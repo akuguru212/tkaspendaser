@@ -886,7 +886,7 @@ function unduhDocx_(filename, items) {
 // peka besar/kecil huruf): Kategori, Topik, Tipe, Pertanyaan, Gambar, Opsi A,
 // Opsi B, Opsi C, Opsi D, Opsi E, Kunci, Bobot, Kesulitan.
 //   • Tipe: PG (pilihan ganda), PGK (pilihan ganda kompleks/lebih dari satu
-//     kunci), BS (benar/salah), Essay. Boleh juga nama panjangnya.
+//     kunci), BS (benar/salah), Kategori (pernyataan | Benar/Salah), Essay. Boleh juga nama panjangnya.
 //   • Kunci: cukup HURUF opsi yang benar, mis. "C". Untuk PGK boleh lebih dari
 //     satu dipisah koma, mis. "A,C". Untuk BS isi "Benar" atau "Salah". Untuk
 //     Essay isi kata kunci penilaian otomatis dipisah koma.
@@ -908,6 +908,7 @@ function tipeDariTeks_(s) {
   const k = String(s || '').replace(/<[^>]*>/g, ' ').toLowerCase().replace(/[^a-z]/g, '');
   if (!k) return '';
   if (TIPE_SINONIM_[k]) return TIPE_SINONIM_[k];
+  if (/kategori|pernyataan|^bsk$|^pgkk/.test(k)) return 'menjodohkan'; // PGK Kategori (Benar/Salah per pernyataan)
   if (/kompleks|checkbox|multi|pgk|jamak|lebihdarisatu/.test(k)) return 'checkbox';
   if (/jodoh|cocok|match|pasang|menjodohkan/.test(k)) return 'menjodohkan';
   if (/benarsalah|truefalse|^bs$|^tf$|^bsalah$/.test(k) || (k.includes('benar') && k.includes('salah'))) return 'benar_salah';
@@ -1077,33 +1078,38 @@ function barisTabelJadiSoal_(headerIdx, nilai, guruId, kategoriDefault, petaGamb
   if (tipe === 'menjodohkan') {
     // Tiap kolom Opsi berisi satu pasangan "Item kiri = Pasangan kanan"
     // (pemisah boleh = , -> , → atau |). Sisi kanan diacak otomatis, kunci dihitung.
-    // KHUSUS Benar/Salah per pernyataan: bila SEMUA opsi berakhiran "= Benar" / "= Salah"
-    // (mis. "10a + b = 31 = Benar"), kolom kanan dibuat tetap [Benar, Salah] (tampil sbg
-    // tabel Benar/Salah gaya ANBK) dan kunci diambil dari kata terakhir tiap baris.
-    const opsiBS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map(h => ambil('opsi' + h).replace(/<[^>]*>/g, '').trim()).filter(Boolean);
-    const reBS = /^(.*?)\s*(?:->|→|=|\|)\s*(benar|salah)\s*\.?$/i;
-    if (opsiBS.length >= 1 && opsiBS.every(t => reBS.test(t) && reBS.exec(t)[1])) {
-      const kiriBS = [], kunciBS = {};
-      opsiBS.forEach((t, i) => { const m = reBS.exec(t); kiriBS.push(m[1].trim()); kunciBS[i] = /^benar$/i.test(m[2]) ? 0 : 1; });
-      item.opsi_json = JSON.stringify({ kiri: kiriBS, kanan: ['Benar', 'Salah'] });
-      item.kunci_json = JSON.stringify(kunciBS);
-      return item;
-    }
     const pasangan = [];
     ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].forEach(h => {
       const teks = ambil('opsi' + h).replace(/<[^>]*>/g, '').trim();
       if (!teks) return;
-      const m = teks.split(/\s*(?:->|→|=|\|)\s*/);
+      // Format KATEGORI (Benar/Salah, Sesuai/Tidak Sesuai, Tepat/Tidak Tepat): teks diakhiri kata
+      // kategori setelah pemisah, mis. \"x + y = 7 | Benar\" atau \"x - y = 2. Salah\". Pernyataan boleh
+      // memuat tanda \"=\" sendiri; yang dipisah hanya kata kategori di ujung.
+      const mKat = teks.match(/^(.*?)\s*(?:\||->|→|=|:|\.|,|;)\s*(tidak\s+sesuai|tidak\s+tepat|benar|salah|sesuai|tepat)\s*$/i);
+      if (mKat && mKat[1].trim()) {
+        const kata = mKat[2].replace(/\s+/g, ' ').trim().toLowerCase();
+        pasangan.push([mKat[1].trim(), kata.charAt(0).toUpperCase() + kata.slice(1)]);
+        return;
+      }
+      // Pasangan biasa \"kiri = kanan\": pemisah | -> → diutamakan; \"=\" dipakai bila tak ada yang lain.
+      const m = /\||->|→/.test(teks) ? teks.split(/\s*(?:->|→|\|)\s*/) : teks.split(/\s*=\s*/);
       if (m.length >= 2 && m[0] && m[1]) pasangan.push([m[0].trim(), m.slice(1).join(' ').trim()]);
-      else if (peringatan) peringatan.push(`"${potonganPertanyaan(pertanyaan)}": opsi "${teks}" bukan pasangan (tulis dengan format "kiri = kanan") — dilewati.`);
+      else if (peringatan) peringatan.push(`"${potonganPertanyaan(pertanyaan)}": opsi "${teks}" bukan pasangan (tulis dengan format "kiri = kanan" atau "pernyataan | Benar") — dilewati.`);
     });
     if (pasangan.length < 2 && peringatan) peringatan.push(`"${potonganPertanyaan(pertanyaan)}": soal Jodohkan butuh minimal 2 pasangan ("kiri = kanan" pada kolom Opsi A, B, ...).`);
     const kiri = pasangan.map(x => x[0]);
-    let urut = pasangan.map((_, i) => i);
-    if (urut.length > 1) { urut = urut.slice(1).concat(urut.slice(0, 1)); } // putar 1 posisi: tidak sejajar dgn kiri
-    const kanan = urut.map(i => pasangan[i][1]);
+    // Sisi kanan DIRINGKAS ke nilai unik (mis. Benar & Salah saja, bukan Benar/Salah/Benar/Salah),
+    // supaya soal kategori (Benar-Salah, Sesuai-Tidak Sesuai, Tepat-Tidak Tepat) tampil 2 kolom
+    // dan penilaiannya bersih. Pasangan kata positif ditaruh lebih dulu.
+    const normK = (t) => String(t).trim().toLowerCase();
+    let unik = [];
+    pasangan.forEach(p => { if (!unik.some(u => normK(u) === normK(p[1]))) unik.push(p[1]); });
+    const positif = /^(benar|sesuai|tepat|ya|setuju)$/i;
+    if (unik.length === 2 && !positif.test(unik[0].trim()) && positif.test(unik[1].trim())) unik = [unik[1], unik[0]];
+    else if (unik.length > 2 && unik.length === pasangan.length) unik = unik.slice(1).concat(unik.slice(0, 1)); // putar 1 posisi: tidak sejajar dgn kiri
+    const kanan = unik;
     const kunci = {};
-    kiri.forEach((_, i) => { kunci[i] = urut.indexOf(i); });
+    kiri.forEach((_, i) => { kunci[i] = unik.findIndex(u => normK(u) === normK(pasangan[i][1])); });
     item.opsi_json = JSON.stringify({ kiri, kanan });
     item.kunci_json = JSON.stringify(kunci);
     return item;
@@ -2448,6 +2454,23 @@ const LocalBackend = (function () {
     return a;
   }
 
+  // Membandingkan pilihan siswa dengan kunci pada soal menjodohkan / kategori
+  // (Benar-Salah per pernyataan). Dibandingkan lewat TEKS sisi kanan (bukan hanya
+  // nomor indeks) karena sisi kanan boleh memuat teks yang sama lebih dari sekali
+  // (mis. \"Benar\", \"Salah\", \"Benar\", \"Salah\" dari hasil impor) -- sebelumnya
+  // jawaban \"Benar\" yang tepat bisa dianggap salah karena nomor indeksnya berbeda.
+  function samaPilihanJodoh_(soal, jawab, kunciVal) {
+    if (jawab === undefined || jawab === null || jawab === '') return false;
+    if (kunciVal === undefined || kunciVal === null || kunciVal === '') return false;
+    if (String(jawab) === String(kunciVal)) return true;
+    let kanan = [];
+    try { const o = JSON.parse(soal.opsi_json || '{}'); kanan = Array.isArray(o.kanan) ? o.kanan : []; } catch (e) { kanan = []; }
+    const norm = (v) => String(v == null ? '' : v).replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const a = kanan[Number(jawab)], b = kanan[Number(kunciVal)];
+    if (a === undefined || b === undefined) return false;
+    return norm(a) !== '' && norm(a) === norm(b);
+  }
+
   // `idxOrder` (opsional): peta posisi-tampil -> indeks-opsi-asli, KHUSUS untuk
   // soal yang opsinya diacak per siswa (lihat opsiAcakMap di action 'mulaiUjian').
   // PENTING: siswa memilih & menjawab berdasarkan POSISI YANG TAMPIL di layarnya
@@ -2473,23 +2496,22 @@ const LocalBackend = (function () {
       case 'benar_salah':
         return keIndeksAsli(jwb) === Number(kunci) ? bobot : 0;
       case 'checkbox': {
-        const benar = Array.isArray(kunci) ? kunci.map(Number) : [];
-        const pilihan = Array.isArray(jwb) ? jwb.map(p => keIndeksAsli(p)) : [];
-        const cocok = pilihan.filter(p => benar.indexOf(p) !== -1).length;
-        const salah = pilihan.filter(p => benar.indexOf(p) === -1).length;
-        // Gaya TKA: PGK (MCMA) = satu butir; benar hanya bila himpunan pilihan PERSIS sama dgn kunci (tanpa skor parsial).
-        return (benar.length > 0 && cocok === benar.length && salah === 0) ? bobot : 0;
+        // DIKOTOMIS / ALL-OR-NOTHING (PGK MCMA TKA): benar penuh HANYA bila himpunan
+        // pilihan siswa SAMA PERSIS dengan kunci (tidak kurang, tidak lebih). Selain itu 0.
+        const benar = Array.isArray(kunci) ? Array.from(new Set(kunci.map(Number))) : [];
+        if (benar.length === 0) return 0;
+        const pilihan = Array.isArray(jwb) ? Array.from(new Set(jwb.map(p => keIndeksAsli(p)))) : [];
+        const persis = pilihan.length === benar.length && benar.every(b => pilihan.indexOf(b) !== -1);
+        return persis ? bobot : 0;
       }
       case 'menjodohkan': {
-        const totalPasang = Object.keys(kunci).length;
-        if (totalPasang === 0) return 0;
-        let benarPasang = 0;
-        Object.keys(kunci).forEach(k => { if (jwb && String(jwb[k]) === String(kunci[k])) benarPasang++; });
-        // Gaya TKA: Benar/Salah per pernyataan (kolom kanan Benar & Salah) = semua pernyataan harus tepat, tanpa skor parsial.
-        let kananBS = false;
-        try { const o = JSON.parse(soal.opsi_json || '{}'); const kn = (o && o.kanan) || []; kananBS = kn.length === 2 && /^benar$/i.test(String(kn[0]).trim()) && /^salah$/i.test(String(kn[1]).trim()); } catch (e) { kananBS = false; }
-        if (kananBS) return benarPasang === totalPasang ? bobot : 0;
-        return Math.round((benarPasang / totalPasang) * bobot * 100) / 100;
+        // DIKOTOMIS / ALL-OR-NOTHING (PGK Kategori TKA: Benar/Salah, Sesuai/Tidak Sesuai,
+        // Tepat/Tidak Tepat per pernyataan): benar penuh HANYA bila SEMUA pernyataan
+        // sesuai kunci. Satu saja keliru/kosong -> 0.
+        const kunciKeys = Object.keys(kunci);
+        if (kunciKeys.length === 0 || !jwb || typeof jwb !== 'object') return 0;
+        const semuaCocok = kunciKeys.every(k => samaPilihanJodoh_(soal, jwb[k], kunci[k]));
+        return semuaCocok ? bobot : 0;
       }
       case 'uraian': {
         const kataKunci = (kunci.kataKunci || []).map(k => String(k).toLowerCase().trim()).filter(Boolean);
@@ -3245,10 +3267,9 @@ function terapkanBranding(branding) {
   // supaya tetap ada ikon walau belum sempat diganti.
   const favicon = document.getElementById('app-favicon');
   const appleIcon = document.getElementById('app-apple-icon');
-  const appleTitle = document.getElementById('app-apple-title');
   if (favicon) favicon.href = logoUrl || 'icons/logo-test-32.png';
   if (appleIcon) appleIcon.href = logoUrl || 'icons/apple-touch-icon.png';
-  if (appleTitle) appleTitle.content = nama;
+  // Nama di bawah ikon HP (iOS) dibiarkan tetap "TKA SPENDASER" (lihat index.html & manifest.json); tidak ditimpa nama aplikasi.
 }
 
 async function muatBrandingGlobal() {
@@ -5063,11 +5084,12 @@ const Guru = {
       ['', 'Geografi', 'BS', 'Indonesia terletak di antara dua benua, yaitu Asia dan Australia.', '', 'Benar', 'Salah', '', '', '', 'Benar', '5', 'Mudah', ''],
       ['', 'Biologi', 'Essay', 'Jelaskan proses terjadinya fotosintesis pada tumbuhan.', '', '', '', '', '', '', 'fotosintesis, klorofil, karbon dioksida', '15', 'Sedang', ''],
       ['', 'Geografi', 'Jodohkan', 'Jodohkan negara dengan ibu kotanya.', '', 'Indonesia = Jakarta', 'Jepang = Tokyo', 'Prancis = Paris', '', '', '', '10', 'Sedang', ''],
+      ['', 'Matematika', 'Kategori', 'Diketahui x = 4 dan y = 3. Tentukan Benar atau Salah untuk setiap pernyataan berikut!', '', 'x + y = 7 | Benar', 'x × y = 12 | Benar', 'x - y = 2 | Salah', '2x + y = 10 | Salah', '', '', '10', 'Sedang', ''],
       ['', '', '', '(tambahkan baris baru di bawah sini, ikuti pola di atas — boleh sebanyak yang dibutuhkan)', '', '', '', '', '', '', '', '', '', '']
     ];
     const items = [
       { text: 'TEMPLATE IMPORT SOAL — CBT Online', heading: true },
-      { text: 'Isi tabel di bawah, SATU BARIS = SATU SOAL (kolom Pembahasan opsional: penjelasan jawaban yang bisa dilihat siswa bila guru mengaktifkannya di pengaturan ujian). Kolom Tipe: PG (pilihan ganda), PGK (pilihan ganda kompleks/kunci boleh lebih dari 1), BS (benar/salah), Jodohkan, Essay. Kolom Kunci cukup diisi HURUF opsi yang benar (mis. "C"), untuk PGK pisah dgn koma (mis. "A,C"), untuk BS isi "Benar"/"Salah", untuk Essay isi kata kunci penilaian dipisah koma. Kolom Gambar: boleh dikosongkan, boleh diisi link gambar publik, ATAU cukup TEMPEL/SISIPKAN gambarnya langsung di dalam sel itu (Insert > Pictures di Word) -- saat diimpor gambar tersebut otomatis terdeteksi & terunggah sendiri, tanpa perlu file gambar terpisah. Gambar juga boleh ditempel langsung di tengah sel Pertanyaan/Opsi kalau perlu. Kolom yang tidak dipakai (mis. Opsi E utk soal 4 opsi) boleh dikosongkan. Tipe Jodohkan sebaiknya dibuat lewat "Tambah Soal Manual" karena pasangannya lebih mudah diatur lewat formulir. RUMUS: tulis lewat Insert > Equation di Word (pecahan, pangkat, akar, tanda coret, dst) -- otomatis ikut terbaca & tampil sama di aplikasi. Kolom Pembahasan juga mempertahankan baris baru, huruf tebal, pangkat/indeks, dan gambar.' },
+      { text: 'Isi tabel di bawah, SATU BARIS = SATU SOAL (kolom Pembahasan opsional: penjelasan jawaban yang bisa dilihat siswa bila guru mengaktifkannya di pengaturan ujian). Kolom Tipe: PG (pilihan ganda), PGK (pilihan ganda kompleks/kunci boleh lebih dari 1), BS (benar/salah), Kategori (Benar/Salah per pernyataan, PGK Kategori), Jodohkan, Essay. Untuk Kategori, tiap Opsi ditulis "pernyataan | Benar" atau "pernyataan | Salah" (juga boleh Sesuai/Tidak Sesuai, Tepat/Tidak Tepat); kolom Kunci dikosongkan. Pernyataan boleh memuat tanda =, mis. "x - y = 2 | Salah". Kolom Kunci cukup diisi HURUF opsi yang benar (mis. "C"), untuk PGK pisah dgn koma (mis. "A,C"), untuk BS isi "Benar"/"Salah", untuk Essay isi kata kunci penilaian dipisah koma. Kolom Gambar: boleh dikosongkan, boleh diisi link gambar publik, ATAU cukup TEMPEL/SISIPKAN gambarnya langsung di dalam sel itu (Insert > Pictures di Word) -- saat diimpor gambar tersebut otomatis terdeteksi & terunggah sendiri, tanpa perlu file gambar terpisah. Gambar juga boleh ditempel langsung di tengah sel Pertanyaan/Opsi kalau perlu. Kolom yang tidak dipakai (mis. Opsi E utk soal 4 opsi) boleh dikosongkan. Tipe Jodohkan sebaiknya dibuat lewat "Tambah Soal Manual" karena pasangannya lebih mudah diatur lewat formulir. RUMUS: tulis lewat Insert > Equation di Word (pecahan, pangkat, akar, tanda coret, dst) -- otomatis ikut terbaca & tampil sama di aplikasi. Kolom Pembahasan juga mempertahankan baris baru, huruf tebal, pangkat/indeks, dan gambar.' },
       { table: { headers, rows } }
     ];
     unduhDocx_('Template_Import_Soal_CBT.docx', items);
@@ -5895,7 +5917,7 @@ const Guru = {
     tampilkanInfoFilter_('kelas-analisis-info', siswaList.length, semuaSiswa.length);
     if (siswaList.length === 0) { cont.innerHTML = '<p class="subtitle">Tidak ada siswa yang cocok dengan kelas/pencarian ini.</p>'; return; }
     const simbol = { benar: '<span class="jwb-cell jwb-benar">✔</span>', sebagian: '<span class="jwb-cell jwb-sebagian">◐</span>', salah: '<span class="jwb-cell jwb-salah">✘</span>', kosong: '<span class="jwb-cell jwb-kosong">–</span>', na: '<span class="jwb-cell jwb-kosong">–</span>' };
-    cont.innerHTML = `<p class="subtitle">✔ = benar &nbsp; ◐ = sebagian benar (checkbox/mencocokkan/uraian) &nbsp; ✘ = salah &nbsp; – = tidak dijawab.</p>
+    cont.innerHTML = `<p class="subtitle">✔ = benar &nbsp; ◐ = sebagian benar (hanya soal uraian) &nbsp; ✘ = salah &nbsp; – = tidak dijawab.</p>
       <div class="table-scroll-x"><table class="ledger"><thead><tr>
         <th>Nama</th><th>Kelas</th><th>Nilai</th>` + soalList.map(s => `<th title="${escapeHtml_(bersihkanHtml_(s.pertanyaan))}">No ${s.nomor}</th>`).join('') + `
       </tr></thead><tbody>` +
@@ -6474,6 +6496,7 @@ const Guru = {
         ['', 'Geografi', 'BS', 'Indonesia terletak di antara dua benua, yaitu Asia dan Australia.', '', 'Benar', 'Salah', '', '', '', 'Benar', '5', 'Mudah', ''],
         ['', 'Biologi', 'Essay', 'Jelaskan proses terjadinya fotosintesis pada tumbuhan.', '', '', '', '', '', '', 'fotosintesis, klorofil, karbon dioksida', '15', 'Sedang', ''],
         ['', 'Geografi', 'Jodohkan', 'Jodohkan negara dengan ibu kotanya.', '', 'Indonesia = Jakarta', 'Jepang = Tokyo', 'Prancis = Paris', '', '', '', '10', 'Sedang', ''],
+        ['', 'Matematika', 'Kategori', 'Diketahui x = 4 dan y = 3. Tentukan Benar atau Salah untuk setiap pernyataan berikut!', '', 'x + y = 7 | Benar', 'x × y = 12 | Benar', 'x - y = 2 | Salah', '2x + y = 10 | Salah', '', '', '10', 'Sedang', ''],
         ['', '', '', '(tambahkan baris baru di bawah sini, ikuti pola di atas)', '', '', '', '', '', '', '', '', '', '']
       ]);
   },
@@ -8249,6 +8272,15 @@ const KumpulUI = {
 // ============================================================================
 // MESIN UJIAN (render soal, timer, autosave, submit, hasil)
 // ============================================================================
+// Kesamaan pilihan jodoh untuk tampilan detail: sama bila indeks sama ATAU teks sisi kanannya sama.
+function jodohSamaTeks_(kanan, j, k) {
+  if (j === undefined || j === null || j === '' || k === undefined || k === null || k === '') return false;
+  if (String(j) === String(k)) return true;
+  const norm = (v) => String(v == null ? '' : v).replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const a = kanan[Number(j)], b = kanan[Number(k)];
+  return a !== undefined && b !== undefined && norm(a) !== '' && norm(a) === norm(b);
+}
+
 const ExamEngine = {
   renderGridSoal() {
     const grid = document.getElementById('soal-grid');
@@ -8475,7 +8507,7 @@ const ExamEngine = {
       isi += '<div class="dj-jodoh">' + kiri.map((tk, i) => {
         const j = jwb[i];
         const adaJwb = j !== undefined && j !== null && j !== '';
-        const benar = adaJwb && String(j) === String(kunci[i]);
+        const benar = adaJwb && jodohSamaTeks_(kanan, j, kunci[i]);
         return `<div class="dj-jodoh-row ${benar ? 'dj-benar' : 'dj-salah'}">
           <div class="dj-jodoh-kiri">${escapeHtml_(tk)}</div>
           <div>${G ? 'Jawaban siswa' : 'Jawaban Anda'}: <strong>${adaJwb ? escapeHtml_(kanan[j] == null ? '-' : String(kanan[j])) : '(kosong)'}</strong></div>
