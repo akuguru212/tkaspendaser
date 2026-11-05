@@ -1,457 +1,452 @@
 /* ============================================================================
-   ANBK — alur & tampilan peserta (login -> konfirmasi data -> konfirmasi tes -> soal -> selesai),
-   penyaji soal bergaya ANBK, impor data siswa sesuai Kartu Login, dan cetak Kartu Login (QR).
-   Dimuat SETELAH app.js; mengganti beberapa fungsi bawaan tanpa mengubah fitur lain.
+   ANBK SKIN — tampilan sisi peserta/siswa meniru aplikasi ANBK (Pusmendik).
+   Hanya berlaku di elemen berkelas .anbk-page; Portal Guru tidak terpengaruh.
+   Warna: header #326698 / #2773b2, tombol #0d6efd, latar #f0f4f8, font Poppins.
    ============================================================================ */
-'use strict';
-const Anbk = (function () {
-  const $ = (id) => document.getElementById(id);
-  const BLN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-  const pad = (n) => String(n).padStart(2, '0');
-  const esc = (s) => escapeHtml_(String(s == null ? '' : s));
+.anbk-page {
+  --a-hdr: #326698; --a-hdr-l: #2773b2; --a-hdr-p: #3379b6;
+  --a-blue: #0d6efd; --a-blue-d: #0b5ed7; --a-red: #dc3545; --a-yellow: #ffc107; --a-green: #198754;
+  --a-bg: #f0f4f8; --a-line: #dee2e6; --a-ink: #212529; --a-mute: #6c757d;
+  font-family: 'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--a-ink); font-size: 14px; line-height: 1.5; color-scheme: light;
+  background: var(--a-bg) !important; background-image: none !important;
+  min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column;
+  -webkit-text-size-adjust: 100%;
+  /* variabel lama -> warna ANBK supaya komponen lama (hasil, detail, bukti, dialog) ikut serasi */
+  --c-primary: #0d6efd; --c-primary-dark: #0b5ed7; --c-secondary: #0d6efd; --c-accent: #0d6efd; --c-bg: #f0f4f8; --c-surface: #ffffff;
+  --c-text: #212529; --c-muted: #6c757d; --c-line: #dee2e6; --c-success: #198754; --c-danger: #dc3545;
+  --c-on-primary: #fff; --c-on-secondary: #fff; --c-on-accent: #fff; --c-hover: #f3f7fe;
+  --ui-btn-bg: #0d6efd; --ui-card-bg: #fff; --ui-modal-bg: #fff; --ui-in-bg: #fff; --ui-in-bd: 1px solid #ced4da; --ui-r-btn: 30px; --ui-r-in: 6px;
+  --ui-btn-shadow: none; --ui-btn-shadow-h: none; --ui-btn-shadow-a: none; --ui-page-img: none; --ui-login-img: none;
+  --font-body: 'Poppins', system-ui, sans-serif; --font-display: 'Poppins', system-ui, sans-serif;
+}
+.anbk-page *, .anbk-page *::before, .anbk-page *::after { box-sizing: border-box; }
+.anbk-page a { color: inherit; }
+#login-screen.anbk-page { display: flex; padding: 0; align-items: stretch; justify-content: flex-start; flex-direction: column; }
 
-  // ---------------- tanggal ----------------
-  function parseTgl(v) {
-    if (v === null || v === undefined || v === '') return null;
-    if (v instanceof Date && !isNaN(v)) return { d: v.getDate(), m: v.getMonth() + 1, y: v.getFullYear() };
-    const s = String(v).trim();
-    if (/^\d{5}(\.\d+)?$/.test(s)) { const n = Number(s); if (n > 20000 && n < 80000) { const dt = new Date(Math.round((n - 25569) * 86400000)); return { d: dt.getUTCDate(), m: dt.getUTCMonth() + 1, y: dt.getUTCFullYear() }; } }
-    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (m) return { y: +m[1], m: +m[2], d: +m[3] };
-    m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/); if (m) return { d: +m[1], m: +m[2], y: +m[3] };
-    m = s.match(/(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
-    if (m) { const i = BLN.findIndex(b => b.toLowerCase().slice(0, 3) === m[2].toLowerCase().slice(0, 3)); if (i >= 0) return { d: +m[1], m: i + 1, y: +m[3] }; }
-    return null;
-  }
-  function isoTgl(v) { const t = parseTgl(v); return t ? t.y + '-' + pad(t.m) + '-' + pad(t.d) : String(v == null ? '' : v).trim(); }
-  function tglPanjang(v) { const t = parseTgl(v); return t ? pad(t.d) + ' ' + BLN[t.m - 1] + ' ' + t.y : String(v || ''); }
+/* ---------- Header biru bertingkat ---------- */
+.anbk-hero { position: relative; flex: 0 0 auto; height: 135px; background: var(--a-hdr); overflow: hidden; color: #fff; }
+.anbk-hero::before { content: ""; position: absolute; inset: 0; background: var(--a-hdr-l); clip-path: polygon(0 0, 29.7% 0, 18.8% 100%, 0 100%); }
+.anbk-hero::after { content: ""; position: absolute; inset: 0; background: var(--a-hdr-p); clip-path: polygon(13% 100%, 29.7% 0, 24% 100%); opacity: .9; }
+.anbk-hero-in { position: relative; z-index: 2; max-width: 1380px; margin: 0 auto; padding: 0 clamp(14px, 3.6vw, 50px); height: 92px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.anbk-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.anbk-brand img { width: 58px; height: 58px; display: block; flex: none; }
+.anbk-brand-t { display: flex; flex-direction: column; line-height: 1.25; }
+.anbk-brand-t b { font-size: 15px; font-weight: 600; letter-spacing: .1px; }
+.anbk-brand-t span { font-size: 13px; font-weight: 400; }
+.anbk-user { position: relative; display: flex; align-items: center; gap: 8px; font-size: 14.5px; font-weight: 400; cursor: default; min-width: 0; }
+.anbk-user-nama { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46vw; }
+.anbk-user-ico { width: 27px; height: 27px; flex: none; background: #6aa9ee; border-radius: 3px; display: grid; place-items: center; color: #1f4f86; font-size: 13px; }
+#siswa-portal .anbk-user, #tes-konfirmasi-screen .anbk-user { cursor: pointer; }
+.anbk-usermenu { position: absolute; right: 0; top: calc(100% + 10px); z-index: 20; min-width: 170px; background: #fff; color: var(--a-ink); border-radius: 8px; box-shadow: 0 14px 34px rgba(20,40,70,.28); padding: 6px; display: flex; flex-direction: column; }
+.anbk-usermenu button { all: unset; box-sizing: border-box; cursor: pointer; padding: 9px 12px; border-radius: 6px; font: 400 13.5px 'Poppins', sans-serif; color: #212529; display: flex; gap: 9px; align-items: center; }
+.anbk-usermenu button:hover { background: #eef4ff; }
+.anbk-usermenu button i { width: 16px; color: var(--a-mute); text-align: center; }
+.anbk-usermenu .hidden { display: none; }
 
-  // ---------------- header / layar ----------------
-  function setUser(pra) {
-    const u = state.user; if (!u || u.role !== 'siswa') return;
-    const teks = (u.username ? u.username + ' - ' : '') + (pra ? 'PESERTA TKA' : u.nama);
-    document.querySelectorAll('.anbk-user-nama').forEach(e => { e.textContent = teks; });
-  }
-  const _tampilkan = UI.tampilkan;
-  UI.tampilkan = function (id) {
-    _tampilkan.call(UI, id);
-    document.querySelectorAll('.anbk-usermenu').forEach(m => m.classList.add('hidden'));
-    if (state.user && state.user.role === 'siswa') setUser(id === 'siswa-portal');
-    window.scrollTo(0, 0);
-  };
+/* ---------- Kartu ---------- */
+.anbk-card { position: relative; background: #fff; border-radius: 12px; box-shadow: 0 24px 44px -14px rgba(30, 55, 90, .32), 0 3px 12px rgba(30, 55, 90, .08); overflow: hidden; background-image: url('icons/anbk-batik.svg'); background-repeat: no-repeat; background-position: right bottom; background-size: auto 92%; }
+.anbk-center { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; padding: 28px 16px 36px; }
+.anbk-wrap { flex: 1 1 auto; width: 100%; max-width: 1380px; margin: -45px auto 0; padding: 0 clamp(14px, 3.1vw, 43px) 36px; position: relative; z-index: 3; }
+.anbk-konf { display: grid; grid-template-columns: minmax(0, 1fr) 417px; gap: 22px; align-items: start; }
+.anbk-card-login { width: 404px; max-width: 100%; padding: 40px 43px 40px; }
+.anbk-card-login h1 { margin: 0 0 2px; font-size: 16px; font-weight: 600; color: #111; }
+.anbk-card-login p#login-sub { margin: 0 0 22px; font-size: 14px; line-height: 1.6; color: #212529; }
+.anbk-foot { flex: 0 0 auto; text-align: center; font-size: 11px; color: #8a96a5; padding: 6px 12px 18px; }
+.anbk-foot a { color: #7d8b9b; text-decoration: none; border-bottom: 1px dotted #aab4c0; }
+.anbk-foot a:hover { color: var(--a-blue); }
 
-  function tampilKonfirmasiData() {
-    const u = state.user || {};
-    UI.tampilkan('siswa-portal');
-    $('kd-username').textContent = u.username || '-';
-    $('kd-nama1').textContent = (u.username ? u.username + ' - ' : '') + 'PESERTA TKA';
-    $('kd-jk').textContent = u.jenis_kelamin === 'P' ? 'Perempuan' : (u.jenis_kelamin === 'L' ? 'Laki-Laki' : '-');
-    $('kd-nama2').value = '';
-    isiPilihanTanggal();
-    $('input-token-ujian').value = ''; $('token-error').textContent = '';
-    segarkanToken(false);
-  }
-  // Peserta mengetik nama & memilih tanggal lahir sendiri (konfirmasi data, seperti ANBK asli)
-  function isiPilihanTanggal() {
-    const opt = (v, t, sel) => `<option value="${v}"${sel ? ' selected disabled hidden' : ''}>${t}</option>`;
-    let h = opt('', 'Hari', 1); for (let d = 1; d <= 31; d++) h += opt(d, d); $('kd-tgl').innerHTML = h;
-    h = opt('', 'Bulan', 1); BLN.forEach((b, i) => { h += opt(i + 1, b); }); $('kd-bln').innerHTML = h;
-    h = opt('', 'Tahun', 1); for (let y = new Date().getFullYear() - 5; y >= 1985; y--) h += opt(y, y); $('kd-thn').innerHTML = h;
-  }
-  const normNama = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  function periksaKonfirmasi() {
-    const u = state.user || {}; const nama = $('kd-nama2').value.trim();
-    if (!nama) return 'Nama Peserta belum diisi.';
-    if (normNama(nama) !== normNama(u.nama)) return 'Nama Peserta tidak sesuai dengan data peserta.';
-    const t = parseTgl(u.tanggal_lahir);
-    if (t) {
-      if (!$('kd-tgl').value || !$('kd-bln').value || !$('kd-thn').value) return 'Tanggal Lahir belum dipilih.';
-      if (+$('kd-tgl').value !== t.d || +$('kd-bln').value !== t.m || +$('kd-thn').value !== t.y) return 'Tanggal Lahir tidak sesuai dengan data peserta.';
-    }
-    return '';
-  }
-  async function segarkanToken(manual) {
-    const btn = $('kd-refresh'); if (btn) btn.classList.add('is-disabled');
-    try {
-      const res = await api('getTokenAktif', {});
-      const l = res && res.ok && res.ujian && res.ujian.length ? res.ujian[0] : null;
-      $('kd-token-tampil').textContent = (l && l.token) ? l.token : '------';
-      $('kd-mata').textContent = l ? l.judul : '-';
-    } catch (e) { /* abaikan */ }
-    if (btn) btn.classList.remove('is-disabled');
-  }
-  function tampilKonfirmasiTes(ujian) {
-    const n = new Date();
-    UI.tampilkan('tes-konfirmasi-screen');
-    $('tk-nama').textContent = ujian.judul;
-    $('tk-status').textContent = ujian.lanjutan ? 'Lanjutkan Tes' : 'Tes Baru';
-    $('tk-waktu').textContent = pad(n.getDate()) + '/' + pad(n.getMonth() + 1) + '/' + n.getFullYear() + ', ' + pad(n.getHours()) + '.' + pad(n.getMinutes());
-    $('tk-alokasi').textContent = (ujian.durasiMenit || '-') + ' Menit';
-  }
-  function kembaliKeKonfirmasiData() { if (!state.user) return; tampilKonfirmasiData(); }
-  function menuUser(ev) {
-    const box = ev.currentTarget; const m = box.querySelector('.anbk-usermenu'); if (!m) return;
-    if (ev.target.closest('.anbk-usermenu button')) return;
-    const adaTes = !$('tes-konfirmasi-screen').classList.contains('hidden');
-    const kembali = m.querySelector('[data-aksi="kembali"]'); if (kembali) kembali.style.display = adaTes ? '' : 'none';
-    const buka = m.classList.contains('hidden');
-    document.querySelectorAll('.anbk-usermenu').forEach(x => x.classList.add('hidden'));
-    if (buka) { m.classList.remove('hidden'); ev.stopPropagation(); }
-  }
-  document.addEventListener('click', (e) => { if (!e.target.closest('.anbk-user')) document.querySelectorAll('.anbk-usermenu').forEach(m => m.classList.add('hidden')); });
+/* ---------- Form ---------- */
+.anbk-ig { display: flex; align-items: center; gap: 14px; margin: 0 0 14px; }
+.anbk-ig > i { width: 18px; text-align: center; color: #111; font-size: 15px; flex: none; margin-left: 4px; }
+.anbk-ig input { flex: 1; min-width: 0; border: 0; border-bottom: 1px solid #dcdcdc; border-radius: 0; background: transparent; padding: 7px 4px 8px; font: 400 15px 'Poppins', sans-serif; color: #212529; outline: none; box-shadow: none; height: auto; min-height: 0; }
+.anbk-ig input::placeholder { color: #8c8c8c; }
+.anbk-ig input:focus { border-bottom-color: var(--a-blue); }
+.anbk-eye { all: unset; cursor: pointer; color: #6c757d; padding: 4px; margin-left: -34px; font-size: 14px; position: relative; z-index: 2; }
+.anbk-btn { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 33px; padding: 0 22px; border-radius: 30px; font: 500 14px/1 'Poppins', sans-serif; color: #fff; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; transition: filter .12s, transform .06s; white-space: nowrap; }
+.anbk-btn:hover { filter: brightness(1.07); } .anbk-btn:active { transform: translateY(1px); }
+.anbk-btn:focus-visible { outline: 3px solid rgba(13,110,253,.35); outline-offset: 2px; }
+.anbk-btn[disabled], .anbk-btn.is-disabled { opacity: .55; cursor: not-allowed; filter: none; }
+.anbk-btn-block { display: flex; width: 100%; }
+.anbk-btn-primary { background: var(--a-blue); } .anbk-btn-red { background: var(--a-red); } .anbk-btn-green { background: var(--a-green); } .anbk-btn-yellow { background: var(--a-yellow); color: #3a3a3a; }
+.anbk-btn-xs { height: 26px; padding: 0 14px; font-size: 12.5px; }
+.anbk-card-login .anbk-btn-block { margin-top: 18px; }
+.anbk-err { color: #dc3545; font-size: 12.5px; line-height: 1.5; margin-top: 10px; min-height: 0; }
+.anbk-err:empty { display: none; }
+.anbk-modestatus { margin: 12px 0 0; font-size: 11px; color: #8a96a5; }
+.anbk-modestatus:empty { display: none; }
 
-  function toggleSandi(btn) {
-    const el = $('login-password'); const sembunyi = el.type === 'password';
-    el.type = sembunyi ? 'text' : 'password';
-    btn.innerHTML = '<i class="fa-solid ' + (sembunyi ? 'fa-eye-slash' : 'fa-eye') + '"></i>';
-  }
-  function pilihPortal(role, ev) {
-    if (ev) ev.preventDefault();
-    UI.pilihRole(role);
-    const g = role === 'guru';
-    $('login-judul').textContent = g ? 'Login Guru' : 'Selamat Datang';
-    $('login-sub').textContent = g ? 'Silakan login dengan username dan password akun guru Anda' : 'Silakan login dengan menggunakan username dan password yang anda miliki';
-    $('anbk-link-guru').classList.toggle('hidden', g); $('anbk-link-siswa').classList.toggle('hidden', !g);
-    $('login-error').textContent = '';
-    try { history.replaceState(null, '', location.pathname + location.search + (g ? '#guru' : '')); } catch (e) { /* abaikan */ }
-  }
+.anbk-card-form, .anbk-card-tes, .anbk-card-selesai { padding: 26px 26px 28px; }
+.anbk-card-form h2, .anbk-card-tes h2, .anbk-card-selesai h2 { margin: 0 0 12px; font: 400 24px/1.25 'Poppins', sans-serif; color: #212529; }
+.anbk-card-tes { width: 404px; max-width: 100%; padding: 34px 36px 36px; }
+.anbk-card-tes h2 { margin-bottom: 20px; }
+.anbk-card-selesai { width: 426px; max-width: 100%; padding: 34px 38px 36px; }
+.anbk-card-selesai h2 { margin-bottom: 20px; }
+.anbk-f { margin: 0 0 4px; }
+.anbk-f > label { display: block; font: 600 9.5px/1.2 'Poppins', sans-serif; color: #111; margin: 6px 0 0; }
+.anbk-v { font-size: 14px; color: #212529; padding: 2px 0 3px; border-bottom: 1px solid #ececec; min-height: 24px; overflow-wrap: anywhere; }
+.anbk-v-lg { font-size: 15.5px; padding: 5px 0 4px; }
+.anbk-card-tes .anbk-f { margin-bottom: 8px; } .anbk-card-tes .anbk-f > label { font-size: 9.5px; }
+.anbk-tgl { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3px; margin-top: 4px; }
+.anbk-tgl span { background: #eceff2; padding: 6px 12px; font-size: 14px; color: #3d4349; border-radius: 0; }
+.anbk-f-token { margin-top: 18px; }
+.anbk-f-token > label { color: var(--a-blue); }
+.anbk-f-token input { width: 100%; border: 0; border-bottom: 1px solid #dcdcdc; border-radius: 0; background: transparent; padding: 4px 0 6px; font: 400 14px 'Poppins', sans-serif; color: #212529; outline: none; box-shadow: none; height: auto; text-transform: uppercase; letter-spacing: .5px; }
+.anbk-f-token input::placeholder { text-transform: none; letter-spacing: 0; color: #8c8c8c; }
+.anbk-f-token input:focus { border-bottom-color: var(--a-blue); }
+.anbk-card-form .anbk-btn-block { margin-top: 36px; }
+.anbk-card-tes .anbk-btn-block { margin-top: 16px; }
+.anbk-card-token { padding: 20px 26px 22px 44px; min-height: 85px; }
+.anbk-token-row { font-size: 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.anbk-token-row b { font-weight: 600; letter-spacing: .5px; }
+.anbk-blokir { margin-top: 12px; padding: 10px 14px; border-radius: 8px; background: #fdecee; color: #a61e2d; font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
+.anbk-blokir b { font-weight: 600; }
+.anbk-p { font-size: 16px; line-height: 1.55; margin: 0 0 18px; color: #212529; }
+.anbk-mark { color: #fff; padding: 1px 6px; border-radius: 2px; font-weight: 500; font-size: 15.5px; }
+.anbk-mark-red { background: #dc3545; } .anbk-mark-green { background: #198754; }
+.anbk-aksi { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+.anbk-aksi .anbk-btn { height: 29px; padding: 0 28px; font-size: 13px; min-width: 142px; text-transform: uppercase; }
+.anbk-ringkas { display: flex; gap: 6px 16px; flex-wrap: wrap; font-size: 12px; color: #6c757d; margin: 0 0 14px; padding: 8px 10px; background: #f6f8fb; border-radius: 6px; }
+.anbk-ringkas b { color: #212529; font-weight: 600; }
+.anbk-peringatan { margin: 0 0 14px; padding: 10px 12px; background: #fff8e1; border: 1px solid #ffe08a; border-radius: 6px; font-size: 12.5px; color: #5c4a00; }
+.anbk-peringatan p { margin: 0 0 8px; }
+.anbk-peringatan .kumpul-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.anbk-peringatan .kumpul-chips button { all: unset; box-sizing: border-box; cursor: pointer; min-width: 28px; height: 26px; padding: 0 6px; display: inline-grid; place-items: center; border: 1px solid #333; border-radius: 3px; background: #fff; font: 500 12px 'Poppins', sans-serif; color: #212529; }
+.anbk-peringatan .kumpul-chips button.rg { background: #ffc107; border-color: #d39e00; }
+.anbk-cek { display: flex; gap: 9px; align-items: flex-start; font-size: 12.5px; line-height: 1.45; margin: 0 0 14px; color: #212529; cursor: pointer; }
+.anbk-cek input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--a-blue); }
+.anbk-overlay { position: fixed; inset: 0; z-index: 400; overflow: auto; }
+#overlay-kirim.anbk-page { position: fixed; inset: 0; z-index: 500; min-height: 0; background: rgba(15, 30, 55, .55) !important; display: flex; align-items: center; justify-content: center; }
+#overlay-kirim.hidden { display: none !important; }
 
-  // ---------------- modal Daftar Soal / Informasi Soal ----------------
-  function bukaDaftar() { ExamEngine.renderGridSoal(); $('modal-daftar').classList.remove('hidden'); }
-  function bukaInfo() {
-    const s = state.soal[state.idxSoal]; if (!s) return;
-    ExamEngine.renderGridSoal();
-    $('inf-nomor').textContent = (state.idxSoal + 1) + ' dari ' + state.soal.length;
-    $('inf-jenis').textContent = jenisTeks(s);
-    const v = state.jawaban[s.id];
-    const ada = v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length);
-    $('inf-status').textContent = (ada ? 'Sudah dijawab' : 'Belum dijawab') + (state.ragu.includes(s.id) ? ' · Ragu-ragu' : '');
-    $('inf-total').textContent = state.soal.length;
-    $('modal-info').classList.remove('hidden');
-  }
-  function tutupModal(id) { $(id).classList.add('hidden'); }
-  function jenisTeks(s) {
-    if (s.tipe === 'checkbox') return 'Pilihan ganda kompleks (jawaban benar lebih dari satu)';
-    if (s.tipe === 'pilihan_ganda') return 'Pilihan ganda';
-    if (s.tipe === 'benar_salah') return 'Benar / Salah';
-    if (s.tipe === 'menjodohkan') return 'Menjodohkan';
-    return 'Uraian';
-  }
+/* ---------- Layar ujian ---------- */
+.anbk-wrap-ujian { max-width: 1456px; margin-top: -57px; }
+.anbk-card-ujian { padding: 26px 48px 36px; background-image: url('icons/anbk-batik.svg'); }
+.anbk-u-top { display: flex; align-items: center; justify-content: space-between; gap: 12px 18px; flex-wrap: wrap; }
+.anbk-u-no { margin: 0; font: 400 20px/1.3 'Poppins', sans-serif; color: #212529; }
+.anbk-u-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.anbk-pill { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 5px; height: 25px; padding: 0 9px; border-radius: 30px; font: 400 12px/1 'Poppins', sans-serif; cursor: default; white-space: nowrap; }
+.anbk-pill-blue { background: var(--a-blue); color: #fff; font-weight: 600; cursor: pointer; font-size: 11.5px; -webkit-tap-highlight-color: transparent; }
+.anbk-pill-blue:hover { filter: brightness(1.08); }
+.anbk-pill-blue:focus-visible { outline: 3px solid rgba(13,110,253,.35); outline-offset: 2px; }
+.anbk-pill-timer { border: 1px solid #8c959d; color: #6c757d; background: #fff; }
+.anbk-pill-timer b { color: #212529; font-weight: 600; margin-left: 2px; font-variant-numeric: tabular-nums; }
+.anbk-pill-timer b.low { color: #dc3545; }
+.pelanggaran-indikator { font-size: 11.5px; color: #dc3545; font-weight: 500; margin-right: 4px; }
+.pelanggaran-indikator:empty { display: none; }
+.anbk-u-sub { display: flex; align-items: center; justify-content: space-between; gap: 8px 18px; flex-wrap: wrap; margin-top: 4px; }
+.anbk-font { display: flex; align-items: baseline; gap: 10px; font-size: 13px; color: #212529; }
+.anbk-fs { all: unset; box-sizing: border-box; cursor: pointer; color: #444; font-family: 'Poppins', sans-serif; font-weight: 400; line-height: 1; padding: 2px 1px; -webkit-tap-highlight-color: transparent; }
+.anbk-fs.fs1 { font-size: 11px; } .anbk-fs.fs2 { font-size: 15px; } .anbk-fs.fs3 { font-size: 19px; }
+.anbk-fs.on { color: #000; font-weight: 700; }
+.anbk-u-mapel { font-size: 16px; color: #212529; text-align: right; }
+.anbk-hr { height: 1px; background: #e4e7ea; margin: 10px 0 14px; }
+.anbk-hr-b { margin: 16px 0 18px; }
+.anbk-soalbox { border: 1px solid #dee2e6; background: rgba(255,255,255,.55); min-height: 345px; }
+.anbk-soalbar { height: 10px; background: #e6e6e6; }
+.anbk-page .question-card { --skala: 1; padding: 0; background: transparent; border: 0; box-shadow: none; border-radius: 0; font-size: calc(14px * var(--skala)); line-height: 1.55; color: #212529; display: grid; grid-template-columns: 1fr; min-height: 320px; }
+.anbk-page .question-card.dua-kolom { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.anbk-page .question-card .soal-kiri, .anbk-page .question-card .soal-kanan { padding: 16px 18px 18px; min-width: 0; overflow-wrap: anywhere; }
+.anbk-page .question-card.dua-kolom .soal-kiri { border-right: 4px dotted #d3d3d3; }
+.anbk-page .question-card .soal-kiri img, .anbk-page .question-card .soal-kanan img.gambar-soal { max-width: 100%; height: auto; display: block; margin: 8px 0; cursor: zoom-in; }
+.anbk-page .question-card .pertanyaan { font-size: inherit; line-height: 1.6; margin: 0 0 12px; padding: 0; }
+.anbk-page .question-card .pertanyaan p { margin: 0 0 8px; }
+.anbk-page .question-card .petunjuk { margin: 0 0 14px; }
+.anbk-page .question-card table { border-collapse: collapse; max-width: 100%; }
+.anbk-page .question-card .pertanyaan table { border: 1px solid #222; margin: 10px 0; font-size: .95em; }
+.anbk-page .question-card .pertanyaan table td, .anbk-page .question-card .pertanyaan table th { border: 1px solid #222; padding: 4px 10px; text-align: center; }
+.anbk-page .question-card .pertanyaan table th { font-weight: 700; }
+.anbk-page .question-card textarea { width: 100%; min-height: 150px; padding: 10px 12px; border: 1px solid #ced4da; border-radius: 6px; font: 400 1em 'Poppins', sans-serif; color: #212529; background: #fff; resize: vertical; outline: none; box-shadow: none; }
+.anbk-page .question-card textarea:focus { border-color: var(--a-blue); box-shadow: 0 0 0 3px rgba(13,110,253,.15); }
 
-  // ---------------- penyaji soal bergaya ANBK ----------------
-  const RE_PISAH_TAG = /<(p|div)[^>]*>\s*(?:-{3,}|\[\[PISAH\]\])\s*<\/\1>/i;
-  const RE_PISAH_TEKS = /(?:<br\s*\/?>\s*|\n|^)\s*(?:-{3,}|\[\[PISAH\]\])\s*(?:<br\s*\/?>|\n|$)/i;
-  function pisah(raw) {
-    raw = String(raw || '');
-    for (const re of [RE_PISAH_TAG, RE_PISAH_TEKS]) {
-      const m = re.exec(raw);
-      if (m) return { stim: raw.slice(0, m.index), tanya: raw.slice(m.index + m[0].length) };
-    }
-    return { stim: '', tanya: raw };
-  }
-  const opsiObj = (o) => (o && typeof o === 'object') ? o : { teks: o || '', gambar: '' };
-  const isiOpsi = (item) => kontenSoalHtml(item.teks) + (item.gambar ? tagGambarAman_(item.gambar, 'opsi-gambar-tampil', 'Gambar opsi') : '');
+/* pilihan jawaban */
+.anbk-opsi-list { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+.anbk-opsi { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+.anbk-cb { flex: none; width: 21px; height: 21px; margin-top: 1px; border: 1.5px solid #4d4d4d; border-radius: 4px; background: #fff; display: grid; place-items: center; transition: background .1s, border-color .1s; font-size: 12px; color: #fff; }
+.anbk-cb.radio { border-radius: 50%; }
+.anbk-opsi:hover .anbk-cb { border-color: var(--a-blue); }
+.anbk-opsi.selected .anbk-cb { background: var(--a-blue); border-color: var(--a-blue); }
+.anbk-opsi.selected .anbk-cb::after { content: "\f00c"; font-family: 'Font Awesome 6 Free'; font-weight: 900; line-height: 1; }
+.anbk-opsi.selected .anbk-cb.radio::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #fff; }
+.anbk-opsi-t { min-width: 0; padding-top: 0; overflow-wrap: anywhere; }
+.anbk-opsi-t p { margin: 0; } .anbk-opsi-t img { max-width: 100%; height: auto; display: block; margin-top: 4px; }
+.anbk-opsi.opsi-readonly { cursor: default; }
+/* tabel benar-salah / menjodohkan */
+.anbk-tbl { width: 100%; border: 1px solid #dee2e6; border-collapse: collapse; margin-top: 6px; font-size: .96em; background: #fff; }
+.anbk-tbl th { font-weight: 400; color: #444; text-align: center; padding: 9px 8px; border-bottom: 2px solid #212529; border-right: 1px solid #dee2e6; white-space: nowrap; }
+.anbk-tbl th:first-child { text-align: left; padding-left: 10px; border-right: 1px solid #dee2e6; }
+.anbk-tbl td { padding: 7px 8px; border-top: 1px solid #dee2e6; border-right: 1px solid #dee2e6; text-align: center; vertical-align: middle; }
+.anbk-tbl td:first-child { text-align: left; padding-left: 10px; font-size: .95em; }
+.anbk-tbl td:last-child, .anbk-tbl th:last-child { border-right: 0; }
+.anbk-tbl .kol-opsi { width: 96px; min-width: 70px; }
+.anbk-rd { display: inline-block; width: 22px; height: 22px; border: 1.5px solid #9aa0a6; border-radius: 50%; cursor: pointer; vertical-align: middle; background: #fff; position: relative; transition: border-color .1s; -webkit-tap-highlight-color: transparent; }
+.anbk-rd:hover { border-color: var(--a-blue); }
+.anbk-rd.on { border-color: var(--a-blue); }
+.anbk-rd.on::after { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: var(--a-blue); }
+.anbk-nav { display: flex; align-items: center; justify-content: space-around; gap: 10px; padding: 0 0 4px; }
+.anbk-nav .anbk-btn { width: 170px; height: 30px; padding: 0 10px; }
+.anbk-ragu { gap: 6px; cursor: pointer; }
+.anbk-ragu input { appearance: none; -webkit-appearance: none; width: 12px; height: 12px; margin: 0; background: #fff; border: 1.5px solid #3a3a3a; border-radius: 2px; display: grid; place-items: center; cursor: pointer; flex: none; }
+.anbk-ragu input:checked { background: #3a3a3a; }
+.anbk-ragu input:checked::after { content: ""; width: 4px; height: 7px; border: solid #ffc107; border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px, -1px); }
+#btn-soal-next.selesai { background: var(--a-blue); }
 
-  function renderSoal(soal, opts) {
-    const jwb = (opts && opts.jawaban) || {};
-    const { stim, tanya } = pisah(soal.pertanyaan);
-    let kiri = '';
-    if (stim.trim()) kiri += '<div class="pertanyaan">' + kontenSoalHtml(stim) + '</div>';
-    if (soal.gambar) kiri += tagGambarAman_(soal.gambar, 'gambar-soal', 'Gambar soal');
-    let kanan = tanya.trim() ? '<div class="pertanyaan">' + kontenSoalHtml(tanya) + '</div>' : '';
-    const id = esc(soal.id);
-    if (soal.tipe === 'pilihan_ganda' || soal.tipe === 'benar_salah') {
-      kanan += '<div class="anbk-opsi-list">' + (soal.opsi || []).map((o, i) =>
-        `<label class="anbk-opsi${jwb[soal.id] === i ? ' selected' : ''}" data-opsi="${i}" onclick="ExamEngine.pilihJawabanTunggal('${id}', ${i})"><span class="anbk-cb radio"></span><span class="anbk-opsi-t">${isiOpsi(opsiObj(o))}</span></label>`).join('') + '</div>';
-    } else if (soal.tipe === 'checkbox') {
-      const dip = jwb[soal.id] || [];
-      // Petunjuk otomatis disembunyikan bila teks soal sudah memuatnya (hindari instruksi ganda).
-      const sudahAdaPetunjuk = /jawaban\s+benar\s+lebih\s+dari\s+satu|pilih\s+semua/i.test(String(soal.pertanyaan || '').replace(/<[^>]*>/g, ' '));
-      if (!sudahAdaPetunjuk) kanan += '<div class="petunjuk">Pilih semua jawaban yang benar! Jawaban benar lebih dari satu.</div>';
-      kanan += '<div class="anbk-opsi-list">' + (soal.opsi || []).map((o, i) =>
-        `<label class="anbk-opsi${dip.includes(i) ? ' selected' : ''}" data-opsi="${i}" onclick="ExamEngine.toggleJawabanGanda('${id}', ${i})"><span class="anbk-cb"></span><span class="anbk-opsi-t">${isiOpsi(opsiObj(o))}</span></label>`).join('') + '</div>';
-    } else if (soal.tipe === 'menjodohkan') {
-      const j = jwb[soal.id] || {}; const kol = (soal.opsi && soal.opsi.kanan) || [];
-      const bs = kol.length === 2 && /^benar$/i.test(String(kol[0]).trim()) && /^salah$/i.test(String(kol[1]).trim());
-      kanan += '<div style="overflow-x:auto"><table class="anbk-tbl"><thead><tr><th>Pernyataan</th>' +
-        kol.map((k, c) => `<th class="kol-opsi">${esc(k)}${bs ? ' (' + (c + 1) + ')' : ''}</th>`).join('') + '</tr></thead><tbody>' +
-        ((soal.opsi && soal.opsi.kiri) || []).map((t, r) => `<tr><td>${esc(t)}</td>` +
-          kol.map((k, c) => `<td><span class="anbk-rd${String(j[r]) === String(c) ? ' on' : ''}" data-row="${r}" data-val="${c}" onclick="ExamEngine.pilihJodoh('${id}', ${r}, '${c}')"></span></td>`).join('') + '</tr>').join('') +
-        '</tbody></table></div>';
-    } else {
-      kanan += `<textarea rows="8" placeholder="Tulis jawaban Anda di sini..." oninput="ExamEngine.isiJawabanUraian('${id}', this.value)">${esc(jwb[soal.id] || '')}</textarea>`;
-    }
-    if (!kiri) return '<div class="soal-kanan">' + kanan + '</div>';
-    return '<div class="soal-kiri">' + kiri + '</div><div class="soal-kanan">' + kanan + '</div>';
-  }
+/* ---------- Modal Daftar Soal / Informasi Soal ---------- */
+.anbk-modal-bg { position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,.52); display: flex; align-items: flex-start; justify-content: center; padding: 60px 14px 20px; overflow: auto; }
+.anbk-modal { width: 100%; max-width: 474px; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,.35); margin-top: min(11vh, 108px); animation: anbk-pop .16s ease-out; }
+@keyframes anbk-pop { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+.anbk-modal-h { display: flex; align-items: center; justify-content: space-between; background: #dfe6e9; padding: 14px 24px 14px 22px; min-height: 48px; }
+.anbk-modal-h h3 { margin: 0; font: 400 20px/1.3 'Poppins', sans-serif; color: #212529; }
+.anbk-x { all: unset; cursor: pointer; font-size: 22px; line-height: 1; color: #333; padding: 2px 6px; }
+.anbk-modal-b { padding: 36px 28px 40px; }
+.anbk-page .soal-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 8px; padding: 0; background: none; border: 0; box-shadow: none; max-height: 52vh; overflow: auto; }
+.anbk-page .soal-grid button { all: unset; box-sizing: border-box; cursor: pointer; min-width: 29px; height: 28px; padding: 0 5px; display: inline-grid; place-items: center; border: 1px solid #333; border-radius: 3px; background: #fff; color: #212529; font: 400 12.5px 'Poppins', sans-serif; -webkit-tap-highlight-color: transparent; }
+.anbk-page .soal-grid button:hover { background: #eef4ff; }
+.anbk-page .soal-grid button.answered { background: var(--a-green); border-color: var(--a-green); color: #fff; }
+.anbk-page .soal-grid button.ragu { background: var(--a-yellow); border-color: #d39e00; color: #3a3a3a; }
+.anbk-page .soal-grid button.current { background: var(--a-blue); border-color: var(--a-blue); color: #fff; box-shadow: none; transform: none; }
+.anbk-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: center; margin-top: 22px; font-size: 11px; color: #6c757d; }
+.anbk-legend .lg { display: inline-block; width: 11px; height: 11px; border-radius: 2px; border: 1px solid #333; margin-right: 5px; vertical-align: -1px; background: #fff; }
+.anbk-legend .lg-now { background: var(--a-blue); border-color: var(--a-blue); } .anbk-legend .lg-ans { background: var(--a-green); border-color: var(--a-green); } .anbk-legend .lg-rag { background: var(--a-yellow); border-color: #d39e00; }
+.anbk-info { padding: 22px 26px 26px; }
+.anbk-info table { width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 14px; }
+.anbk-info td { padding: 8px 4px; border-bottom: 1px solid #edf0f2; vertical-align: top; }
+.anbk-info td:first-child { color: #6c757d; width: 46%; } .anbk-info td:last-child { font-weight: 500; }
 
-  // ---------------- hook ke mesin ujian ----------------
-  Siswa.cekToken = async function () {
-    const inp = $('input-token-ujian'), err = $('token-error'), btn = $('btn-cari-ujian');
-    const token = inp.value.trim().toUpperCase(); err.textContent = '';
-    const salah = periksaKonfirmasi(); if (salah) { err.textContent = salah; return; }
-    if (!token) { err.textContent = 'Token belum diisi.'; inp.focus(); return; }
-    btn.classList.add('is-disabled'); const lama = btn.textContent; btn.textContent = 'Memeriksa...';
-    try {
-      const res = await api('cekToken', { token, siswaId: state.user && state.user.id });
-      if (!res.ok) { err.textContent = res.error || 'Token salah.'; return; }
-      state.ujian = res.ujian; tampilKonfirmasiTes(res.ujian);
-    } finally { btn.classList.remove('is-disabled'); btn.textContent = lama; }
-  };
-  UI.kembaliKeBerandaSiswa = function () { tampilKonfirmasiData(); };
+/* ---------- Layar lama (hasil, detail, bukti) di bawah header ANBK ---------- */
+.anbk-legacy { display: flex !important; flex-direction: column; align-items: center; padding: 0 !important; justify-content: flex-start !important; }
+.anbk-legacy.hidden { display: none !important; }
+.anbk-legacy > .anbk-hero { width: 100%; }
+.anbk-legacy > :not(.anbk-hero) { margin-top: -45px; position: relative; z-index: 3; margin-bottom: 36px; }
+#hasil-screen .hasil-card { box-shadow: 0 24px 44px -14px rgba(30,55,90,.32), 0 3px 12px rgba(30,55,90,.08); border-radius: 12px; }
+#detail-screen .detail-wrap, #bukti-screen .bukti-card { background: #fff; border-radius: 12px; box-shadow: 0 24px 44px -14px rgba(30,55,90,.32), 0 3px 12px rgba(30,55,90,.08); padding: 1.6rem; }
+#detail-screen .detail-wrap { width: min(920px, calc(100% - 28px)); }
+#bukti-screen .bukti-card { width: min(560px, calc(100% - 28px)); }
+.anbk-legacy button.accent, .anbk-legacy .accent { border-radius: 30px; }
+.anbk-page .anticheat-warning { z-index: 600; }
 
-  ExamEngine.renderSoal = function () {
-    const idx = state.idxSoal, soal = state.soal[idx], card = $('question-card');
-    card.innerHTML = renderKontenSoal(soal, { nomor: idx + 1, total: state.soal.length, interaktif: true, jawaban: state.jawaban, pecah: true, anbk: true });
-    card.classList.toggle('dua-kolom', !!card.querySelector('.soal-kiri'));
-    renderMatika(card);
-    $('u-nomor').textContent = 'Soal nomor ' + (idx + 1);
-    $('chk-ragu').checked = state.ragu.includes(soal.id);
-    $('btn-soal-prev').disabled = idx === 0;
-    const terakhir = idx === state.soal.length - 1, nx = $('btn-soal-next');
-    nx.classList.toggle('selesai', terakhir);
-    nx.querySelector('span').textContent = terakhir ? 'Selesai' : 'Soal berikutnya';
-    nx.querySelector('i').style.display = terakhir ? 'none' : '';
-    SkalaSoal.terapkan(); ExamEngine.renderGridSoal();
-    $('modal-daftar').classList.add('hidden'); $('modal-info').classList.add('hidden');
-  };
-  ExamEngine.pilihJawabanTunggal = function (id, i) {
-    state.jawaban[id] = i; simpanCacheLokal();
-    document.querySelectorAll('#question-card .anbk-opsi').forEach(e => e.classList.toggle('selected', +e.dataset.opsi === i));
-    ExamEngine.renderGridSoal();
-  };
-  ExamEngine.toggleJawabanGanda = function (id, i) {
-    const arr = state.jawaban[id] || []; const k = arr.indexOf(i);
-    if (k === -1) arr.push(i); else arr.splice(k, 1);
-    state.jawaban[id] = arr; simpanCacheLokal();
-    document.querySelectorAll('#question-card .anbk-opsi').forEach(e => e.classList.toggle('selected', arr.includes(+e.dataset.opsi)));
-    ExamEngine.renderGridSoal();
-  };
-  ExamEngine.pilihJodoh = function (id, i, val) {
-    const j = state.jawaban[id] || {}; j[i] = val; state.jawaban[id] = j; simpanCacheLokal();
-    document.querySelectorAll('#question-card .anbk-rd[data-row="' + i + '"]').forEach(e => e.classList.toggle('on', String(e.dataset.val) === String(val)));
-    ExamEngine.renderGridSoal();
-  };
+/* ---------- HP / layar sempit ---------- */
+@media (max-width: 900px) {
+  .anbk-konf { grid-template-columns: 1fr; }
+  .anbk-wrap { margin-top: -38px; }
+  .anbk-card-token { padding: 16px 20px 18px; min-height: 0; }
+  .anbk-card-ujian { padding: 18px 18px 22px; }
+  .anbk-page .question-card.dua-kolom { grid-template-columns: 1fr; }
+  .anbk-page .question-card.dua-kolom .soal-kiri { border-right: 0; border-bottom: 4px dotted #d3d3d3; }
+}
+@media (max-width: 640px) {
+  .anbk-hero { height: 112px; }
+  .anbk-hero-in { height: 74px; }
+  .anbk-brand img { width: 46px; height: 46px; }
+  .anbk-brand-t b { font-size: 13.5px; } .anbk-brand-t span { font-size: 12px; }
+  .anbk-user { font-size: 12.5px; gap: 6px; } .anbk-user-nama { max-width: 42vw; }
+  .anbk-user-ico { width: 24px; height: 24px; font-size: 12px; }
+  .anbk-wrap, .anbk-wrap-ujian { margin-top: -34px; padding-left: 10px; padding-right: 10px; }
+  .anbk-center { padding: 18px 12px 28px; align-items: flex-start; }
+  .anbk-card-login { padding: 30px 26px 32px; } .anbk-card-tes { padding: 26px 24px 28px; } .anbk-card-selesai { padding: 26px 22px 28px; }
+  .anbk-card-form { padding: 20px 20px 24px; } .anbk-card-form h2, .anbk-card-tes h2 { font-size: 21px; }
+  .anbk-card-ujian { padding: 14px 12px 18px; border-radius: 10px; }
+  .anbk-u-no { font-size: 17px; width: 100%; }
+  .anbk-u-tools { width: 100%; justify-content: flex-start; gap: 5px; }
+  .anbk-pill { height: 24px; padding: 0 8px; font-size: 11px; } .anbk-pill-blue { font-size: 10.5px; }
+  .anbk-u-sub { margin-top: 8px; } .anbk-u-mapel { font-size: 13px; text-align: left; width: 100%; }
+  .anbk-hr { margin: 8px 0 10px; } .anbk-hr-b { margin: 12px 0 12px; }
+  .anbk-soalbox { min-height: 260px; } .anbk-soalbar { height: 7px; }
+  .anbk-page .question-card .soal-kiri, .anbk-page .question-card .soal-kanan { padding: 12px 11px 14px; }
+  .anbk-page .question-card .pertanyaan table { font-size: .85em; } .anbk-page .question-card .pertanyaan table td, .anbk-page .question-card .pertanyaan table th { padding: 3px 5px; }
+  .anbk-tbl .kol-opsi { width: 62px; min-width: 0; } .anbk-tbl th { padding: 7px 4px; font-size: .9em; } .anbk-rd { width: 22px; height: 22px; }
+  .anbk-nav { gap: 6px; justify-content: space-between; }
+  .anbk-nav .anbk-btn { width: auto; flex: 1 1 0; min-width: 0; padding: 0 6px; height: 34px; font-size: 12.5px; }
+  .anbk-nav .anbk-btn span { overflow: hidden; text-overflow: ellipsis; }
+  #btn-soal-prev span, #btn-soal-next span { font-size: 0; } 
+  #btn-soal-prev span::after { content: "Sebelumnya"; font-size: 12.5px; } #btn-soal-next span::after { content: "Berikutnya"; font-size: 12.5px; }
+  #btn-soal-next.selesai span::after { content: "Selesai"; }
+  .anbk-modal-bg { padding-top: 24px; } .anbk-modal { margin-top: 8vh; } .anbk-modal-b { padding: 24px 16px 28px; } .anbk-modal-h h3 { font-size: 18px; }
+  .anbk-aksi .anbk-btn { flex: 1; min-width: 0; }
+  .anbk-p { font-size: 15px; }
+}
+@media print { .anbk-page { display: none !important; } }
 
-  // ukuran font soal: 3 tingkat "A A A"
-  Object.assign(SkalaSoal, {
-    tingkat: [1, 1.2, 1.45], idx: 0,
-    init() { try { const v = parseInt(localStorage.getItem('cbt_skala_anbk'), 10); if (v >= 0 && v < 3) SkalaSoal.idx = v; } catch (e) { /* abaikan */ } },
-    pilih(i) { SkalaSoal.idx = i; try { localStorage.setItem('cbt_skala_anbk', String(i)); } catch (e) { /* abaikan */ } SkalaSoal.terapkan(); },
-    terapkan() {
-      const c = $('question-card'); if (c) c.style.setProperty('--skala', SkalaSoal.tingkat[SkalaSoal.idx]);
-      ['skala-kecil', 'skala-sedang', 'skala-besar'].forEach((id, k) => { const b = $(id); if (b) b.classList.toggle('on', k === SkalaSoal.idx); });
-    }
-  });
-  SkalaSoal.init();
+/* ---------- Kartu Login (cetak) ---------- */
+@page kartulogin { size: A4 portrait; margin: 8mm; }
+@media print {
+  body.cetak-detail-siswa #cetak-area.kl-area { page: kartulogin; font: 9pt/1.3 Arial, Helvetica, sans-serif; display: block !important; }
+  .kl-wrap { display: grid; gap: 4mm; }
+  .kl-wrap.kl-k2 { grid-template-columns: 1fr 1fr; } .kl-wrap.kl-k1 { grid-template-columns: 1fr; gap: 6mm; font-size: 12.5pt; }
+  .kl-card { border: 1.1px solid #444; background: #fff; break-inside: avoid; page-break-inside: avoid; }
+  .kl-head { display: flex; align-items: center; gap: 2.2mm; padding: 2.2mm 2.6mm; border-bottom: 1.1px solid #444; }
+  .kl-logo { width: 13mm; height: 13mm; flex: none; } .kl-k1 .kl-logo { width: 22mm; height: 22mm; }
+  .kl-judul { flex: 1; text-align: center; font-weight: 700; font-size: 8.4pt; line-height: 1.3; } .kl-k1 .kl-judul { font-size: 13.5pt; }
+  .kl-qr { width: 19mm; height: 19mm; flex: none; } .kl-k1 .kl-qr { width: 30mm; height: 30mm; } .kl-qr svg { width: 100%; height: 100%; display: block; }
+  .kl-tb { width: 100%; border-collapse: collapse; } .kl-tb td { padding: 1.3mm 1mm; vertical-align: top; }
+  .kl-tb td.k { width: 36%; padding-left: 2.6mm; } .kl-tb td.c { width: 3%; text-align: center; } .kl-tb td.v.b { font-weight: 700; }
+  .kl-k1 .kl-tb td { padding: 2.2mm 1.2mm; }
+}
 
-  const _buka = KumpulUI.buka;
-  KumpulUI.buka = function () {
-    $('modal-daftar').classList.add('hidden'); $('modal-info').classList.add('hidden');
-    _buka.call(KumpulUI); $('kumpul-judul').textContent = 'Konfirmasi Tes';
-  };
+/* ---------- penegasan (menang atas aturan lama berbasis #ujian-screen) ---------- */
+#ujian-screen .question-card { font-size: calc(14px * var(--skala, 1)); padding: 0; background: transparent; border: 0; box-shadow: none; }
+#ujian-screen .question-card .pertanyaan { font-size: inherit; line-height: 1.6; margin: 0 0 12px; font-weight: 400; color: #212529; }
+#ujian-screen .question-card .soal-kiri, #ujian-screen .question-card .soal-kanan { padding: 14px 18px 18px; }
+#ujian-screen .question-card .petunjuk { font-size: inherit; color: #212529; margin: 0 0 12px; font-weight: 400; }
+#ujian-screen .anbk-opsi, #ujian-screen .anbk-opsi-t, .anbk-tbl td, .anbk-tbl th { font-weight: 400; color: #212529; font-size: inherit; }
+#ujian-screen .anbk-opsi { margin: 0; padding: 0; background: none; border: 0; border-radius: 0; box-shadow: none; }
+#ujian-screen .anbk-tbl th { color: #444; }
+.anbk-login .anbk-card-login { background-image: none; }
+.anbk-page .soal-grid button.current { transform: none; }
+#modal-kumpul .kumpul-ikon, #modal-kumpul #kumpul-sub { display: none !important; }
+#modal-kumpul .anbk-cek, #modal-kumpul .anbk-cek span { font-weight: 400; }
+#ujian-screen .soal-grid button { border-radius: 3px; font-size: 12.5px; font-weight: 400; min-width: 29px; height: 28px; }
+#ujian-screen .soal-grid { gap: 8px; }
+#siswa-portal .anbk-f-token input { text-align: left; font-size: 14px; padding: 4px 0 6px; }
+@media print { .kl-tb td.k { width: 42%; white-space: nowrap; } .kl-judul { font-size: 7.8pt; } .kl-k1 .kl-judul { font-size: 13pt; } }
 
-  // ---------------- QR (byte mode, ECC M, versi 1-10) ----------------
-  function qrMatrix(text) {
-    const data = Array.from(new TextEncoder().encode(text));
-    const ECC = [0, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26], BLK = [0, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5];
-    const raw = (v) => { let r = (16 * v + 128) * v + 64; if (v >= 2) { const na = Math.floor(v / 7) + 2; r -= (25 * na - 10) * na - 55; if (v >= 7) r -= 36; } return r; };
-    let ver = 1;
-    for (; ver <= 10; ver++) { if (data.length * 8 + 4 + (ver < 10 ? 8 : 16) <= (Math.floor(raw(ver) / 8) - ECC[ver] * BLK[ver]) * 8) break; }
-    if (ver > 10) throw new Error('Teks QR terlalu panjang');
-    const dataCw = Math.floor(raw(ver) / 8) - ECC[ver] * BLK[ver];
-    const bits = []; const put = (v, n) => { for (let i = n - 1; i >= 0; i--) bits.push((v >>> i) & 1); };
-    put(4, 4); put(data.length, ver < 10 ? 8 : 16); data.forEach(b => put(b, 8));
-    put(0, Math.min(4, dataCw * 8 - bits.length)); while (bits.length % 8) bits.push(0);
-    for (let p = 0xEC; bits.length < dataCw * 8; p ^= 0xEC ^ 0x11) put(p, 8);
-    const cw = []; for (let i = 0; i < bits.length; i += 8) cw.push(parseInt(bits.slice(i, i + 8).join(''), 2));
-    const mul = (x, y) => { let z = 0; for (let i = 7; i >= 0; i--) { z = (z << 1) ^ ((z >>> 7) * 0x11D); z ^= ((y >>> i) & 1) * x; } return z; };
-    const div = (deg) => { const r = new Array(deg).fill(0); r[deg - 1] = 1; let root = 1; for (let i = 0; i < deg; i++) { for (let j = 0; j < r.length; j++) { r[j] = mul(r[j], root); if (j + 1 < r.length) r[j] ^= r[j + 1]; } root = mul(root, 2); } return r; };
-    const rem = (d, dv) => { const r = dv.map(() => 0); for (const b of d) { const f = b ^ r.shift(); r.push(0); dv.forEach((c, i) => { r[i] ^= mul(c, f); }); } return r; };
-    const nb = BLK[ver], el = ECC[ver], rawCw = Math.floor(raw(ver) / 8), nShort = nb - rawCw % nb, shortLen = Math.floor(rawCw / nb), dv = div(el);
-    const blocks = []; for (let i = 0, k = 0; i < nb; i++) { const d = cw.slice(k, k + shortLen - el + (i < nShort ? 0 : 1)); k += d.length; blocks.push(d.concat(i < nShort ? [0] : [], rem(d, dv))); }
-    const out = []; for (let i = 0; i < blocks[0].length; i++) blocks.forEach((b, j) => { if (i !== shortLen - el || j >= nShort) out.push(b[i]); });
-    const size = ver * 4 + 17; const M = [], F = [];
-    for (let y = 0; y < size; y++) { M.push(new Array(size).fill(false)); F.push(new Array(size).fill(false)); }
-    const setF = (x, y, d) => { if (x >= 0 && y >= 0 && x < size && y < size) { M[y][x] = d; F[y][x] = true; } };
-    for (let i = 0; i < size; i++) { setF(6, i, i % 2 === 0); setF(i, 6, i % 2 === 0); }
-    const finder = (cx, cy) => { for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) { const d = Math.max(Math.abs(dx), Math.abs(dy)); setF(cx + dx, cy + dy, d !== 2 && d !== 4); } };
-    finder(3, 3); finder(size - 4, 3); finder(3, size - 4);
-    if (ver >= 2) {
-      const na = Math.floor(ver / 7) + 2, step = ver === 32 ? 26 : Math.ceil((ver * 4 + 4) / (na * 2 - 2)) * 2; const pos = [6];
-      for (let p = size - 7; pos.length < na; p -= step) pos.splice(1, 0, p);
-      for (let i = 0; i < na; i++) for (let j = 0; j < na; j++) {
-        if ((i === 0 && j === 0) || (i === 0 && j === na - 1) || (i === na - 1 && j === 0)) continue;
-        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) setF(pos[i] + dx, pos[j] + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
-      }
-    }
-    const fmt = (mask) => {
-      const dat = (0 << 3) | mask; let r = dat; for (let i = 0; i < 10; i++) r = (r << 1) ^ ((r >>> 9) * 0x537);
-      const b = ((dat << 10) | r) ^ 0x5412; const g = (i) => ((b >>> i) & 1) !== 0;
-      for (let i = 0; i <= 5; i++) setF(8, i, g(i)); setF(8, 7, g(6)); setF(8, 8, g(7)); setF(7, 8, g(8));
-      for (let i = 9; i < 15; i++) setF(14 - i, 8, g(i));
-      for (let i = 0; i < 8; i++) setF(size - 1 - i, 8, g(i));
-      for (let i = 8; i < 15; i++) setF(8, size - 15 + i, g(i));
-      setF(8, size - 8, true);
-    };
-    fmt(0);
-    if (ver >= 7) { let r = ver; for (let i = 0; i < 12; i++) r = (r << 1) ^ ((r >>> 11) * 0x1F25); const b = (ver << 12) | r; for (let i = 0; i < 18; i++) { const d = ((b >>> i) & 1) !== 0, a = size - 11 + i % 3, c = Math.floor(i / 3); setF(a, c, d); setF(c, a, d); } }
-    let k = 0;
-    for (let right = size - 1; right >= 1; right -= 2) {
-      if (right === 6) right = 5;
-      for (let v = 0; v < size; v++) for (let j = 0; j < 2; j++) {
-        const x = right - j, up = ((right + 1) & 2) === 0, y = up ? size - 1 - v : v;
-        if (!F[y][x] && k < out.length * 8) { M[y][x] = ((out[k >>> 3] >>> (7 - (k & 7))) & 1) !== 0; k++; }
-      }
-    }
-    const maskFn = [(x, y) => (x + y) % 2 === 0, (x, y) => y % 2 === 0, (x, y) => x % 3 === 0, (x, y) => (x + y) % 3 === 0, (x, y) => (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0, (x, y) => x * y % 2 + x * y % 3 === 0, (x, y) => (x * y % 2 + x * y % 3) % 2 === 0, (x, y) => ((x + y) % 2 + x * y % 3) % 2 === 0];
-    const apply = (m) => { for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if (!F[y][x] && maskFn[m](x, y)) M[y][x] = !M[y][x]; };
-    const penalty = () => {
-      let p = 0;
-      for (let y = 0; y < size; y++) { let run = 1; for (let x = 1; x < size; x++) { if (M[y][x] === M[y][x - 1]) { run++; if (run === 5) p += 3; else if (run > 5) p++; } else run = 1; } }
-      for (let x = 0; x < size; x++) { let run = 1; for (let y = 1; y < size; y++) { if (M[y][x] === M[y - 1][x]) { run++; if (run === 5) p += 3; else if (run > 5) p++; } else run = 1; } }
-      for (let y = 0; y < size - 1; y++) for (let x = 0; x < size - 1; x++) { const c = M[y][x]; if (c === M[y][x + 1] && c === M[y + 1][x] && c === M[y + 1][x + 1]) p += 3; }
-      let dark = 0; M.forEach(r => r.forEach(c => { if (c) dark++; })); p += Math.floor(Math.abs(dark * 20 - size * size * 10) / (size * size)) * 10;
-      return p;
-    };
-    let best = 0, bp = Infinity;
-    for (let m = 0; m < 8; m++) { apply(m); fmt(m); const p = penalty(); if (p < bp) { bp = p; best = m; } apply(m); }
-    apply(best); fmt(best);
-    return M;
-  }
-  function qrSvg(text) {
-    const M = qrMatrix(text), n = M.length, q = 2; let d = '';
-    M.forEach((r, y) => { let x = 0; while (x < n) { if (r[x]) { let w = 1; while (x + w < n && r[x + w]) w++; d += 'M' + (x + q) + ' ' + (y + q) + 'h' + w + 'v1h-' + w + 'z'; x += w; } else x++; } });
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n + 2 * q} ${n + 2 * q}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
-  }
+/* ============ v43b: logo asli + penyesuaian HP sesuai tangkapan layar ANBK ============ */
+.anbk-brand { gap: 9px; }
+.anbk-brand .anbk-logo-tw { width: 58px; height: 58px; }
+.anbk-brand .anbk-logo-sch { width: auto; height: 50px; margin-right: 2px; }
+.anbk-brand-t { margin-left: 1px; }
+.anbk-in { width: 100%; border: 0; border-bottom: 1px solid #ececec; border-radius: 0; background: transparent; padding: 4px 0 6px; font: 400 14px 'Poppins', sans-serif; color: #212529; outline: none; box-shadow: none; height: auto; }
+.anbk-in::placeholder { color: #9aa0a6; } .anbk-in:focus { border-bottom-color: var(--a-blue); }
+.anbk-tgl select { width: 100%; min-width: 0; border: 0; border-radius: 0; background: #eceff2; padding: 7px 10px; font: 400 14px 'Poppins', sans-serif; color: #3d4349; outline: none; box-shadow: none; height: auto; appearance: none; -webkit-appearance: none; cursor: pointer; }
+.anbk-tgl select:invalid, .anbk-tgl select option[value=""] { color: #6c757d; }
+.anbk-tgl select:focus { outline: 2px solid rgba(13,110,253,.35); }
+.anbk-ic { display: none; }
+.kl-sch { margin-left: -1mm; }
 
-  // ---------------- Kartu Login ----------------
-  function bukaKartuLogin() {
-    const semua = state.guru.daftarSiswa || [];
-    if (!semua.length) { toast('Belum ada data siswa. Impor atau tambahkan siswa dulu.', 'error'); return; }
-    let m = $('modal-kartu-login'); if (m) m.remove();
-    const kelas = Array.from(new Set(semua.map(s => s.kelas || ''))).sort((a, b) => a.localeCompare(b, 'id', { numeric: true }));
-    const pil = $('filter-kelas-siswa') ? $('filter-kelas-siswa').value : '';
-    m = document.createElement('div'); m.id = 'modal-kartu-login'; m.className = 'modal-backdrop';
-    m.innerHTML = `<div class="modal"><h3>Cetak Kartu Login</h3>
-      <p class="subtitle" style="margin-top:-.4rem">Kartu berisi logo, QR (memindai QR membuka aplikasi dengan username &amp; password terisi), nama, NISN, tempat/tanggal lahir, username dan password.</p>
-      <div class="field"><label>Baris judul 1</label><input type="text" id="kl-j1" value="KARTU LOGIN  GLADI BERSIH"></div>
-      <div class="field"><label>Baris judul 2</label><input type="text" id="kl-j2" value="TES KEMAMPUAN AKADEMIK  SMP/MTS"></div>
-      <div class="field"><label>Baris judul 3</label><input type="text" id="kl-j3" value="TAHUN  ${new Date().getFullYear()}"></div>
-      <div class="row">
-        <div class="field"><label>Kelas</label><select id="kl-kelas"><option value="">Semua kelas</option>${kelas.map(k => `<option value="${esc(k)}"${k === pil ? ' selected' : ''}>${esc(k || '(tanpa kelas)')}</option>`).join('')}</select></div>
-        <div class="field"><label>Ukuran kartu</label><select id="kl-ukuran"><option value="2">Ringkas: 8 kartu per halaman A4</option><option value="1">Besar: 3 kartu per halaman A4</option></select></div>
-      </div>
-      <div class="modal-close-row"><button class="secondary" onclick="document.getElementById('modal-kartu-login').remove()">Batal</button><button class="accent" id="kl-cetak" onclick="Anbk.cetakKartuLogin()">Cetak / Simpan PDF</button></div></div>`;
-    document.body.appendChild(m);
-  }
-  function cetakKartuLogin() {
-    const kelas = $('kl-kelas').value, kol = $('kl-ukuran').value;
-    const j = [$('kl-j1').value, $('kl-j2').value, $('kl-j3').value].filter(x => x.trim());
-    let daftar = (state.guru.daftarSiswa || []).filter(s => !$('kl-kelas').value || (s.kelas || '') === kelas);
-    if (!daftar.length) { toast('Tidak ada siswa untuk dicetak.', 'error'); return; }
-    daftar = daftar.slice().sort((a, b) => String(a.kelas || '').localeCompare(String(b.kelas || ''), 'id', { numeric: true }) || String(a.nama || '').localeCompare(String(b.nama || ''), 'id'));
-    const base = location.href.split('#')[0];
-    const kartu = daftar.map(s => {
-      let qr = ''; try { qr = qrSvg(base + '#u=' + encodeURIComponent(s.username) + '&p=' + encodeURIComponent(s.password)); } catch (e) { qr = ''; }
-      const ttl = [s.tempat_lahir, tglPanjang(s.tanggal_lahir)].filter(Boolean).join(', ');
-      const baris = [['Nama Peserta', s.nama], ['NISN', s.nisn], ['Tempat, Tanggal Lahir', ttl], ['Username', s.username, 1], ['Password', s.password, 1]];
-      return `<div class="kl-card"><div class="kl-head"><img class="kl-logo" src="icons/tutwuri.png" alt=""><img class="kl-logo kl-sch" src="icons/smpn2.png" alt=""><div class="kl-judul">${j.map(esc).join('<br>')}</div><div class="kl-qr">${qr}</div></div>
-        <table class="kl-tb">${baris.map(r => `<tr><td class="k">${r[0]}</td><td class="c">:</td><td class="v${r[2] ? ' b' : ''}">${esc(r[1] || '')}</td></tr>`).join('')}</table></div>`;
-    }).join('');
-    const html = `<div class="kl-wrap kl-k${kol}">${kartu}</div>`;
-    $('modal-kartu-login').remove();
-    Guru._cetakArea_(html, 'Kartu Login' + (kelas ? ' ' + kelas : '')).then(() => {});
-    const a = $('cetak-area'); if (a) a.classList.add('kl-area');
-  }
-  async function simpanTampilToken(aktif) {
-    const res = await api('simpanPengaturanTokenSiswa', { aktif });
-    if (res && res.ok) toast(aktif ? 'Token tampil di layar peserta.' : 'Token disembunyikan dari layar peserta.', 'success');
-    else toast('Gagal menyimpan pengaturan.', 'error');
-  }
-  async function muatPengaturanToken() {
-    try { const r = await api('getPengaturanTokenSiswa', {}); const c = $('opt-tampil-token'); if (c && r && r.ok) c.checked = !!r.aktif; } catch (e) { /* abaikan */ }
-  }
+@media (max-width: 640px) {
+  .anbk-hero { height: 140px; }
+  .anbk-hero-in { flex-direction: column; align-items: flex-start; justify-content: flex-start; height: auto; padding: 10px 14px 0 18px; gap: 0; }
+  .anbk-brand .anbk-logo-tw { width: 56px; height: 56px; } .anbk-brand .anbk-logo-sch { height: 46px; }
+  .anbk-brand-t b { font-size: 14px; } .anbk-brand-t span { font-size: 13px; }
+  .anbk-hero-in .anbk-user { align-self: flex-end; margin: 12px 24px 0 0; font-size: 14px; max-width: calc(100% - 16px); }
+  .anbk-user-nama { max-width: 62vw; } .anbk-user-ico { width: 27px; height: 27px; }
+  /* login & konfirmasi data: header satu baris (logo kiri, peserta kanan) */
+  #login-screen .anbk-hero-in, #siswa-portal .anbk-hero-in { flex-direction: row; align-items: center; justify-content: space-between; height: 74px; padding: 6px 12px 0 12px; }
+  #login-screen .anbk-brand .anbk-logo-tw, #siswa-portal .anbk-brand .anbk-logo-tw { width: 40px; height: 40px; }
+  #login-screen .anbk-brand .anbk-logo-sch, #siswa-portal .anbk-brand .anbk-logo-sch { height: 34px; }
+  #login-screen .anbk-brand, #siswa-portal .anbk-brand { gap: 6px; }
+  #login-screen .anbk-brand-t b, #siswa-portal .anbk-brand-t b { font-size: 13px; } #login-screen .anbk-brand-t span, #siswa-portal .anbk-brand-t span { font-size: 11.5px; }
+  #siswa-portal .anbk-hero-in .anbk-user { align-self: center; margin: 0; font-size: 11.5px; } #siswa-portal .anbk-user-nama { max-width: 24vw; }
+  .anbk-wrap { margin-top: -53px; padding-left: 11px; padding-right: 11px; }
+  .anbk-center { align-items: center; padding: 20px 18px 36px; }
+  .anbk-card-token { padding: 22px 22px 24px; } .anbk-token-row { font-size: 16px; gap: 12px; }
+  .anbk-card-tes { padding: 32px 36px 36px; } .anbk-card-tes h2 { font-size: 24px; margin-bottom: 22px; }
+  .anbk-card-tes .anbk-f > label { font-size: 11px; } .anbk-card-tes .anbk-v-lg { font-size: 16px; }
+  .anbk-card-selesai { padding: 32px 36px 36px; } .anbk-card-selesai h2 { font-size: 24px; } .anbk-p { font-size: 16px; }
+  .anbk-aksi .anbk-btn { flex: 0 0 auto; min-width: 118px; }
+  /* layar soal */
+  #ujian-screen .anbk-wrap-ujian { margin-top: -86px; padding-left: 11px; padding-right: 11px; }
+  .anbk-card-ujian { padding: 16px 12px 22px; }
+  .anbk-u-top { flex-direction: column; align-items: center; gap: 8px; }
+  .anbk-u-no { width: auto; text-align: center; font-size: 22px; }
+  .anbk-u-tools { width: auto; justify-content: center; gap: 8px; }
+  .anbk-pill-blue { width: 28px; height: 28px; padding: 0; justify-content: center; border-radius: 50%; font-size: 13px; }
+  .anbk-pill-blue .anbk-tx { display: none; } .anbk-ic { display: inline; }
+  .anbk-pill-timer { height: 29px; padding: 0 14px; font-size: 14px; }
+  .anbk-u-sub { flex-direction: column; align-items: center; gap: 4px; margin-top: 6px; }
+  .anbk-font { font-size: 15px; gap: 12px; } .anbk-fs.fs1 { font-size: 13px; } .anbk-fs.fs2 { font-size: 17px; } .anbk-fs.fs3 { font-size: 22px; }
+  .anbk-u-mapel { text-align: center; width: auto; font-size: 16px; }
+  .anbk-page .question-card.dua-kolom .soal-kiri { border-bottom: 0; }
+  .anbk-page .question-card.dua-kolom .soal-kanan { border-left: 4px dotted #d3d3d3; margin: 4px 0 10px 12px; padding-left: 10px; }
+  .anbk-nav { justify-content: space-around; }
+  .anbk-nav .anbk-btn { flex: 0 0 auto; width: 60px; height: 30px; padding: 0; font-size: 18px; }
+  .anbk-nav .anbk-ragu { width: 72px; }
+  #btn-soal-prev span, #btn-soal-next span, .anbk-ragu span { display: none; }
+  #btn-soal-prev span::after, #btn-soal-next span::after { content: none; }
+  #btn-soal-next.selesai { width: 96px; } #btn-soal-next.selesai span { display: inline; font-size: 14px; }
+  .anbk-ragu input { width: 20px; height: 20px; border-radius: 3px; }
+}
+@media print { .kl-logo.kl-sch { width: 13mm; height: auto; } .kl-k1 .kl-logo.kl-sch { width: 22mm; } }
+#siswa-portal .anbk-in { border: 0; border-bottom: 1px solid #ececec; border-radius: 0; background: transparent; box-shadow: none; padding: 4px 0 6px; height: auto; }
+#siswa-portal .anbk-in:focus { border-bottom-color: var(--a-blue); box-shadow: none; }
+#siswa-portal .anbk-tgl select { border-radius: 0; box-shadow: none; }
 
-  // ---------------- impor data siswa (sesuai Kartu Login) ----------------
-  const norm = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]/g, '');
-  const KOL = {
-    nama: ['nama', 'namapeserta', 'namalengkap', 'namasiswa'], nisn: ['nisn', 'nis'], tempat: ['tempatlahir', 'tempat'],
-    tgl: ['tanggallahir', 'tgllahir', 'tanggal'], ttl: ['tempattanggallahir', 'tempattgllahir', 'ttl'],
-    username: ['username', 'user', 'namapengguna'], password: ['password', 'sandi', 'katasandi', 'pass'],
-    kelas: ['kelas', 'rombel'], jk: ['jeniskelamin', 'jk', 'kelamin', 'lp']
-  };
-  function petaKolom(row) {
-    const p = {}; (row || []).forEach((c, i) => { const n = norm(c); Object.keys(KOL).forEach(k => { if (p[k] === undefined && KOL[k].includes(n)) p[k] = i; }); });
-    return p;
-  }
-  const normJk = (v) => { const s = String(v || '').trim().toLowerCase(); return /^(l|lk|laki)/.test(s) ? 'L' : (/^(p|pr|perempuan|wanita)/.test(s) ? 'P' : ''); };
-  const teks = (v) => (v === null || v === undefined) ? '' : String(v).trim();
+/* kategori hasil siswa: garis aksen warna di atas kartu */
+#hasil-card { border-top: 5px solid #cfd8e3; }
+#hasil-card[data-kategori="kurang"] { border-top-color: #dc3545; }
+#hasil-card[data-kategori="memadai"] { border-top-color: #f59e0b; }
+#hasil-card[data-kategori="baik"] { border-top-color: #16a34a; }
+#hasil-card[data-kategori="istimewa"] { border-top-color: #7c3aed; }
+#hasil-card .status-lulus { font-size: .82rem; letter-spacing: .06em; }
+@media (max-width: 640px) { .anbk-legacy > :not(.anbk-hero) { width: calc(100% - 22px); max-width: 100%; } }
 
-  Guru.unduhTemplateSiswa = function () {
-    unduhXlsx('template-data-siswa.xlsx', ['Nama Peserta', 'NISN', 'Tempat Lahir', 'Tanggal Lahir', 'Jenis Kelamin', 'Kelas', 'Username', 'Password'], [
-      ['Komang Rendi Mahardika', '0105952278', 'Banjarasem', '01 Oktober 2010', 'L', '9A', 'TP2206005700018', '187377*'],
-      ['Ni Luh Ayu Sari', '0112345678', 'Seririt', '12/03/2011', 'P', '9A', '', '']
-    ]);
-  };
-  Guru.importSiswaDariFile = function (ev) {
-    const file = ev.target.files[0]; if (!file) return;
-    const kelasOverride = $('siswa-import-kelas').value.trim();
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try { await muatPustaka_('xlsx'); } catch (err) { toast(err.message, 'error'); ev.target.value = ''; return; }
-      const wb = XLSX.read(e.target.result, { type: 'binary' });
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' });
-      let hi = rows.findIndex(r => petaKolom(r).nama !== undefined), P;
-      if (hi >= 0) P = petaKolom(rows[hi]); else { hi = 0; P = { nama: 0, kelas: 1, username: 2, password: 3 }; }
-      const data = rows.slice(hi + 1).filter(r => r.some(c => teks(c)) && teks(r[P.nama]));
-      const ada = {}, adaNisn = {}; (state.guru.daftarSiswa || []).forEach(s => { ada[String(s.username).trim().toLowerCase()] = s; if (s.nisn) adaNisn[String(s.nisn)] = s; });
-      const terpakai = Object.keys(ada); let nUser = 0, nPass = 0;
-      const baru = [], ubah = [];
-      data.forEach(r => {
-        const nama = teks(r[P.nama]); let tempat = P.tempat !== undefined ? teks(r[P.tempat]) : '', tgl = P.tgl !== undefined ? r[P.tgl] : '';
-        if (P.ttl !== undefined && teks(r[P.ttl])) { const t = teks(r[P.ttl]), k = t.indexOf(','); if (k > 0) { tempat = tempat || t.slice(0, k).trim(); tgl = tgl || t.slice(k + 1).trim(); } else tempat = tempat || t; }
-        let nisn = P.nisn !== undefined ? teks(r[P.nisn]) : ''; if (/^\d{1,9}$/.test(nisn)) nisn = nisn.padStart(10, '0');
-        let username = P.username !== undefined ? teks(r[P.username]) : '';
-        let password = P.password !== undefined ? teks(r[P.password]) : '';
-        const rec = { nama, nisn, tempat_lahir: tempat, tanggal_lahir: isoTgl(tgl), jenis_kelamin: P.jk !== undefined ? normJk(r[P.jk]) : '' };
-        const kelas = kelasOverride || (P.kelas !== undefined ? teks(r[P.kelas]) : ''); if (kelas) rec.kelas = kelas;
-        const lama = (username && ada[username.toLowerCase()]) || (nisn && adaNisn[nisn]) || null;
-        if (lama) { if (password) rec.password = password; if (username) rec.username = username; ubah.push(Object.assign({}, rec, { id: lama.id })); return; }
-        if (!username) { username = buatUsernameDariNama(nama, terpakai); nUser++; }
-        terpakai.push(username.toLowerCase());
-        if (!password) { password = buatPasswordAcak(); nPass++; }
-        baru.push(Object.assign({ kelas: '' }, rec, { username, password }));
-      });
-      if (!baru.length && !ubah.length) { toast('Tidak ada baris valid. Pastikan ada kolom "Nama Peserta".', 'error'); ev.target.value = ''; return; }
-      let gagal = '';
-      if (baru.length) { const r = await api('importSiswa', { siswaList: JSON.stringify(baru) }); if (!r.ok) gagal = r.error; }
-      for (const u of ubah) { const r = await api('updateSiswa', { siswa: JSON.stringify(u) }); if (!r.ok) gagal = r.error; }
-      if (gagal) toast('Gagal impor: ' + gagal, 'error');
-      else {
-        let pesan = baru.length + ' siswa baru diimpor' + (ubah.length ? ', ' + ubah.length + ' siswa lama diperbarui' : '') + '.';
-        if (nUser) pesan += ' ' + nUser + ' username dibuatkan otomatis.'; if (nPass) pesan += ' ' + nPass + ' password dibuatkan otomatis.';
-        toast(pesan, 'success'); $('siswa-import-kelas').value = '';
-      }
-      Guru.muatDaftarSiswa(); ev.target.value = '';
-    };
-    reader.readAsBinaryString(file);
-  };
-  const _muatSiswa = Guru.muatDaftarSiswa;
-  Guru.muatDaftarSiswa = async function () { const r = await _muatSiswa.apply(Guru, arguments); muatPengaturanToken(); return r; };
 
-  // ---------------- awal: #guru dan #u=..&p=.. (hasil memindai QR kartu) ----------------
-  window.addEventListener('DOMContentLoaded', () => {
-    const h = location.hash || '';
-    if (/^#guru/i.test(h)) pilihPortal('guru');
-    else if (/^#u=/.test(h)) {
-      const q = new URLSearchParams(h.slice(1));
-      if (q.get('u')) { $('login-username').value = q.get('u'); $('login-password').value = q.get('p') || ''; }
-      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* abaikan */ }
-      setTimeout(() => { const b = $('btn-login-submit'); if (b) b.focus(); }, 50);
-    }
-  });
+/* ============================================================================
+   v43d — TEMA "ANBK Pusmendik" UNTUK PORTAL GURU
+   Dipilih lewat Pengaturan > Tampilan > Galeri Gaya > "ANBK Pusmendik"
+   (JS memasang html[data-skin="anbk"]). Tema lain & sisi siswa tidak terpengaruh.
+   Warna dari aplikasi asli: header #326698 / #2773b2 / #3379b6, biru #0d6efd,
+   latar #f0f4f8, font Poppins, tombol kapsul, kartu putih bergaris bayangan lembut.
+   ============================================================================ */
+.anbk-guru-band { display: none; }
+html[data-skin="anbk"] #guru-portal { font-family: 'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+html[data-skin="anbk"] #guru-portal.shell { background: #f0f4f8; }
 
-  return { setUser, isoTgl, tglPanjang, tampilKonfirmasiData, segarkanToken, tampilKonfirmasiTes, kembaliKeKonfirmasiData, menuUser, toggleSandi, pilihPortal,
-    bukaDaftar, bukaInfo, tutupModal, renderSoal, qrMatrix, qrSvg, bukaKartuLogin, cetakKartuLogin, simpanTampilToken };
-})();
-window.Anbk = Anbk;
+/* --- pita header biru bertingkat di atas konten --- */
+html[data-skin="anbk"] #guru-portal .main { position: relative; background: #f0f4f8; padding-top: 148px; }
+html[data-skin="anbk"] #guru-portal .main > section { position: relative; z-index: 1; }
+html[data-skin="anbk"] .anbk-guru-band {
+  display: flex; align-items: center; gap: 12px; position: absolute; left: 0; right: 0; top: 0; height: 118px; padding: 0 2.2rem; z-index: 0; overflow: hidden; color: #fff;
+  background: #326698 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 100' preserveAspectRatio='none'%3E%3Cpolygon points='0,0 297,0 188,100 0,100' fill='%232773b2'/%3E%3Cpolygon points='130,100 297,0 240,100' fill='%233379b6' fill-opacity='.9'/%3E%3C/svg%3E") no-repeat center / 100% 100%;
+}
+.anbk-guru-band .agb-logo { height: 58px; width: auto; display: block; flex: none; }
+.anbk-guru-band .agb-teks { display: flex; flex-direction: column; line-height: 1.25; margin-left: 2px; min-width: 0; }
+.anbk-guru-band .agb-teks b { font-size: 15.5px; font-weight: 700; letter-spacing: .1px; }
+.anbk-guru-band .agb-teks small { font-size: 13px; font-weight: 400; }
+.anbk-guru-band .agb-user { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 14.5px; white-space: nowrap; }
+.anbk-guru-band .agb-ico { width: 27px; height: 27px; display: grid; place-items: center; background: #6aa9ee; color: #1f4f86; border-radius: 3px; font-size: 13px; font-style: normal; }
+
+/* --- sidebar biru ANBK --- */
+html[data-skin="anbk"] #sidebar-guru {
+  background-color: #326698;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpolygon points='0,0 100,0 62,100 0,100' fill='%232773b2'/%3E%3Cpolygon points='30,100 100,0 78,100' fill='%233379b6' fill-opacity='.85'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: top left; background-size: 100% 100%;
+}
+html[data-skin="anbk"] #sidebar-guru .brand { font-weight: 700; font-size: 1rem; }
+html[data-skin="anbk"] #sidebar-guru .brand-sub { color: rgba(255,255,255,.8); }
+html[data-skin="anbk"] #sidebar-guru .nav-tab { color: rgba(255,255,255,.92); font-weight: 500; }
+html[data-skin="anbk"] #sidebar-guru .nav-tab .nav-ico { color: rgba(255,255,255,.7); }
+html[data-skin="anbk"] #sidebar-guru .nav-tab:hover { background: rgba(255,255,255,.14); }
+html[data-skin="anbk"] #sidebar-guru .nav-tab.active { background: #fff; color: #326698; font-weight: 600; box-shadow: 0 6px 16px rgba(0,0,0,.16); }
+html[data-skin="anbk"] #sidebar-guru .nav-tab.active .nav-ico { color: #0d6efd; }
+
+/* --- kartu, judul, tabel, isian --- */
+html[data-skin="anbk"] #guru-portal .panel { background: #fff; border: 0 !important; border-radius: 14px; box-shadow: 0 18px 36px rgba(51,65,90,.10), 0 1px 3px rgba(51,65,90,.06) !important; backdrop-filter: none; }
+html[data-skin="anbk"] #guru-portal .main h2 { font-weight: 600; color: #212529; }
+html[data-skin="anbk"] #guru-portal table.ledger { border-collapse: separate; border-spacing: 0; }
+html[data-skin="anbk"] #guru-portal table.ledger th { background: linear-gradient(90deg, #386799, #4a7fb8); color: #fff; font-weight: 600; border: 0; }
+html[data-skin="anbk"] #guru-portal table.ledger thead th:first-child { border-top-left-radius: 10px; }
+html[data-skin="anbk"] #guru-portal table.ledger thead th:last-child { border-top-right-radius: 10px; }
+html[data-skin="anbk"] #guru-portal table.ledger tr:hover td { background: #eef4fc; }
+html[data-skin="anbk"] #guru-portal input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+html[data-skin="anbk"] #guru-portal select, html[data-skin="anbk"] #guru-portal textarea { border: 1px solid #ced4da !important; border-radius: 6px !important; background: #fff !important; box-shadow: none !important; font-family: inherit; }
+html[data-skin="anbk"] #guru-portal input:focus, html[data-skin="anbk"] #guru-portal select:focus, html[data-skin="anbk"] #guru-portal textarea:focus { border-color: #0d6efd !important; box-shadow: 0 0 0 3px rgba(13,110,253,.18) !important; }
+html[data-skin="anbk"] #guru-portal button { font-family: inherit; box-shadow: none; }
+html[data-skin="anbk"] #guru-portal button.secondary { background: #fff; color: #212529; border: 1px solid #ced4da; }
+html[data-skin="anbk"] #guru-portal button.secondary:hover { background: #f3f7fe; border-color: #0d6efd; }
+html[data-skin="anbk"] #guru-portal button.accent { background: #ffc107; border-color: #ffc107; color: #212529; }
+html[data-skin="anbk"] #guru-portal button.danger { background: #dc3545; border-color: #dc3545; color: #fff; }
+
+/* kartu dashboard: putih bersih seperti ANBK (tanpa gradien pastel) */
+html[data-skin="anbk"] #guru-portal .dash-card { background: #fff !important; border: 0 !important; border-radius: 14px; box-shadow: 0 14px 30px rgba(51,65,90,.09), 0 1px 3px rgba(51,65,90,.06) !important; }
+html[data-skin="anbk"] #guru-portal .dash-card:hover { box-shadow: 0 18px 36px rgba(51,65,90,.14) !important; }
+html[data-skin="anbk"] #guru-portal .dash-hero { background: linear-gradient(115deg, #2a7cc0 0%, #326698 55%, #33689c 100%) !important; border-radius: 14px; box-shadow: 0 18px 36px rgba(51,65,90,.16); }
+html[data-skin="anbk"] #guru-portal .dash-hero, html[data-skin="anbk"] #guru-portal .dash-hero h3, html[data-skin="anbk"] #guru-portal .dash-hero p { color: #fff !important; }
+
+/* --- HP: tanpa pita besar, topbar biru ANBK --- */
+@media (max-width: 880px) {
+  html[data-skin="anbk"] .anbk-guru-band { display: none; }
+  html[data-skin="anbk"] #guru-portal .main { padding-top: 1.2rem; }
+  html[data-skin="anbk"] #guru-portal .mobile-topbar { background: #326698; }
+  html[data-skin="anbk"] #guru-portal .mobile-topbar, html[data-skin="anbk"] #guru-portal .mobile-topbar small, html[data-skin="anbk"] #guru-portal .mobile-topbar strong { color: #fff !important; opacity: 1; }
+}
+
+/* --- kategori nilai di sisi guru --- */
+.kat-badge { font-weight: 600; white-space: nowrap; }
+#dsw-kategori .kat-badge { margin-left: .4rem; }
+@media print {
+  #cetak-area .cp-kat-istimewa { color: #6d28d9; background: #f3ecff; border-color: #6d28d9; }
+  #cetak-area .cp-kat-baik { color: #15803d; background: #e6f4ea; border-color: #15803d; }
+  #cetak-area .cp-kat-memadai { color: #b45309; background: #fff4e0; border-color: #b45309; }
+  #cetak-area .cp-kat-kurang { color: #b91c1c; background: #fdecec; border-color: #b91c1c; }
+}
