@@ -1077,6 +1077,18 @@ function barisTabelJadiSoal_(headerIdx, nilai, guruId, kategoriDefault, petaGamb
   if (tipe === 'menjodohkan') {
     // Tiap kolom Opsi berisi satu pasangan "Item kiri = Pasangan kanan"
     // (pemisah boleh = , -> , → atau |). Sisi kanan diacak otomatis, kunci dihitung.
+    // KHUSUS Benar/Salah per pernyataan: bila SEMUA opsi berakhiran "= Benar" / "= Salah"
+    // (mis. "10a + b = 31 = Benar"), kolom kanan dibuat tetap [Benar, Salah] (tampil sbg
+    // tabel Benar/Salah gaya ANBK) dan kunci diambil dari kata terakhir tiap baris.
+    const opsiBS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map(h => ambil('opsi' + h).replace(/<[^>]*>/g, '').trim()).filter(Boolean);
+    const reBS = /^(.*?)\s*(?:->|→|=|\|)\s*(benar|salah)\s*\.?$/i;
+    if (opsiBS.length >= 1 && opsiBS.every(t => reBS.test(t) && reBS.exec(t)[1])) {
+      const kiriBS = [], kunciBS = {};
+      opsiBS.forEach((t, i) => { const m = reBS.exec(t); kiriBS.push(m[1].trim()); kunciBS[i] = /^benar$/i.test(m[2]) ? 0 : 1; });
+      item.opsi_json = JSON.stringify({ kiri: kiriBS, kanan: ['Benar', 'Salah'] });
+      item.kunci_json = JSON.stringify(kunciBS);
+      return item;
+    }
     const pasangan = [];
     ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].forEach(h => {
       const teks = ambil('opsi' + h).replace(/<[^>]*>/g, '').trim();
@@ -2465,14 +2477,18 @@ const LocalBackend = (function () {
         const pilihan = Array.isArray(jwb) ? jwb.map(p => keIndeksAsli(p)) : [];
         const cocok = pilihan.filter(p => benar.indexOf(p) !== -1).length;
         const salah = pilihan.filter(p => benar.indexOf(p) === -1).length;
-        const proporsi = benar.length > 0 ? Math.max(cocok - salah, 0) / benar.length : 0;
-        return Math.round(proporsi * bobot * 100) / 100;
+        // Gaya TKA: PGK (MCMA) = satu butir; benar hanya bila himpunan pilihan PERSIS sama dgn kunci (tanpa skor parsial).
+        return (benar.length > 0 && cocok === benar.length && salah === 0) ? bobot : 0;
       }
       case 'menjodohkan': {
         const totalPasang = Object.keys(kunci).length;
         if (totalPasang === 0) return 0;
         let benarPasang = 0;
         Object.keys(kunci).forEach(k => { if (jwb && String(jwb[k]) === String(kunci[k])) benarPasang++; });
+        // Gaya TKA: Benar/Salah per pernyataan (kolom kanan Benar & Salah) = semua pernyataan harus tepat, tanpa skor parsial.
+        let kananBS = false;
+        try { const o = JSON.parse(soal.opsi_json || '{}'); const kn = (o && o.kanan) || []; kananBS = kn.length === 2 && /^benar$/i.test(String(kn[0]).trim()) && /^salah$/i.test(String(kn[1]).trim()); } catch (e) { kananBS = false; }
+        if (kananBS) return benarPasang === totalPasang ? bobot : 0;
         return Math.round((benarPasang / totalPasang) * bobot * 100) / 100;
       }
       case 'uraian': {
