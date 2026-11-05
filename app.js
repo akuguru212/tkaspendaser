@@ -1,0 +1,8941 @@
+/* ============================================================================
+   CBT APP — FRONTEND LOGIC
+   Mode LOKAL (default): semua data (soal, siswa, ujian, sesi) disimpan di
+   localStorage browser ini — TIDAK perlu setup apa pun, langsung bisa dipakai.
+   Cocok untuk uji coba atau ujian yang dikerjakan di satu perangkat/komputer.
+
+   Mode SERVER (opsional, untuk ujian banyak siswa di banyak perangkat/HP):
+   isi CONFIG.API_URL dengan URL Web App Google Apps Script (lihat Code.gs +
+   README). Begitu diisi, aplikasi otomatis pindah ke mode server — semua
+   fungsi (tambah/impor/lihat/ubah soal, data siswa, dll) memakai kontrak API
+   yang sama sehingga tidak perlu ubah kode lain.
+   ============================================================================ */
+
+const CONFIG = {
+  // URL server sekarang diisi lewat config.js (window.CBT_API_URL) supaya tidak hilang saat
+  // app.js diganti. Mengisi langsung di sini tetap bisa dan dipakai kalau config.js kosong.
+  API_URL: (typeof window !== 'undefined' && window.CBT_API_URL) || '', // contoh: https://script.google.com/macros/s/xxxx/exec — kosongkan untuk mode lokal
+  AUTOSAVE_INTERVAL_MS: 20000,   // sinkron jawaban ke server tiap 20 detik (throttle)
+  PING_INTERVAL_MS: 60000,       // heartbeat device-lock tiap 60 detik
+  REALTIME_POLL_MS: 8000,        // saat Mode Server aktif: tarik ulang data tiap 8 detik ("realtime")
+  TIMER_LOW_THRESHOLD_SEC: 120,  // timer jadi merah & berdenyut saat sisa < 2 menit
+  // Watermark kecil di layar ujian siswa (nama guru pengajar). Bisa diganti TANPA mengedit app.js:
+  // tambahkan di config.js  ->  window.CBT_WATERMARK = 'Nama Guru, S.Pd.';   (isi '' untuk menyembunyikan)
+  WATERMARK_GURU: (typeof window !== 'undefined' && typeof window.CBT_WATERMARK === 'string')
+    ? window.CBT_WATERMARK : 'Komang Edi Suastrawan, S.Pd., M.Pd.'
+};
+
+// URL Web App bisa diisi langsung di CONFIG.API_URL di atas (berlaku untuk semua
+// orang yang membuka situs ini), ATAU ditempel lewat menu "⚙ Pengaturan Server"
+// di layar login (tersimpan per-perangkat di localStorage). Yang tersimpan di
+// perangkat selalu diprioritaskan, supaya guru/siswa bisa mengaktifkan Mode
+// Server tanpa perlu mengedit kode sama sekali.
+function getUrlServerTersimpan() {
+  try { return (localStorage.getItem('cbt_api_url_override') || '').trim(); } catch (e) { return ''; }
+}
+function setUrlServerTersimpan(url) {
+  try {
+    if (url) localStorage.setItem('cbt_api_url_override', url);
+    else localStorage.removeItem('cbt_api_url_override');
+  } catch (e) { /* localStorage tidak tersedia */ }
+}
+function efektifApiUrl() {
+  const override = getUrlServerTersimpan();
+  if (override) return override;
+  if (CONFIG.API_URL && CONFIG.API_URL.trim() && CONFIG.API_URL.indexOf('GANTI_DENGAN') !== 0) return CONFIG.API_URL.trim();
+  return '';
+}
+
+function modeServerAktif() {
+  return !!efektifApiUrl();
+}
+
+// Toggle ikon mata di samping field password (login, ganti password akun, dst).
+function toggleLihatSandi(idInput, tombol) {
+  const el = document.getElementById(idInput);
+  if (!el) return;
+  const sedangTersembunyi = el.type === 'password';
+  el.type = sedangTersembunyi ? 'text' : 'password';
+  tombol.textContent = sedangTersembunyi ? '🙈' : '👁️';
+  tombol.title = sedangTersembunyi ? 'Sembunyikan sandi' : 'Lihat sandi';
+}
+
+// ---------------- Pemuat pustaka berat (lazy) ----------------
+// SheetJS (.xlsx) & Mammoth (.docx) hanya dipakai guru. Dimuat saat pertama dibutuhkan
+// (atau di latar belakang setelah guru login), bukan di <head>, supaya halaman login &
+// layar ujian siswa tidak menunggu ~1,5 MB skrip yang tidak mereka pakai.
+const PUSTAKA_EKSTERNAL = {
+  xlsx: { url: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', siap: () => typeof XLSX !== 'undefined' },
+  mammoth: { url: 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js', siap: () => typeof mammoth !== 'undefined' },
+  // JSZip: dipakai untuk membuka .docx & mengubah rumus Word (OMML) -> LaTeX sebelum dibaca mammoth
+  jszip: { url: 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', siap: () => typeof JSZip !== 'undefined' },
+  // heic2any: mengonversi foto HEIC/HEIF (iPhone) -> JPEG di browser yang belum bisa membacanya (Chrome/Firefox/Android).
+  // Hanya dimuat bila siswa benar-benar memilih foto HEIC. 'cadangan' dipakai bila CDN utama gagal.
+  heic2any: { url: 'https://cdnjs.cloudflare.com/ajax/libs/heic2any/0.0.4/heic2any.min.js', cadangan: 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js', siap: () => typeof heic2any !== 'undefined' }
+};
+const _janjiPustaka = {};
+function muatPustaka_(nama) {
+  const info = PUSTAKA_EKSTERNAL[nama];
+  if (!info) return Promise.reject(new Error('Pustaka tidak dikenal: ' + nama));
+  if (info.siap()) return Promise.resolve();
+  if (_janjiPustaka[nama]) return _janjiPustaka[nama];
+  _janjiPustaka[nama] = new Promise((resolve, reject) => {
+    const coba = (url, cadangan) => {
+      const el = document.createElement('script');
+      el.src = url;
+      el.async = true;
+      el.onload = () => resolve();
+      el.onerror = () => {
+        el.remove();
+        if (cadangan) { coba(cadangan, null); return; } // CDN utama gagal -> coba CDN cadangan
+        delete _janjiPustaka[nama]; // boleh dicoba lagi nanti
+        reject(new Error('Gagal memuat pustaka ' + nama + '. Periksa koneksi internet lalu coba lagi.'));
+      };
+      document.head.appendChild(el);
+    };
+    coba(info.url, info.cadangan || null);
+  });
+  return _janjiPustaka[nama];
+}
+// Pemanasan di latar belakang (tidak mengganggu): dipanggil setelah guru login.
+function pemanasanPustakaGuru_() {
+  const jalan = () => { muatPustaka_('xlsx').catch(() => {}); };
+  if (window.requestIdleCallback) requestIdleCallback(jalan, { timeout: 4000 }); else setTimeout(jalan, 1500);
+}
+
+// ---------------- Bar loading global (dipanggil dari api(), lihat di bawah) ----------------
+let jumlahRequestBerjalan = 0;
+function mulaiLoading() {
+  jumlahRequestBerjalan++;
+  const bar = document.getElementById('top-loading-bar');
+  if (bar) bar.classList.add('active');
+}
+function selesaiLoading() {
+  jumlahRequestBerjalan = Math.max(0, jumlahRequestBerjalan - 1);
+  if (jumlahRequestBerjalan === 0) {
+    const bar = document.getElementById('top-loading-bar');
+    if (bar) bar.classList.remove('active');
+  }
+}
+
+// Menonaktifkan sebuah tombol "Simpan" selagi aksinya berjalan (mengganti teksnya
+// jadi "Menyimpan...") lalu mengembalikannya seperti semula setelah selesai —
+// mencegah orang mengetuk tombol yang sama berkali-kali saat responsnya terasa
+// lambat (tiap klik ganda hanya menambah antrean permintaan ke server, membuatnya
+// terasa makin lambat).
+async function jalankanDenganTombolSibuk(idTombol, teksSibuk, fn) {
+  const tombol = document.getElementById(idTombol);
+  if (!tombol || tombol.disabled) return; // sudah berjalan, abaikan klik susulan
+  const teksAsli = tombol.textContent;
+  tombol.disabled = true;
+  tombol.textContent = teksSibuk;
+  try {
+    await fn();
+  } finally {
+    tombol.disabled = false;
+    tombol.textContent = teksAsli;
+  }
+}
+
+function tampilkanBadgeMode() {
+  const aktif = modeServerAktif();
+  const teksBadge = aktif
+    ? '☁️ Mode: Server (Google Sheets) — tersinkron ke semua perangkat (tiap ' + Math.round(CONFIG.REALTIME_POLL_MS / 1000) + ' dtk). Ketuk untuk ubah/lepas.'
+    : '⚙ Mode: Lokal (perangkat ini) — data belum tersinkron. Ketuk untuk aktifkan Google Sheets.';
+  // Sengaja HANYA ditampilkan di Portal Guru (mode-badge-guru) — status koneksi
+  // Google Sheets bukan urusan siswa, dan tidak ditampilkan di layar login supaya
+  // halaman awal tetap sederhana. Guru mengatur/memantau koneksi lewat tab
+  // Pengaturan setelah masuk ke Portal Guru.
+  // Tombol "Kirim ke Spreadsheet" / "Tarik Data Terbaru" hanya relevan di Mode
+  // Server (Mode Lokal tidak punya spreadsheet terpisah untuk disinkron).
+  const sync = document.getElementById('pengaturan-sync-guru');
+  if (sync) sync.classList.toggle('hidden', !aktif);
+  const statusPengaturan = document.getElementById('pengaturan-status-server');
+  if (statusPengaturan) {
+    statusPengaturan.textContent = aktif
+      ? '☁️ Status saat ini: Mode Server (Google Sheets) — data tersinkron ke semua perangkat (tiap ' + Math.round(CONFIG.REALTIME_POLL_MS / 1000) + ' dtk).'
+      : '⚙ Status saat ini: Mode Lokal — data hanya tersimpan di perangkat ini.';
+  }
+}
+
+// Versi lebih rapi dari unduhXlsx: lebar kolom bebas, baris judul dibekukan,
+// ada filter, dan nama file/sheet disesuaikan. Dipakai unduhan analisis.
+async function unduhXlsxRapi_(namaFile, namaSheet, headers, rows, lebarKolom) {
+  try { await muatPustaka_('xlsx'); } catch (e) { toast(e.message, 'error'); return false; }
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  ws['!cols'] = headers.map((_, i) => ({ wch: (lebarKolom && lebarKolom[i]) || 14 }));
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: headers.length - 1 } }) };
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, String(namaSheet).replace(/[\[\]*?\/\\:]/g, '-').slice(0, 31));
+  XLSX.writeFile(wb, namaFile);
+  return true;
+}
+
+// Nama ujian terpilih pada sebuah <select>, aman dipakai untuk nama file.
+function namaUjianUntukFile_(selectId) {
+  const sel = document.getElementById(selectId);
+  const t = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text : '';
+  return (t && t !== 'Pilih ujian...' ? t : 'ujian').replace(/[\\/:*?"<>|]+/g, '-').trim().slice(0, 60);
+}
+
+
+// ----------------------------------------------------------------------------
+// PENCARIAN SISWA + FILTER KELAS (dipakai Rekap Nilai, Pemantauan, Log Pelanggaran,
+// Analisis Jawaban, Data Siswa & Status Login)
+// ----------------------------------------------------------------------------
+function normCari_(s) { return String(s === null || s === undefined ? '' : s).toLowerCase().trim(); }
+
+// Daftar kelas unik (urut natural: 7A, 7B, 8A, ... 10A).
+function kelasUnikDari_(list) {
+  return [...new Set((list || []).map(x => String(x.kelas || '').trim()).filter(k => k && k !== '-'))]
+    .sort((a, b) => a.localeCompare(b, 'id', { numeric: true }));
+}
+
+// Isi <select> filter kelas, pertahankan pilihan lama kalau masih ada.
+// Gagal memuat ulang: bila tabel sebelumnya masih tampil, biarkan (jangan dikosongkan) dan beri tahu lewat toast.
+function gagalMuat_(cont, pesan) {
+  if (cont && cont.querySelector('table')) toast(pesan + ' Data sebelumnya tetap ditampilkan.', 'error');
+  else if (cont) cont.textContent = pesan;
+  return false;
+}
+
+function isiOpsiKelas_(selectId, daftarKelas) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const lama = sel.value;
+  sel.innerHTML = '<option value="">Semua Kelas</option>' + daftarKelas.map(k => `<option value="${escapeHtml_(k)}">${escapeHtml_(k)}</option>`).join('');
+  sel.value = daftarKelas.includes(lama) ? lama : '';
+}
+
+// true kalau item lolos Filter Kelas (kelasId) & kotak cari (cariId). Pencarian
+// cocok ke nama, username, dan kelas (tidak peka huruf besar/kecil).
+function cocokFilterSiswa_(item, kelasId, cariId) {
+  const kelas = kelasId ? (document.getElementById(kelasId)?.value || '') : '';
+  const q = normCari_(cariId ? document.getElementById(cariId)?.value : '');
+  if (kelas && String(item.kelas || '').trim() !== kelas) return false;
+  if (q && !(normCari_(item.nama).includes(q) || normCari_(item.username).includes(q) || normCari_(item.kelas).includes(q))) return false;
+  return true;
+}
+
+// Checkbox "Diblokir saja": true bila dicentang. Juga memperbarui angka jumlah di labelnya.
+function hanyaBlokir_(idCek, jumlah) {
+  const cek = document.getElementById(idCek);
+  const jml = document.getElementById(idCek + '-jml');
+  if (jml && jumlah !== undefined) jml.textContent = '(' + jumlah + ')';
+  const lbl = document.getElementById('lbl-' + idCek);
+  if (lbl && jumlah !== undefined) lbl.classList.toggle('ada', jumlah > 0);
+  return !!(cek && cek.checked);
+}
+
+function filterAktif_(kelasId, cariId) {
+  return !!((kelasId && document.getElementById(kelasId)?.value) || (cariId && document.getElementById(cariId)?.value.trim()));
+}
+
+function tampilkanInfoFilter_(infoId, tampil, total, tambahan) {
+  const el = document.getElementById(infoId);
+  if (!el) return;
+  el.textContent = `Menampilkan ${tampil} dari ${total} siswa` + (tambahan ? ' • ' + tambahan : '');
+}
+
+// Nama sheet Excel: maks 31 karakter, tanpa []:*?/\ dan unik.
+function namaSheetUnik_(nama, terpakai) {
+  const dasar = String(nama || 'Sheet').replace(/[\[\]:*?\/\\]/g, '-').trim().slice(0, 31) || 'Sheet';
+  let calon = dasar, n = 2;
+  while (terpakai.has(calon.toLowerCase())) calon = dasar.slice(0, 28) + '-' + (n++);
+  terpakai.add(calon.toLowerCase());
+  return calon;
+}
+
+// ----------------------------------------------------------------------------
+// PALET WARNA SIAP PAKAI + PEMBUAT PALET ACAK
+// ----------------------------------------------------------------------------
+function hslToHex(h, s, l) {
+  s /= 100; l /= 100;
+  const k = n => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const toHex = x => Math.round(255 * x).toString(16).padStart(2, '0');
+  return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
+}
+
+// ============================================================================
+// MESIN TAMPILAN — (1) warna turunan dari warna utama, (2) gaya UI tak terbatas
+// Semua tampilan memakai variabel CSS (--c-* dan --ui-*) yang dihitung di sini,
+// jadi mengganti SATU warna utama atau satu parameter gaya mengubah seluruh app.
+// ============================================================================
+const Warna = (() => {
+  const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+  const hex2rgb = (h) => {
+    h = String(h || '#000').replace('#', '');
+    if (h.length === 3) h = h.split('').map(c => c + c).join('');
+    const n = parseInt(h, 16);
+    return (isNaN(n) || h.length !== 6) ? [0, 0, 0] : [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+  const rgb2hex = (r, g, b) => '#' + [r, g, b].map(v => Math.round(clamp(v, 0, 255)).toString(16).padStart(2, '0')).join('');
+  const rgb2hsl = (r, g, b) => {
+    r /= 255; g /= 255; b /= 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, l = (mx + mn) / 2;
+    let h = 0, s = 0;
+    if (d) {
+      s = l > .5 ? d / (2 - mx - mn) : d / (mx + mn);
+      h = mx === r ? ((g - b) / d + (g < b ? 6 : 0)) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      h *= 60;
+    }
+    return [h, s * 100, l * 100];
+  };
+  const hsl = (hex) => rgb2hsl(...hex2rgb(hex));
+  const dariHsl = (h, s, l) => hslToHex(((h % 360) + 360) % 360, clamp(s, 0, 100), clamp(l, 0, 100));
+  const mix = (a, b, t) => { const A = hex2rgb(a), B = hex2rgb(b); return rgb2hex(A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t); };
+  const lum = (hex) => { const c = hex2rgb(hex).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; };
+  const kontras = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+  const teksDi = (bg) => kontras('#ffffff', bg) >= kontras('#14161a', bg) ? '#ffffff' : '#14161a';
+  const geser = (hex, dl, ds = 0) => { const [h, s, l] = hsl(hex); return dariHsl(h, s + ds, l + dl); };
+  const rgba = (hex, a) => { const [r, g, b] = hex2rgb(hex); return `rgba(${r},${g},${b},${+(+a).toFixed(3)})`; };
+  const valid = (h) => /^#[0-9a-f]{6}$/i.test(h || '');
+  return { clamp, hex2rgb, hsl, dariHsl, mix, lum, kontras, teksDi, geser, rgba, valid };
+})();
+
+// ---- Palet siap pakai + harmoni warna ---------------------------------------
+const PALET_PRESET = [
+  { nama: 'Soft Clay', primary: '#e58a72', secondary: '#6f9f94', accent: '#e9b44c', bg: '#faf6f1', text: '#2d2a26' },
+  { nama: 'Violet Neon', primary: '#7c3aed', secondary: '#ec4899', accent: '#eab308', bg: '#faf7ff', text: '#211334' },
+  { nama: 'Gold Elegan', primary: '#8a5a00', secondary: '#4b3621', accent: '#d4af37', bg: '#fffdf6', text: '#2b2210' },
+  { nama: 'Ocean Teal', primary: '#0f766e', secondary: '#0369a1', accent: '#facc15', bg: '#f2fbfa', text: '#0b2a27' },
+  { nama: 'Sunset Ceria', primary: '#c2410c', secondary: '#db2777', accent: '#facc15', bg: '#fff8f2', text: '#3a1607' },
+  { nama: 'Emerald Segar', primary: '#15803d', secondary: '#0d9488', accent: '#eab308', bg: '#f3fdf6', text: '#0c2a17' },
+  { nama: 'Midnight Neon', primary: '#151a3d', secondary: '#3b82f6', accent: '#ec4899', bg: '#f5f6ff', text: '#12142b' },
+  { nama: 'Putih Klasik', primary: '#1d3557', secondary: '#457b9d', accent: '#e76f51', bg: '#ffffff', text: '#1b1f24' },
+  { nama: 'Sakura', primary: '#d6336c', secondary: '#9775fa', accent: '#fcc419', bg: '#fff5f8', text: '#3b1020' },
+  { nama: 'Mint Fresh', primary: '#12b886', secondary: '#339af0', accent: '#ff922b', bg: '#f1fcf8', text: '#0b2e24' },
+  { nama: 'Cokelat Hangat', primary: '#8d5a3b', secondary: '#c08552', accent: '#e0a458', bg: '#fbf6f0', text: '#2e1d12' },
+  { nama: 'Grafit Biru', primary: '#3b5bdb', secondary: '#495057', accent: '#fab005', bg: '#f6f7fb', text: '#14161f' }
+];
+
+const HARMONI = {
+  klasik: { nama: 'Klasik (aksen emas)' },
+  analog: { nama: 'Analog (warna bertetangga)' },
+  komplementer: { nama: 'Komplementer (berlawanan)' },
+  triad: { nama: 'Triad (3 warna seimbang)' },
+  split: { nama: 'Split-komplementer' },
+  tetrad: { nama: 'Tetrad (4 warna)' },
+  mono: { nama: 'Monokrom (satu warna)' }
+};
+
+// Dari SATU warna utama -> seluruh palet (sekunder, aksen, latar, teks).
+function turunkanPalet(primary, harmoni) {
+  const W = Warna, [h, s] = W.hsl(primary);
+  const sat = Math.max(45, Math.min(s, 88));
+  const H = (off, ss, ll) => W.dariHsl(h + off, ss, ll);
+  let sec, acc;
+  switch (harmoni) {
+    case 'analog': sec = H(32, sat * .85, 46); acc = H(-34, 85, 56); break;
+    case 'komplementer': sec = H(180, sat * .7, 44); acc = H(28, 88, 57); break;
+    case 'triad': sec = H(120, sat * .8, 44); acc = H(240, sat * .85, 55); break;
+    case 'split': sec = H(150, sat * .75, 45); acc = H(210, sat * .8, 55); break;
+    case 'tetrad': sec = H(90, sat * .75, 45); acc = H(180, sat * .8, 52); break;
+    case 'mono': sec = H(0, Math.min(sat, 45) * .8, 42); acc = H(0, sat, 64); break;
+    default: sec = H(38, sat * .45, 52); acc = W.dariHsl(42, 80, 58);
+  }
+  return { primary, secondary: sec, accent: acc, bg: W.dariHsl(h, Math.min(sat, 40) * .85, 96.5), text: W.dariHsl(h, 28, 14) };
+}
+
+function buatPaletAcak(rnd) {
+  rnd = rnd || Math.random;
+  const ks = Object.keys(HARMONI);
+  return turunkanPalet(hslToHex(Math.floor(rnd() * 360), 60 + rnd() * 25, 38 + rnd() * 12), ks[Math.floor(rnd() * ks.length)]);
+}
+
+// ---- Font -------------------------------------------------------------------
+const FALLBACK_SANS = ", system-ui, -apple-system, 'Segoe UI', sans-serif";
+const GAYA_FONT = {
+  jakarta: { nama: 'Plus Jakarta Sans', d: "'Plus Jakarta Sans'", b: "'Inter'" },
+  inter: { nama: 'Inter', d: "'Inter'", b: "'Inter'" },
+  system: { nama: 'Sistem (tercepat)', d: 'system-ui', b: 'system-ui' },
+  poppins: { nama: 'Poppins', d: "'Poppins'", b: "'Poppins'", q: 'Poppins:wght@400;500;600;700;800' },
+  nunito: { nama: 'Nunito (bulat)', d: "'Nunito'", b: "'Nunito'", q: 'Nunito:wght@400;600;700;800;900' },
+  baloo: { nama: 'Baloo 2 (gemuk ceria)', d: "'Baloo 2'", b: "'Nunito'", q: 'Baloo+2:wght@500;600;700;800&family=Nunito:wght@400;600;700' },
+  space: { nama: 'Space Grotesk', d: "'Space Grotesk'", b: "'Inter'", q: 'Space+Grotesk:wght@500;600;700' },
+  sora: { nama: 'Sora', d: "'Sora'", b: "'Inter'", q: 'Sora:wght@500;600;700;800' },
+  outfit: { nama: 'Outfit', d: "'Outfit'", b: "'Outfit'", q: 'Outfit:wght@400;500;600;700;800' },
+  lexend: { nama: 'Lexend', d: "'Lexend'", b: "'Lexend'", q: 'Lexend:wght@400;500;600;700' },
+  fraunces: { nama: 'Fraunces (serif)', d: "'Fraunces', Georgia, serif", b: "'Inter'", q: 'Fraunces:wght@500;600;700;800' },
+  mono: { nama: 'JetBrains Mono (kode)', d: "'JetBrains Mono', ui-monospace, monospace", b: "'Inter'", q: 'JetBrains+Mono:wght@500;600;700;800' },
+  doodle: { nama: 'Patrick Hand (tulisan tangan)', d: "'Patrick Hand', cursive", b: "'Nunito'", q: 'Patrick+Hand&family=Nunito:wght@400;600;700' }
+};
+function muatFont(key) {
+  const f = GAYA_FONT[key];
+  if (!f || !f.q) return;
+  const id = 'font-' + key;
+  if (document.getElementById(id)) return;
+  const l = document.createElement('link');
+  l.id = id; l.rel = 'stylesheet';
+  l.href = 'https://fonts.googleapis.com/css2?family=' + f.q + '&display=swap';
+  document.head.appendChild(l);
+}
+
+// ---- Parameter gaya & preset ------------------------------------------------
+const DEF_UI = { r: 14, pill: 0, depth: 'soft', elev: 50, bw: 0, ink: 0, glass: 0, grad: 0, pat: 'blobs', side: 'tint', float: 1, font: 'jakarta', hw: 800, caps: 0, dens: 100, neon: 0, skin: '' };
+const OPSI_DEPTH = { flat: 'Rata (tanpa bayangan)', line: 'Garis tipis', soft: 'Lembut', layer: 'Berlapis (material)', clay: 'Clay (empuk 3D)', neu: 'Neumorphism (timbul)', hard: 'Keras (brutalis)', pop: 'Pop 3D (tombol tebal)', glow: 'Cahaya (glow)' };
+const OPSI_POLA = { none: 'Polos', blobs: 'Gumpalan lembut', aurora: 'Aurora', mesh: 'Mesh gradien', waves: 'Gelombang', dots: 'Titik-titik', grid: 'Kotak-kotak', lines: 'Buku bergaris', checker: 'Papan catur' };
+const OPSI_SIDE = { tint: 'Warna pastel', light: 'Putih bersih', solid: 'Warna utama', dark: 'Gelap pekat', glass: 'Kaca transparan', navy: 'Gelap navy (ikut warna sekunder)' };
+
+const GAYA_PRESET = [
+  { id: 'anbk', nama: 'ANBK Pusmendik', pal: { primary: '#0d6efd', secondary: '#326698', accent: '#ffc107', bg: '#f0f4f8', text: '#212529' }, info: 'Persis aplikasi ANBK: header biru bertingkat, kartu putih, tombol kapsul, font Poppins', u: { r: 14, pill: 1, depth: 'soft', elev: 35, bw: 0, pat: 'none', side: 'navy', float: 0, font: 'poppins', hw: 600, skin: 'anbk' } },
+  { id: 'softclay', nama: 'Soft Pastel', info: 'Bawaan, lembut & hangat', u: { r: 14, depth: 'soft', elev: 50, pat: 'blobs', side: 'tint', float: 1, font: 'jakarta', hw: 800 } },
+  { id: 'clay', nama: 'Claymorphism', info: 'Empuk seperti tanah liat', u: { r: 26, depth: 'clay', elev: 60, grad: 25, pat: 'blobs', side: 'tint', float: 1, font: 'baloo', hw: 700 } },
+  { id: 'glass', nama: 'Glassmorphism', info: 'Kaca buram di atas aurora', u: { r: 20, depth: 'soft', elev: 40, bw: 1, glass: 70, pat: 'aurora', side: 'glass', float: 1, font: 'outfit', hw: 600 } },
+  { id: 'neu', nama: 'Neumorphism', info: 'Timbul & tenggelam satu warna', u: { r: 22, depth: 'neu', elev: 55, pat: 'none', side: 'light', float: 1, font: 'nunito', hw: 800 } },
+  { id: 'brutal', nama: 'Neo-Brutalism', info: 'Garis tebal, bayangan keras', u: { r: 4, depth: 'hard', elev: 55, bw: 3, ink: 1, pat: 'dots', side: 'solid', float: 0, font: 'space', hw: 700 } },
+  { id: 'flat', nama: 'Flat Minimal', info: 'Datar, bersih, fokus', u: { r: 8, depth: 'flat', bw: 1, pat: 'none', side: 'light', float: 0, font: 'inter', hw: 700 } },
+  { id: 'material', nama: 'Material Elevated', info: 'Bayangan berlapis halus', u: { r: 10, depth: 'layer', elev: 55, pat: 'none', side: 'light', float: 0, font: 'inter', hw: 600 } },
+  { id: 'aurora', nama: 'Aurora Gradient', info: 'Gradien cerah berpendar', u: { r: 22, depth: 'glow', elev: 35, grad: 85, glass: 25, pat: 'aurora', side: 'tint', float: 1, font: 'sora', hw: 700 } },
+  { id: 'neon', nama: 'Cyber Neon', mode: 'dark', info: 'Gelap, garis kisi, menyala', u: { r: 6, depth: 'glow', elev: 75, bw: 1, grad: 30, pat: 'grid', side: 'dark', float: 0, font: 'mono', hw: 700, neon: 1, caps: 1 } },
+  { id: 'paper', nama: 'Buku Tulis', info: 'Kertas bergaris, nuansa klasik', u: { r: 3, depth: 'soft', elev: 25, bw: 1, pat: 'lines', side: 'light', float: 0, font: 'fraunces', hw: 700 } },
+  { id: 'retro', nama: 'Retro Terminal', info: 'Kotak tajam ala komputer lama', u: { r: 0, depth: 'hard', elev: 30, bw: 2, ink: 1, pat: 'checker', side: 'dark', float: 0, font: 'mono', hw: 700, caps: 1 } },
+  { id: 'pop', nama: 'Candy Pop 3D', info: 'Tombol tebal bisa "ditekan"', u: { r: 18, pill: 1, depth: 'pop', elev: 60, bw: 2, pat: 'dots', side: 'tint', float: 1, font: 'baloo', hw: 800 } },
+  { id: 'corporate', nama: 'Corporate Clean', info: 'Formal, sidebar gelap', u: { r: 10, depth: 'soft', elev: 25, bw: 1, pat: 'none', side: 'dark', float: 0, font: 'inter', hw: 700 } },
+  { id: 'ocean', nama: 'Ocean Glass Gelap', mode: 'dark', info: 'Kaca di mode gelap', u: { r: 22, depth: 'soft', elev: 50, bw: 1, glass: 60, pat: 'aurora', side: 'glass', float: 1, font: 'lexend', hw: 600 } },
+  { id: 'doodle', nama: 'Doodle Sketsa', info: 'Seperti digambar tangan', u: { r: 14, depth: 'hard', elev: 25, bw: 2, ink: 1, pat: 'dots', side: 'tint', float: 1, font: 'doodle', hw: 400 } },
+  { id: 'bento', nama: 'Bento Lapang', info: 'Kartu besar, ruang lega', u: { r: 28, depth: 'line', bw: 1, pat: 'none', side: 'light', float: 1, font: 'jakarta', hw: 800, dens: 110 } },
+  { id: 'mono', nama: 'Mono Ink Elegan', info: 'Garis tinta tipis, serif', u: { r: 2, depth: 'flat', bw: 1, ink: 1, pat: 'none', side: 'light', float: 0, font: 'fraunces', hw: 700 } },
+  { id: 'gloss', nama: 'Glossy Skeuomorphic', info: 'Tombol mengkilap', u: { r: 12, depth: 'clay', elev: 45, grad: 75, bw: 1, pat: 'waves', side: 'dark', float: 0, font: 'poppins', hw: 700 } },
+  { id: 'vapor', nama: 'Vaporwave Gelap', mode: 'dark', info: 'Gelap, gradien, neon lembut', u: { r: 16, depth: 'glow', elev: 65, grad: 90, glass: 30, pat: 'mesh', side: 'glass', float: 1, font: 'outfit', hw: 700, neon: 1 } },
+  { id: 'dream', nama: 'Pastel Dream', info: 'Mesh pastel berkaca', u: { r: 26, depth: 'soft', elev: 45, glass: 35, grad: 20, pat: 'mesh', side: 'glass', float: 1, font: 'nunito', hw: 800 } },
+  { id: 'portal', nama: 'Portal Navy Magenta', pal: { primary: '#d6249f', secondary: '#1b2559', accent: '#f5a524', bg: '#ffffff', text: '#161a33' }, info: 'Sidebar navy, menu aktif magenta, kartu putih bergaris', u: { r: 12, depth: 'line', bw: 1, pat: 'none', side: 'navy', float: 0, font: 'inter', hw: 800 } },
+  { id: 'sunset', nama: 'Senja Hangat', pal: { primary: '#f2562b', secondary: '#c2255c', accent: '#fbbf24', bg: '#fff6ef', text: '#3b1d12' }, info: 'Gradien jingga-merah, sidebar berwarna', u: { r: 24, depth: 'soft', elev: 55, grad: 70, pat: 'waves', side: 'solid', float: 1, font: 'poppins', hw: 700 } },
+  { id: 'forest', nama: 'Hutan Tenang', pal: { primary: '#2f7d4f', secondary: '#8a5a2b', accent: '#e0a526', bg: '#f1f5ee', text: '#1d2b21' }, info: 'Hijau tua, serif, sidebar gelap', u: { r: 12, depth: 'layer', elev: 40, pat: 'none', side: 'dark', float: 0, font: 'fraunces', hw: 700 } },
+  { id: 'koran', nama: 'Koran Klasik', pal: { primary: '#222222', secondary: '#7a1f1f', accent: '#b8860b', bg: '#f4efe4', text: '#1a1a1a' }, info: 'Kertas krem, huruf kapital, tinta hitam', u: { r: 0, depth: 'line', bw: 1, ink: 1, pat: 'lines', side: 'light', float: 0, font: 'fraunces', hw: 800, caps: 1 } },
+  { id: 'midnight', nama: 'Midnight Slate', mode: 'dark', pal: { primary: '#7c8cff', secondary: '#4cc9f0', accent: '#ffb86b', bg: '#0e1020', text: '#e8eaf6' }, info: 'Gelap elegan dengan kisi halus', u: { r: 14, depth: 'layer', elev: 60, pat: 'grid', side: 'dark', float: 0, font: 'inter', hw: 700 } },
+  { id: 'sakura', nama: 'Sakura Lembut', pal: { primary: '#ec5f9a', secondary: '#9b7fe6', accent: '#ffc15e', bg: '#fff3f8', text: '#3d1f31' }, info: 'Merah muda bulat, tombol kapsul empuk', u: { r: 30, pill: 1, depth: 'clay', elev: 55, grad: 30, pat: 'dots', side: 'tint', float: 1, font: 'nunito', hw: 800 } },
+  { id: 'mint', nama: 'Mint Segar', pal: { primary: '#0f9d8a', secondary: '#2b6cb0', accent: '#f6ad55', bg: '#f2fbf9', text: '#12302c' }, info: 'Datar, hijau toska, ruang lega', u: { r: 16, depth: 'flat', bw: 1, pat: 'none', side: 'light', float: 1, font: 'lexend', hw: 600, dens: 105 } },
+  { id: 'blueprint', nama: 'Blueprint Teknik', mode: 'dark', pal: { primary: '#4fc3f7', secondary: '#81d4fa', accent: '#ffd54f', bg: '#0b2545', text: '#e3f2fd' }, info: 'Biru malam, kisi gambar teknik, huruf kode', u: { r: 2, depth: 'line', bw: 1, pat: 'grid', side: 'dark', float: 0, font: 'mono', hw: 600, caps: 1 } },
+  { id: 'kuning', nama: 'Kuning Kontras', pal: { primary: '#ffd400', secondary: '#111111', accent: '#ff4d4d', bg: '#fffbe0', text: '#111111' }, info: 'Kuning-hitam, garis tebal, sangat jelas', u: { r: 6, depth: 'hard', elev: 60, bw: 3, ink: 1, pat: 'checker', side: 'solid', float: 0, font: 'space', hw: 800, caps: 1 } },
+  { id: 'lavender', nama: 'Lavender Kaca', pal: { primary: '#8b5cf6', secondary: '#ec4899', accent: '#38bdf8', bg: '#f5f0ff', text: '#2a1f4d' }, info: 'Ungu berkaca di atas aurora', u: { r: 24, depth: 'soft', elev: 45, glass: 55, grad: 40, pat: 'aurora', side: 'glass', float: 1, font: 'outfit', hw: 600 } },
+  { id: 'sporty', nama: 'Sporty Bold', pal: { primary: '#e11d48', secondary: '#0f172a', accent: '#facc15', bg: '#f8fafc', text: '#0f172a' }, info: 'Merah tegas, sidebar navy, tombol 3D', u: { r: 6, depth: 'pop', elev: 50, bw: 2, pat: 'none', side: 'navy', float: 0, font: 'sora', hw: 800, caps: 1 } },
+  { id: 'zen', nama: 'Zen Putih', pal: { primary: '#475569', secondary: '#94a3b8', accent: '#f59e0b', bg: '#fafaf9', text: '#1c1917' }, info: 'Sangat minimalis, abu-abu tenang', u: { r: 14, depth: 'line', bw: 1, pat: 'none', side: 'light', float: 0, font: 'sora', hw: 600, dens: 110 } },
+  { id: 'royal', nama: 'Royal Gold', mode: 'dark', pal: { primary: '#e0b04c', secondary: '#6d5bd0', accent: '#f08a5d', bg: '#14112b', text: '#f3efe2' }, info: 'Gelap ungu tua dengan aksen emas', u: { r: 8, depth: 'glow', elev: 40, bw: 1, pat: 'mesh', side: 'dark', float: 0, font: 'fraunces', hw: 700 } },
+  { id: 'pantai', nama: 'Pantai Biru', pal: { primary: '#0891b2', secondary: '#f59e0b', accent: '#fb7185', bg: '#effcff', text: '#083344' }, info: 'Biru laut, gelombang, sidebar pastel', u: { r: 20, depth: 'soft', elev: 50, grad: 55, pat: 'waves', side: 'tint', float: 1, font: 'baloo', hw: 700 } }
+];
+const GAYA_BY_ID = Object.fromEntries(GAYA_PRESET.map(g => [g.id, g]));
+
+function normalisasiUI(u) {
+  const o = Object.assign({}, DEF_UI, u || {});
+  const n = (v, a, b) => Warna.clamp(Number(v) || 0, a, b);
+  o.r = n(o.r, 0, 40); o.elev = n(o.elev, 0, 100); o.bw = n(o.bw, 0, 4); o.glass = n(o.glass, 0, 100);
+  o.grad = n(o.grad, 0, 100); o.dens = n(o.dens, 80, 125); o.hw = n(o.hw, 400, 900);
+  ['pill', 'ink', 'float', 'caps', 'neon'].forEach(k => o[k] = o[k] ? 1 : 0);
+  if (!OPSI_DEPTH[o.depth]) o.depth = 'soft';
+  if (!OPSI_POLA[o.pat]) o.pat = 'none';
+  if (!OPSI_SIDE[o.side]) o.side = 'tint';
+  if (!GAYA_FONT[o.font]) o.font = 'jakarta';
+  o.skin = o.skin === 'anbk' ? 'anbk' : ''; // kulit khusus: 'anbk' = tampilan persis aplikasi ANBK (Pusmendik)
+  return o;
+}
+
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+// Gaya acak: ambil preset sebagai dasar lalu acak banyak parameter -> kombinasi tak terbatas.
+function buatGayaAcak(rnd) {
+  rnd = rnd || Math.random;
+  const pick = (a) => a[Math.floor(rnd() * a.length)];
+  const base = pick(GAYA_PRESET.filter(g => g.u.skin !== 'anbk'));
+  const u = Object.assign({}, DEF_UI, base.u);
+  u.r = Math.round(Warna.clamp(u.r + (rnd() - .5) * 14, 0, 36));
+  u.elev = Math.round(Warna.clamp(u.elev + (rnd() - .5) * 40, 10, 95));
+  u.dens = Math.round(95 + rnd() * 20);
+  if (rnd() < .3) u.depth = pick(Object.keys(OPSI_DEPTH));
+  if (rnd() < .4) u.pat = pick(Object.keys(OPSI_POLA));
+  if (rnd() < .35) u.side = pick(Object.keys(OPSI_SIDE));
+  if (rnd() < .45) u.font = pick(Object.keys(GAYA_FONT));
+  if (rnd() < .3) u.grad = Math.round(rnd() * 90);
+  if (rnd() < .25) u.glass = Math.round(rnd() * 75);
+  if (rnd() < .2) u.pill = u.pill ? 0 : 1;
+  if (rnd() < .2) u.float = u.float ? 0 : 1;
+  if (u.depth === 'neu') { u.bw = 0; u.glass = 0; }
+  if (u.depth === 'hard') { u.bw = Math.max(u.bw, 2); u.ink = 1; }
+  if (u.glass > 20 && (u.pat === 'none' || u.pat === 'lines')) u.pat = 'aurora';
+  return { u, mode: base.mode || (rnd() < .12 ? 'dark' : 'light') };
+}
+
+// ---- Perhitungan palet lengkap ---------------------------------------------
+function hitungPalet(t, u, gelap) {
+  const W = Warna;
+  let { primary, secondary, accent, bg, text } = t;
+  if (u.neon) {
+    const boost = (c) => { const [h, s, l] = W.hsl(c); return W.dariHsl(h, Math.max(s, 88), gelap ? Math.max(l, 60) : Math.min(Math.max(l, 48), 56)); };
+    primary = boost(primary); secondary = boost(secondary); accent = boost(accent);
+  }
+  let surface, line;
+  const [hp] = W.hsl(primary);
+  if (gelap) {
+    bg = W.dariHsl(hp, 16, 9); surface = W.dariHsl(hp, 15, 13.5); text = W.dariHsl(hp, 10, 93); line = W.dariHsl(hp, 13, 23);
+    const angkat = (c) => { const [h, s, l] = W.hsl(c); return l < 58 ? W.dariHsl(h, s, 62) : c; };
+    primary = angkat(primary); secondary = angkat(secondary); accent = angkat(accent);
+  } else {
+    if (W.kontras(text, bg) < 4.5) text = W.lum(bg) > .4 ? '#1b1b1f' : '#f5f5f5';
+    surface = W.lum(bg) < .35 ? W.geser(bg, 6) : W.mix(bg, '#ffffff', .7);
+    line = W.mix(bg, text, .11);
+  }
+  if (u.depth === 'neu') surface = bg;
+  let muted = W.mix(text, bg, .45);
+  if (W.kontras(muted, surface) < 3.6) muted = W.mix(text, bg, .32);
+  const primaryDark = W.geser(primary, gelap ? 6 : -9);
+  const [hs] = W.hsl(secondary), [ht] = W.hsl(text);
+  const sh = gelap ? '#000000' : W.dariHsl(ht, 28, 30);
+  const ink = gelap ? W.dariHsl(hp, 10, 86) : text;
+  // sidebar
+  let sidebar, onSb = text, sideBg;
+  switch (t._side || u.side) {
+    case 'solid': sidebar = gelap ? W.dariHsl(hp, 45, 25) : W.geser(primary, -8); onSb = W.teksDi(sidebar); break;
+    case 'navy': { const ss = W.hsl(secondary)[1]; sidebar = gelap ? W.dariHsl(hs, Math.min(ss, 55) * .8, 7) : W.dariHsl(hs, Math.min(Math.max(ss, 35), 60), 13); onSb = W.teksDi(sidebar); break; }
+    case 'dark': sidebar = gelap ? W.dariHsl(hp, 30, 6) : W.dariHsl(hp, 32, 13); onSb = W.teksDi(sidebar); break;
+    case 'light': sidebar = surface; break;
+    case 'glass': sidebar = W.mix(surface, bg, .2); break;
+    default: sidebar = gelap ? W.dariHsl(hs, 22, 15) : W.mix(secondary, bg, .8);
+  }
+  sideBg = u.side === 'glass' ? W.rgba(surface, gelap ? .5 : .5) : sidebar;
+  return {
+    gelap, primary, secondary, accent, bg, text, surface, line, muted, primaryDark, sh, ink, sidebar, onSb, sideBg,
+    onPrimary: W.teksDi(primary), onSecondary: W.teksDi(secondary), onAccent: W.teksDi(accent),
+    success: gelap ? '#5cc79a' : '#4f9a78', danger: gelap ? '#ff7b72' : '#d9534f', warn: gelap ? '#f0b84a' : '#d98e04',
+    warnInk: gelap ? '#f0c566' : W.mix(W.dariHsl(40, 90, 36), text, .25),
+    neuD: gelap ? W.geser(bg, -5) : W.mix(bg, '#000000', .13), neuL: gelap ? W.geser(bg, 6) : W.mix(bg, '#ffffff', .85),
+    inputLine: W.mix(bg, text, gelap ? .2 : .17)
+  };
+}
+
+function polaLatar(pat, P) {
+  const W = Warna, a = (c, x) => W.rgba(c, x), p = P.primary, s = P.secondary, c = P.accent, tx = P.text;
+  switch (pat) {
+    case 'blobs': return [`radial-gradient(circle at 12% 8%, ${a(p, .20)}, transparent 42%), radial-gradient(circle at 90% 92%, ${a(s, .20)}, transparent 46%), radial-gradient(circle at 82% 10%, ${a(c, .12)}, transparent 35%)`, 'auto'];
+    case 'aurora': return [`radial-gradient(60% 50% at 15% 10%, ${a(p, .42)}, transparent 70%), radial-gradient(55% 45% at 85% 20%, ${a(s, .38)}, transparent 70%), radial-gradient(60% 55% at 60% 95%, ${a(c, .34)}, transparent 70%)`, 'auto'];
+    case 'mesh': return [`radial-gradient(at 0% 0%, ${a(p, .38)} 0, transparent 50%), radial-gradient(at 100% 0%, ${a(s, .36)} 0, transparent 50%), radial-gradient(at 100% 100%, ${a(c, .34)} 0, transparent 50%), radial-gradient(at 0% 100%, ${a(W.mix(p, s, .5), .34)} 0, transparent 50%)`, 'auto'];
+    case 'waves': return [`radial-gradient(120% 55% at 50% 108%, ${a(p, .30)}, transparent 62%), radial-gradient(90% 40% at 18% 112%, ${a(s, .26)}, transparent 60%), radial-gradient(70% 35% at 88% 115%, ${a(c, .24)}, transparent 60%)`, 'auto'];
+    case 'dots': return [`radial-gradient(${a(tx, .17)} 1.3px, transparent 1.7px)`, '20px 20px'];
+    case 'grid': return [`linear-gradient(${a(tx, .07)} 1px, transparent 1px), linear-gradient(90deg, ${a(tx, .07)} 1px, transparent 1px)`, '26px 26px'];
+    case 'lines': return [`repeating-linear-gradient(0deg, transparent 0 27px, ${a(p, .20)} 27px 28px)`, 'auto'];
+    case 'checker': return [`conic-gradient(${a(tx, .05)} 25%, transparent 0 50%, ${a(tx, .05)} 0 75%, transparent 0)`, '30px 30px'];
+    default: return ['none', 'auto'];
+  }
+}
+
+function bayangan(u, P, jenis) {
+  const e = u.elev / 100, W = Warna, A = (x) => W.rgba(P.sh, x), R = Math.round;
+  const hi = P.gelap ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.85)';
+  const bc = 'var(--btn-c)';
+  switch (u.depth) {
+    case 'soft':
+      if (jenis === 'card') return `0 1px 2px ${A(.04 + .03 * e)}, 0 ${R(3 + 9 * e)}px ${R(10 + 20 * e)}px ${A(.05 + .09 * e)}`;
+      if (jenis === 'btn') return `0 ${R(2 + 5 * e)}px ${R(6 + 10 * e)}px -${R(1 + 3 * e)}px color-mix(in srgb, ${bc} ${R(40 + 25 * e)}%, transparent)`;
+      return 'none';
+    case 'layer':
+      if (jenis === 'card') { const k = .5 + e; return `0 1px 1px ${A(.06)}, 0 2px 2px ${A(.06)}, 0 4px 4px ${A(.06)}, 0 ${R(8 * k)}px ${R(8 * k)}px ${A(.05)}, 0 ${R(16 * k)}px ${R(16 * k)}px ${A(.04)}`; }
+      if (jenis === 'btn') return `0 1px 1px ${A(.12)}, 0 2px 3px ${A(.12)}, 0 ${R(3 + 3 * e)}px ${R(6 + 6 * e)}px -1px color-mix(in srgb, ${bc} 35%, transparent)`;
+      return 'none';
+    case 'clay':
+      if (jenis === 'card') return `0 ${R(10 + 14 * e)}px ${R(24 + 22 * e)}px -${R(6 + 4 * e)}px ${A(.14 + .16 * e)}, inset 0 ${R(4 + 2 * e)}px ${R(6 + 6 * e)}px ${hi}, inset 0 -${R(5 + 4 * e)}px ${R(10 + 8 * e)}px ${A(.06 + .06 * e)}`;
+      if (jenis === 'btn') return `0 ${R(6 + 6 * e)}px ${R(12 + 8 * e)}px -4px color-mix(in srgb, ${bc} 60%, transparent), inset 0 3px 6px rgba(255,255,255,.35), inset 0 -4px 8px rgba(0,0,0,.14)`;
+      return `inset 0 ${R(2 + 2 * e)}px ${R(4 + 4 * e)}px ${A(.10 + .08 * e)}, inset 0 -2px 4px ${hi}`;
+    case 'neu': {
+      const d = R(4 + 9 * e), d2 = Math.max(2, R(d * .55));
+      if (jenis === 'card') return `${d}px ${d}px ${d * 2}px ${P.neuD}, -${d}px -${d}px ${d * 2}px ${P.neuL}`;
+      if (jenis === 'btn') return `${d2}px ${d2}px ${d2 * 2}px ${P.neuD}, -${d2}px -${d2}px ${d2 * 2}px ${P.neuL}`;
+      if (jenis === 'pressed') return `inset ${d2}px ${d2}px ${d2 * 2}px ${P.neuD}, inset -${d2}px -${d2}px ${d2 * 2}px ${P.neuL}`;
+      return `inset ${d2}px ${d2}px ${d2 * 2}px ${P.neuD}, inset -${d2}px -${d2}px ${d2 * 2}px ${P.neuL}`;
+    }
+    case 'hard': {
+      const o = R(2 + 5 * e);
+      if (jenis === 'card') return `${o}px ${o}px 0 0 ${P.ink}`;
+      if (jenis === 'btn') return `${Math.max(2, o - 1)}px ${Math.max(2, o - 1)}px 0 0 ${P.ink}`;
+      if (jenis === 'btn-h') return `${o + 1}px ${o + 1}px 0 0 ${P.ink}`;
+      if (jenis === 'btn-a') return `0 0 0 0 ${P.ink}`;
+      return `2px 2px 0 0 ${P.ink}`;
+    }
+    case 'pop':
+      if (jenis === 'card') return `0 ${R(3 + 4 * e)}px 0 0 ${W.mix(P.line, P.text, .14)}`;
+      if (jenis === 'btn') return `0 ${R(3 + 3 * e)}px 0 0 color-mix(in srgb, ${bc} 65%, #000)`;
+      return 'none';
+    case 'glow':
+      if (jenis === 'card') return `0 0 0 1px ${W.rgba(P.primary, .25)}, 0 0 ${R(14 + 26 * e)}px ${W.rgba(P.primary, .12 + .18 * e)}`;
+      if (jenis === 'btn') return `0 0 ${R(8 + 16 * e)}px color-mix(in srgb, ${bc} ${R(35 + 30 * e)}%, transparent)`;
+      return 'none';
+    default: return 'none';
+  }
+}
+
+// Peta variabel CSS lengkap (dipakai <html> dan juga kartu pratinjau gaya).
+function petaVar(t, u, P) {
+  const W = Warna, R = Math.round, m = {};
+  const f = GAYA_FONT[u.font];
+  m['--c-primary'] = P.primary; m['--c-secondary'] = P.secondary; m['--c-accent'] = P.accent;
+  m['--c-bg'] = P.bg; m['--c-surface'] = P.surface; m['--c-text'] = P.text; m['--c-muted'] = P.muted; m['--c-line'] = P.line;
+  m['--c-success'] = P.success; m['--c-danger'] = P.danger; m['--c-warn-ink'] = P.warnInk;
+  m['--c-primary-dark'] = P.primaryDark;
+  m['--c-on-primary'] = P.onPrimary; m['--c-on-secondary'] = P.onSecondary; m['--c-on-accent'] = P.onAccent;
+  m['--c-sidebar'] = P.sidebar; m['--c-on-sidebar'] = P.onSb;
+  m['--c-shadow'] = W.hex2rgb(P.sh).join(',');
+  m['--font-display'] = f.d + FALLBACK_SANS; m['--font-body'] = f.b + FALLBACK_SANS;
+  m['--ui-hw'] = String(u.hw); m['--ui-caps'] = u.caps ? 'uppercase' : 'none'; m['--ui-hls'] = u.caps ? '.04em' : '-.01em';
+  m['--ui-d'] = String(u.dens / 100);
+  // radius
+  const r = u.r;
+  m['--radius'] = r + 'px'; m['--radius-lg'] = R(r * 1.7) + 'px'; m['--r-xl'] = R(r * 2) + 'px';
+  m['--ui-r-btn'] = u.pill ? '999px' : r + 'px';
+  m['--ui-r-in'] = (u.pill ? Math.min(R(r * 1.6), 26) : r) + 'px';
+  m['--ui-r-nav'] = (u.pill ? 999 : R(r * .85)) + 'px';
+  m['--ui-r-sm'] = Math.min(8, r) + 'px';
+  m['--ui-r-badge'] = (r >= 12 ? 999 : R(r * .5)) + 'px';
+  // permukaan kartu
+  const g = u.glass / 100, kaca = g > 0;
+  const bw = u.depth === 'neu' ? 0 : (u.bw || (kaca ? 1 : 0));
+  const bcol = u.ink ? P.ink : (kaca ? (P.gelap ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.55)') : P.line);
+  m['--ui-card-bd'] = bw ? `${bw}px solid ${bcol}` : '0 solid transparent';
+  m['--ui-card-bg'] = kaca ? W.rgba(P.surface, Math.max(.4, 1 - .62 * g)) : P.surface;
+  m['--ui-modal-bg'] = kaca ? W.rgba(P.surface, .94) : P.surface;
+  m['--ui-bf'] = kaca ? `blur(${R(4 + 20 * g)}px) saturate(1.4)` : 'none';
+  m['--clay'] = bayangan(u, P, 'card'); m['--shadow'] = m['--clay'];
+  // tombol
+  m['--ui-btn-bw'] = Math.max(u.bw, 1) + 'px';
+  if (u.ink) m['--ui-btn-bc'] = P.ink;
+  m['--ui-btn-shadow'] = bayangan(u, P, 'btn');
+  m['--ui-btn-shadow-h'] = u.depth === 'hard' ? bayangan(u, P, 'btn-h') : m['--ui-btn-shadow'];
+  m['--ui-btn-shadow-a'] = u.depth === 'hard' ? bayangan(u, P, 'btn-a') : (u.depth === 'neu' ? bayangan(u, P, 'pressed') : m['--ui-btn-shadow']);
+  m['--ui-neu-pressed'] = bayangan(u, P, 'pressed');
+  m['--ui-btn-bg'] = u.grad > 0 ? `linear-gradient(135deg, ${P.primary}, ${W.mix(P.primary, P.secondary, Math.min(.85, u.grad / 100 * .9))})` : P.primary;
+  if (u.depth === 'hard') { m['--ui-lift'] = 'translate(-1px,-1px)'; m['--ui-press'] = 'translate(2px,2px)'; }
+  else if (u.depth === 'flat' || u.depth === 'line') { m['--ui-lift'] = 'none'; m['--ui-press'] = 'none'; }
+  // input
+  const inClay = u.depth === 'clay' || u.depth === 'neu';
+  m['--ui-in-bg'] = u.depth === 'neu' ? P.bg : (kaca ? W.rgba(P.surface, .6) : P.surface);
+  m['--ui-in-bd'] = inClay ? '0 solid transparent' : `${Math.max(u.bw, 1)}px solid ${u.ink ? P.ink : P.inputLine}`;
+  m['--ui-in-shadow'] = bayangan(u, P, 'input');
+  m['--ui-in-focus'] = `0 0 0 3px ${W.rgba(P.primary, .28)}`;
+  // latar halaman
+  const [img, size] = polaLatar(u.pat, P);
+  m['--ui-page-img'] = img; m['--ui-page-size'] = size;
+  m['--ui-login-img'] = u.pat === 'none' ? polaLatar('blobs', P)[0] : img;
+  // sidebar
+  m['--ui-shell-gap'] = u.float ? '12px' : '0px';
+  m['--ui-side-r'] = u.float ? Math.min(R(r * 2.2), 40) + 'px' : '0px';
+  m['--ui-side-bg'] = P.sideBg;
+  m['--ui-side-bd'] = bw && u.side !== 'glass' ? `${bw}px solid ${u.ink ? P.ink : P.line}` : (u.side === 'light' && !u.float && u.depth !== 'neu' ? `1px solid ${P.line}` : '0');
+  m['--ui-side-shadow'] = (u.float || u.depth === 'neu') ? bayangan(u, P, 'card') : 'none';
+  const terang = u.side === 'tint' || u.side === 'light' || u.side === 'glass';
+  if (terang) {
+    m['--ui-nav-act-bg'] = u.depth === 'neu' ? P.bg : P.surface; m['--ui-nav-act-fg'] = P.text;
+    m['--ui-nav-ico-bg'] = W.rgba(P.surface, .6); m['--ui-nav-ico-fg'] = P.secondary;
+    m['--ui-nav-ico-act-bg'] = W.mix(P.primary, P.surface, .84); m['--ui-nav-ico-act-fg'] = P.primary;
+  } else if (u.side === 'solid') {
+    m['--ui-nav-act-bg'] = W.rgba(P.onSb, .2); m['--ui-nav-act-fg'] = P.onSb;
+    m['--ui-nav-ico-bg'] = W.rgba(P.onSb, .12); m['--ui-nav-ico-fg'] = P.onSb;
+    m['--ui-nav-ico-act-bg'] = W.rgba(P.onSb, .2); m['--ui-nav-ico-act-fg'] = P.onSb;
+  } else {
+    m['--ui-nav-act-bg'] = P.primary; m['--ui-nav-act-fg'] = P.onPrimary;
+    m['--ui-nav-ico-bg'] = W.rgba(P.onSb, .1); m['--ui-nav-ico-fg'] = P.onSb;
+    m['--ui-nav-ico-act-bg'] = W.rgba(P.onPrimary, .18); m['--ui-nav-ico-act-fg'] = P.onPrimary;
+  }
+  if (u.depth === 'hard') { m['--ui-nav-act-sh'] = '3px 3px 0 0 ' + P.ink; m['--ui-nav-ol'] = `2px solid ${P.ink}`; }
+  else if (u.depth === 'neu') { m['--ui-nav-act-sh'] = bayangan(u, P, 'pressed'); m['--ui-nav-ol'] = 'none'; }
+  else if (u.depth === 'flat' || u.depth === 'line') { m['--ui-nav-act-sh'] = 'none'; m['--ui-nav-ol'] = 'none'; }
+  else { m['--ui-nav-act-sh'] = `0 8px 20px -8px ${W.rgba(P.sh, .38)}`; m['--ui-nav-ol'] = 'none'; }
+  // hero dashboard
+  if (u.grad >= 35) {
+    m['--ui-hero-bg'] = `linear-gradient(120deg, ${P.primary}, ${W.mix(P.primary, P.secondary, .7)})`;
+    m['--c-hero-fg'] = P.onPrimary; m['--c-hero-fg-soft'] = W.rgba(P.onPrimary, .86);
+  } else {
+    m['--ui-hero-bg'] = `linear-gradient(120deg, ${W.mix(P.primary, P.surface, .8)}, ${W.mix(P.primary, P.surface, .66)})`;
+    m['--c-hero-fg'] = P.text; m['--c-hero-fg-soft'] = W.rgba(P.text, .72);
+  }
+  return m;
+}
+
+// ---- Pengendali tema aktif --------------------------------------------------
+const Tampilan = (() => {
+  const CACHE = 'cbt_tema_v2';
+  let terpasang = [];
+  let aktif = null;     // tema (yang sedang tampil)
+  let tersimpan = null; // tema yang terakhir disimpan/dimuat (untuk Batalkan)
+  const mqGelap = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+  function normalisasiTema(t) {
+    t = t || {};
+    const D = PALET_PRESET[0], W = Warna;
+    return {
+      primary: W.valid(t.primary) ? t.primary : D.primary,
+      secondary: W.valid(t.secondary) ? t.secondary : D.secondary,
+      accent: W.valid(t.accent) ? t.accent : D.accent,
+      bg: W.valid(t.bg) ? t.bg : D.bg,
+      text: W.valid(t.text) ? t.text : D.text,
+      mode: ['light', 'dark', 'auto'].includes(t.mode) ? t.mode : 'light',
+      rot: ['tetap', 'harian', 'harian-total'].includes(t.rot) ? t.rot : 'tetap',
+      ui: normalisasiUI(t.ui || GAYA_BY_ID.softclay.u)
+    };
+  }
+  function efektif(t, tanpaRotasi) {
+    if (tanpaRotasi || t.rot === 'tetap') return t;
+    const d = new Date(), seed = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+    const rnd = mulberry32(seed * 7 + 13);
+    const g = buatGayaAcak(rnd);
+    const r = Object.assign({}, t, { ui: normalisasiUI(g.u), mode: t.mode === 'auto' ? 'auto' : g.mode });
+    if (t.rot === 'harian-total') Object.assign(r, buatPaletAcak(rnd));
+    return r;
+  }
+  function gelapEfektif(mode) { return mode === 'dark' || (mode === 'auto' && !!(mqGelap && mqGelap.matches)); }
+
+  function setVars(map) {
+    const st = document.documentElement.style;
+    terpasang.forEach(k => { if (!(k in map)) st.removeProperty(k); });
+    terpasang = Object.keys(map);
+    for (const k in map) st.setProperty(k, map[k]);
+  }
+  function petaUntuk(t, u) {
+    const P = hitungPalet(t, u, gelapEfektif(t.mode));
+    return { P, map: petaVar(t, u, P) };
+  }
+  function terapkan(tema, opsi) {
+    opsi = opsi || {};
+    const t = efektif(normalisasiTema(tema), opsi.tanpaRotasi);
+    aktif = t;
+    muatFont(t.ui.font);
+    const { P, map } = petaUntuk(t, t.ui);
+    setVars(map);
+    const el = document.documentElement;
+    el.style.colorScheme = P.gelap ? 'dark' : 'light';
+    el.dataset.skin = t.ui.skin || ''; el.dataset.depth = t.ui.depth; el.dataset.glass = t.ui.glass > 0 ? '1' : '0'; el.dataset.mode = P.gelap ? 'dark' : 'light';
+    const mt = document.querySelector('meta[name="theme-color"]');
+    if (mt) mt.setAttribute('content', P.sidebar);
+    return t;
+  }
+  function pasangVarPada(el, tema, u) {
+    const t = normalisasiTema(tema);
+    const { map } = petaUntuk(t, normalisasiUI(u));
+    el.style.cssText = Object.keys(map).map(k => `${k}:${map[k]}`).join(';');
+  }
+  function muatCache() {
+    try { const raw = localStorage.getItem(CACHE); if (raw) { const t = JSON.parse(raw); tersimpan = normalisasiTema(t); terapkan(t); return true; } } catch (e) {}
+    return false;
+  }
+  function simpanCache(t) { try { localStorage.setItem(CACHE, JSON.stringify(t)); } catch (e) {} }
+  function tandaiTersimpan(t) { tersimpan = normalisasiTema(t); simpanCache(tersimpan); }
+  function kode(t) { t = normalisasiTema(t); return btoa(unescape(encodeURIComponent(JSON.stringify({ v: 2, c: [t.primary, t.secondary, t.accent, t.bg, t.text], m: t.mode, u: t.ui })))); }
+  function dariKode(s) {
+    const o = JSON.parse(decodeURIComponent(escape(atob(String(s).trim()))));
+    if (!o || !o.c || o.c.length < 5) throw new Error('Kode tidak valid');
+    return normalisasiTema({ primary: o.c[0], secondary: o.c[1], accent: o.c[2], bg: o.c[3], text: o.c[4], mode: o.m, ui: o.u });
+  }
+  if (mqGelap && mqGelap.addEventListener) mqGelap.addEventListener('change', () => { if (aktif && aktif.mode === 'auto') terapkan(tersimpan || aktif, {}); });
+  return { terapkan, normalisasiTema, pasangVarPada, muatCache, tandaiTersimpan, kode, dariKode, get tersimpan() { return tersimpan; }, get aktif() { return aktif; } };
+})();
+Tampilan.muatCache();
+
+function terapkanTema(tema) { if (tema) { Tampilan.tandaiTersimpan(tema); Tampilan.terapkan(tema); } }
+async function muatTemaGlobal() {
+  const res = await api('getTema', {});
+  if (res.ok) terapkanTema(res.tema);
+}
+
+function unduhTeks(teks, filename) {
+  const blob = new Blob(['\uFEFF' + teks], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+// Bikin file .xlsx sungguhan (bukan teks koma) supaya saat dibuka di Excel/Google
+// Sheets datanya langsung rapi per kolom, tidak numpuk di satu kolom seperti CSV
+// kadang bermasalah di beberapa pengaturan region (koma vs titik koma).
+async function unduhXlsx(filename, headers, rows) {
+  try { await muatPustaka_('xlsx'); } catch (e) { toast(e.message, 'error'); return; }
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  ws['!cols'] = headers.map(() => ({ wch: 22 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Template');
+  XLSX.writeFile(wb, filename);
+}
+
+// ----------------------------------------------------------------------------
+// MINI-ZIP / .DOCX (tulis saja, tanpa pustaka pihak ketiga) — dipakai HANYA untuk
+// membuat file "Unduh Template (.docx)" di Bank Soal. Zip ditulis metode STORE
+// (tanpa kompresi) karena kita yang membuat isinya sendiri (bukan membaca file
+// pihak lain), jadi tidak perlu implementasi DEFLATE. Untuk MEMBACA .docx yang
+// diunggah guru (hasil edit di Microsoft Word, biasanya terkompresi), dipakai
+// pustaka mammoth.js (lihat DocxImport & tag <script> mammoth di index.html) --
+// menulis file jauh lebih sederhana daripada membaca file sembarang dari luar.
+// ----------------------------------------------------------------------------
+const CRC32_TABLE_ = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32_(bytes) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = CRC32_TABLE_[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function zU16_(n) { return [n & 0xFF, (n >>> 8) & 0xFF]; }
+function zU32_(n) { return [n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF]; }
+
+function buatZipSederhana_(files) {
+  const enc = new TextEncoder();
+  const localParts = [], centralParts = [];
+  let offset = 0;
+  const time = 0, date = 0x21; // tanggal tetap (tidak penting untuk validitas file)
+  files.forEach(f => {
+    const nameBytes = enc.encode(f.name);
+    const content = f.content;
+    const crc = crc32_(content);
+    const size = content.length;
+    const localHeader = new Uint8Array([
+      0x50, 0x4b, 0x03, 0x04, 20, 0, 0, 0, 0, 0,
+      ...zU16_(time), ...zU16_(date), ...zU32_(crc), ...zU32_(size), ...zU32_(size),
+      ...zU16_(nameBytes.length), ...zU16_(0)
+    ]);
+    localParts.push(localHeader, nameBytes, content);
+    const centralHeader = new Uint8Array([
+      0x50, 0x4b, 0x01, 0x02, 20, 0, 20, 0, 0, 0, 0, 0,
+      ...zU16_(time), ...zU16_(date), ...zU32_(crc), ...zU32_(size), ...zU32_(size),
+      ...zU16_(nameBytes.length), ...zU16_(0), ...zU16_(0), ...zU16_(0), ...zU16_(0),
+      ...zU32_(0), ...zU32_(offset)
+    ]);
+    centralParts.push(centralHeader, nameBytes);
+    offset += localHeader.length + nameBytes.length + content.length;
+  });
+  const centralStart = offset;
+  let centralSize = 0; centralParts.forEach(p => centralSize += p.length);
+  const eocd = new Uint8Array([
+    0x50, 0x4b, 0x05, 0x06, 0, 0, 0, 0, ...zU16_(files.length), ...zU16_(files.length),
+    ...zU32_(centralSize), ...zU32_(centralStart), 0, 0
+  ]);
+  const all = [...localParts, ...centralParts, eocd];
+  let total = 0; all.forEach(p => total += p.length);
+  const out = new Uint8Array(total);
+  let pos = 0; all.forEach(p => { out.set(p, pos); pos += p.length; });
+  return out;
+}
+
+function xmlEscape_(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Tabel OOXML sederhana (dipakai buatDocxSederhana_ utk item {table:{headers,rows}}).
+function buildTableXml_(headers, rows, widths) {
+  const wDef = Math.floor(9500 / headers.length);
+  const lebar = (i) => (widths && widths[i]) ? widths[i] : wDef;
+  const grid = headers.map((_, i) => `<w:gridCol w:w="${lebar(i)}"/>`).join('');
+  const cell = (text, bold, i) => `<w:tc><w:tcPr><w:tcW w:w="${lebar(i)}" w:type="dxa"/></w:tcPr><w:p>${text ? `<w:r>${bold ? '<w:rPr><w:b/></w:rPr>' : ''}<w:t xml:space="preserve">${xmlEscape_(text)}</w:t></w:r>` : ''}</w:p></w:tc>`;
+  const headerRow = `<w:tr><w:trPr><w:tblHeader/></w:trPr>${headers.map((h, i) => cell(h, true, i)).join('')}</w:tr>`;
+  const bodyRows = rows.map(r => `<w:tr>${r.map((c, i) => cell(c, false, i)).join('')}</w:tr>`).join('');
+  return `<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblBorders><w:top w:val="single" w:sz="4" w:color="999999"/><w:left w:val="single" w:sz="4" w:color="999999"/><w:bottom w:val="single" w:sz="4" w:color="999999"/><w:right w:val="single" w:sz="4" w:color="999999"/><w:insideH w:val="single" w:sz="4" w:color="999999"/><w:insideV w:val="single" w:sz="4" w:color="999999"/></w:tblBorders></w:tblPr><w:tblGrid>${grid}</w:tblGrid>${headerRow}${bodyRows}</w:tbl>`;
+}
+
+// items: [{text, heading?, bold?} | {table:{headers,rows}}]. Halaman dibuat
+// landscape (lebar) supaya tabel dgn banyak kolom (Opsi A..E dst) tidak terlalu
+// sempit saat dibuka & diisi guru di Microsoft Word/WPS/LibreOffice.
+function buatDocxSederhana_(items) {
+  const enc = new TextEncoder();
+  const body = items.map(p => {
+    if (p.table) return buildTableXml_(p.table.headers, p.table.rows, p.table.widths);
+    if (p.heading) {
+      return `<w:p><w:pPr><w:spacing w:before="240" w:after="120"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="28"/></w:rPr><w:t xml:space="preserve">${xmlEscape_(p.text)}</w:t></w:r></w:p>`;
+    }
+    const runs = String(p.text || '').length
+      ? `<w:r>${p.bold ? '<w:rPr><w:b/></w:rPr>' : ''}<w:t xml:space="preserve">${xmlEscape_(p.text)}</w:t></w:r>`
+      : '';
+    return `<w:p>${runs}</w:p>`;
+  }).join('');
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:body>${body}<w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/><w:pgMar w:top="900" w:right="900" w:bottom="900" w:left="900"/></w:sectPr></w:body>
+</w:document>`;
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`;
+  const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`;
+  const files = [
+    { name: '[Content_Types].xml', content: enc.encode(contentTypes) },
+    { name: '_rels/.rels', content: enc.encode(rels) },
+    { name: 'word/document.xml', content: enc.encode(documentXml) }
+  ];
+  return buatZipSederhana_(files);
+}
+
+function unduhDocx_(filename, items) {
+  const bytes = buatDocxSederhana_(items);
+  const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+// ----------------------------------------------------------------------------
+// FORMAT TABEL IMPOR SOAL (dipakai bersama oleh Excel & Word) — satu baris tabel
+// = satu soal. Kolom (nama header BEBAS URUTANNYA, dicocokkan lewat nama, tidak
+// peka besar/kecil huruf): Kategori, Topik, Tipe, Pertanyaan, Gambar, Opsi A,
+// Opsi B, Opsi C, Opsi D, Opsi E, Kunci, Bobot, Kesulitan.
+//   • Tipe: PG (pilihan ganda), PGK (pilihan ganda kompleks/lebih dari satu
+//     kunci), BS (benar/salah), Essay. Boleh juga nama panjangnya.
+//   • Kunci: cukup HURUF opsi yang benar, mis. "C". Untuk PGK boleh lebih dari
+//     satu dipisah koma, mis. "A,C". Untuk BS isi "Benar" atau "Salah". Untuk
+//     Essay isi kata kunci penilaian otomatis dipisah koma.
+//   • Gambar: KOSONGKAN jika tidak ada gambar, atau cukup ketik NAMA FILE
+//     gambarnya saja (mis. "soal1.jpg") — lalu saat mengimpor, pilih juga
+//     file-file gambar itu sekaligus lewat tombol "Pilih Gambar Pendukung"
+//     (boleh pilih banyak file sekaligus), sistem otomatis mencocokkan nama
+//     file ke soal yang sesuai. Boleh juga isi link gambar publik langsung.
+// ----------------------------------------------------------------------------
+const TIPE_SINONIM_ = {
+  pg: 'pilihan_ganda', 'pilihanganda': 'pilihan_ganda', pilihan_ganda: 'pilihan_ganda', single: 'pilihan_ganda',
+  pgk: 'checkbox', 'pilihangandakompleks': 'checkbox', checkbox: 'checkbox', kompleks: 'checkbox', multi: 'checkbox',
+  bs: 'benar_salah', 'benarsalah': 'benar_salah', benar_salah: 'benar_salah',
+  essay: 'uraian', uraian: 'uraian', isian: 'uraian'
+};
+// Deteksi tipe dari teks kolom Tipe. Toleran: abaikan tag HTML, huruf besar/kecil,
+// spasi & tanda baca. Mengembalikan '' kalau tidak dikenali sama sekali.
+function tipeDariTeks_(s) {
+  const k = String(s || '').replace(/<[^>]*>/g, ' ').toLowerCase().replace(/[^a-z]/g, '');
+  if (!k) return '';
+  if (TIPE_SINONIM_[k]) return TIPE_SINONIM_[k];
+  if (/kompleks|checkbox|multi|pgk|jamak|lebihdarisatu/.test(k)) return 'checkbox';
+  if (/jodoh|cocok|match|pasang|menjodohkan/.test(k)) return 'menjodohkan';
+  if (/benarsalah|truefalse|^bs$|^tf$|^bsalah$/.test(k) || (k.includes('benar') && k.includes('salah'))) return 'benar_salah';
+  if (/essay|esai|uraian|isian|isiansingkat|jawabansingkat/.test(k)) return 'uraian';
+  if (/pilihanganda|^pg|single|biasa|opsi/.test(k)) return 'pilihan_ganda';
+  return '';
+}
+function normalisasiTipeSoal_(s) {
+  return tipeDariTeks_(s) || 'pilihan_ganda';
+}
+// "C" -> 2, "3" -> 2 (angka dianggap 1-based spy konsisten dgn huruf), "benar" -> 0, "salah" -> 1.
+// `opsi` (opsional): daftar teks opsi soal ini -- dipakai sbg JARING PENGAMAN
+// kalau guru mengisi kolom Kunci dengan TEKS JAWABANNYA LANGSUNG (mis. "Sel")
+// alih-alih huruf opsi (mis. "A"), yang tanpa ini akan diam-diam dianggap "0"
+// (opsi A) oleh Number("Sel") -> NaN -> 0, sehingga soal jadi SELALU disalahkan
+// walau siswa memilih jawaban yang sebenarnya benar. Kembalikan -1 kalau kunci
+// benar-benar tidak bisa dikenali sama sekali (dipakai pemanggil utk memberi
+// peringatan ke guru, BUKAN didiamkan begitu saja).
+function hurufKunciKeIndeks_(s, opsi) {
+  const t = String(s || '').trim();
+  const tUpper = t.toUpperCase();
+  if (tUpper === 'BENAR') return 0;
+  if (tUpper === 'SALAH') return 1;
+  if (/^[A-H]$/.test(tUpper)) return tUpper.charCodeAt(0) - 65;
+  if (opsi && opsi.length) {
+    const norm = (x) => String(x || '').replace(/<[^>]*>/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const tNorm = norm(t);
+    if (tNorm) {
+      const idxPersis = opsi.findIndex(o => norm(o) === tNorm);
+      if (idxPersis !== -1) return idxPersis;
+      // Jaring pengaman kedua: cocok sebagian (mis. kunci "sel" vs opsi teks
+      // kaya "Sel (unit terkecil)") -- hanya dipakai kalau hasilnya unik.
+      const idxSebagian = opsi.map(o => norm(o)).reduce((acc, o, i) => (o.includes(tNorm) || tNorm.includes(o)) ? acc.concat(i) : acc, []);
+      if (idxSebagian.length === 1) return idxSebagian[0];
+    }
+  }
+  if (/^[A-H]$/i.test(tUpper)) return tUpper.charCodeAt(0) - 65; // (jaga-jaga, sudah tercakup di atas)
+  if (t === '') return -1;
+  const n = Number(t);
+  if (!isNaN(n)) return Math.max(0, Math.round(n) - 1);
+  return -1; // tidak dikenali sama sekali -> jangan diam-diam anggap opsi A
+}
+
+// ----------------------------------------------------------------------------
+// KUNCI JAWABAN: pembacaan aman + status "sudah/belum ditetapkan".
+// BUG LAMA: kunci_json disimpan "0" (opsi A) -> Google Sheets mengubahnya jadi
+// ANGKA 0 -> saat dibaca `soal.kunci_json || 'null'` angka 0 dianggap kosong
+// sehingga kunci A selalu "tidak terdeteksi" (dan skor soal itu selalu 0).
+// Sekarang semua pembacaan lewat parseKunciJson_ yang paham angka 0.
+// ----------------------------------------------------------------------------
+function parseKunciJson_(raw) {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === 'number') return isNaN(raw) ? null : raw;
+  if (typeof raw === 'object') return raw;
+  const t = String(raw).trim();
+  if (t === '') return null;
+  try { return JSON.parse(t); } catch (e) { return null; }
+}
+// Hasil: { ada, manual, label, indeks[] }.
+//  ada    = kunci valid sudah ditetapkan
+//  manual = soal Essay tanpa kata kunci (dikoreksi manual, bukan "belum")
+function statusKunciSoal_(soal) {
+  let opsi = null;
+  try { opsi = JSON.parse(soal.opsi_json || 'null'); } catch (e) { opsi = null; }
+  const k = parseKunciJson_(soal.kunci_json);
+  const tipe = soal.tipe || 'pilihan_ganda';
+  const huruf = (i) => String.fromCharCode(65 + i);
+  const valid = (v, n) => v !== null && v !== undefined && v !== '' && !isNaN(Number(v)) && Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) < n;
+  if (tipe === 'pilihan_ganda' || tipe === 'benar_salah') {
+    const n = Array.isArray(opsi) ? opsi.length : 0;
+    if (valid(k, n)) return { ada: true, manual: false, label: huruf(Number(k)), indeks: [Number(k)] };
+    return { ada: false, manual: false, label: '', indeks: [] };
+  }
+  if (tipe === 'checkbox') {
+    const n = Array.isArray(opsi) ? opsi.length : 0;
+    const idx = Array.isArray(k) ? k.filter(v => valid(v, n)).map(Number) : [];
+    if (idx.length) return { ada: true, manual: false, label: idx.map(huruf).join(', '), indeks: idx };
+    return { ada: false, manual: false, label: '', indeks: [] };
+  }
+  if (tipe === 'menjodohkan') {
+    const nKiri = opsi && Array.isArray(opsi.kiri) ? opsi.kiri.length : 0;
+    const vals = (k && typeof k === 'object' && !Array.isArray(k)) ? Object.values(k) : [];
+    const ok = nKiri > 0 && vals.length === nKiri && vals.every(v => v !== '' && v !== null && !isNaN(Number(v)));
+    return { ada: ok, manual: false, label: ok ? 'pasangan lengkap' : '', indeks: [] };
+  }
+  const kata = (k && Array.isArray(k.kataKunci)) ? k.kataKunci.filter(x => String(x).trim()) : [];
+  if (kata.length) return { ada: true, manual: false, label: kata.length + ' kata kunci', indeks: [] };
+  return { ada: false, manual: true, label: '', indeks: [] };
+}
+// Baris Bank Soal (opsi_json = teks JSON) -> bentuk yang dipakai renderKontenSoal (soal.opsi).
+function soalDenganOpsi_(soal) {
+  if (soal && soal.opsi !== undefined && soal.opsi !== null && soal.opsi !== '') return soal;
+  let opsi = null;
+  try { opsi = JSON.parse(soal.opsi_json || 'null'); } catch (e) { opsi = null; }
+  return Object.assign({}, soal, { opsi: opsi === null ? [] : opsi });
+}
+
+// Token ujian 6 karakter yang mudah dibaca siswa: TIDAK memakai angka 0 & huruf O
+// (juga 1 & I) karena sulit dibedakan. Sisa: huruf A-Z (tanpa I, O) + angka 2-9.
+const KARAKTER_TOKEN_ = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function buatTokenAman_(panjang) {
+  panjang = panjang || 6;
+  let hasil = '';
+  const acak = (typeof crypto !== 'undefined' && crypto.getRandomValues) ? crypto.getRandomValues(new Uint32Array(panjang)) : null;
+  for (let i = 0; i < panjang; i++) {
+    const r = acak ? acak[i] : Math.floor(Math.random() * 4294967296);
+    hasil += KARAKTER_TOKEN_.charAt(r % KARAKTER_TOKEN_.length);
+  }
+  return hasil;
+}
+
+// Normalisasi header kolom: lowercase, buang spasi -> dipakai sbg key peta.
+function kunciHeader_(h) { return String(h || '').trim().toLowerCase().replace(/[\s._-]+/g, ''); }
+
+// Satu baris tabel (array nilai kolom, SEJAJAR dgn `headers`) -> objek soal siap
+// dikirim ke action 'importSoal'. `petaGambar`: Map nama-file(lowercase) -> URL
+// gambar yg sudah diunggah (lihat Guru.unggahBatchGambarImpor). kategoriDefault
+// dipakai kalau kolom Kategori kosong (mis. mapel yg sedang dibuka di Kelola Soal).
+// `peringatan` (opsional, array): kalau diisi, baris dgn kunci jawaban yang tidak
+// bisa dikenali (bukan huruf opsi A-H, bukan Benar/Salah, dan tidak cocok dgn
+// teks opsi mana pun) akan DITULIS PESANNYA ke sini alih-alih diam-diam
+// dianggap opsi A -- supaya guru pasti tahu & bisa memperbaikinya sebelum
+// dipakai siswa (lihat catatan panjang di hurufKunciKeIndeks_ di atas).
+function barisTabelJadiSoal_(headerIdx, nilai, guruId, kategoriDefault, petaGambar, peringatan) {
+  const ambil = (nama) => { const i = headerIdx[nama]; return i == null ? '' : String(nilai[i] == null ? '' : nilai[i]).trim(); };
+  const pertanyaan = ambil('pertanyaan');
+  if (!pertanyaan) return null;
+  // Baris petunjuk bawaan template ("(tambahkan baris baru di bawah sini...)") bukan soal.
+  if (/^\(\s*tambahkan baris/i.test(pertanyaan.replace(/<[^>]*>/g, '').trim())) return null;
+  const tipeTeks = ambil('tipe');
+  let tipe = tipeDariTeks_(tipeTeks);
+  if (!tipe) {
+    // Kolom Tipe kosong / tak dikenali -> tebak otomatis dari isi baris.
+    const opsiTebak = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map(h => ambil('opsi' + h)).filter(Boolean);
+    const kunciTebak = (ambil('kunci') || ambil('kuncijawaban')).replace(/<[^>]*>/g, '').trim();
+    if (/^[A-H](\s*[,|;]\s*[A-H])+$/i.test(kunciTebak)) tipe = 'checkbox';
+    else if (/^(benar|salah)$/i.test(kunciTebak) && opsiTebak.length <= 2) tipe = 'benar_salah';
+    else if (opsiTebak.length >= 2 && opsiTebak.every(o => /\s(=|->|→|\|)\s|=|→/.test(o))) tipe = 'menjodohkan';
+    else if (opsiTebak.length === 0) tipe = 'uraian';
+    else tipe = 'pilihan_ganda';
+    if (tipeTeks && peringatan) peringatan.push(`"${String(pertanyaan).replace(/<[^>]*>/g, '').trim().slice(0, 60)}": Tipe "${tipeTeks.replace(/<[^>]*>/g, '').trim()}" tidak dikenali — ditebak otomatis sebagai ${tipe}. Mohon periksa.`);
+  }
+  const gambarRaw = ambil('gambar');
+  let gambar = '';
+  if (gambarRaw) {
+    if (/^(https?:|data:)/i.test(gambarRaw)) gambar = normalisasiUrlGambar(gambarRaw);
+    else if (petaGambar && petaGambar.has(gambarRaw.trim().toLowerCase())) gambar = petaGambar.get(gambarRaw.trim().toLowerCase());
+  }
+  const item = {
+    guru_id: guruId,
+    // Impor dilakukan dari dalam halaman Kelola Soal 1 mapel -> SEMUA baris masuk
+    // ke mapel yang sedang dibuka (persis seperti ejaan namanya), tidak peduli isi
+    // kolom Kategori di file (template lama berisi "Simulasi"/"IPA", yang dulu
+    // membuat soal menumpuk di kategori lama). Kolom Kategori di file hanya dipakai
+    // bila tidak ada mapel yang sedang dibuka.
+    kategori: kategoriDefault ? String(kategoriDefault).trim() : normalisasiKategoriSoal_(ambil('kategori') || 'Kuis'),
+    subkategori: ambil('subkategori') || ambil('sub-kategori'),
+    topik: ambil('topik'),
+    tipe,
+    pertanyaan,
+    gambar,
+    bobot: Number(ambil('bobot')) || 10,
+    tingkat_kesulitan: (ambil('kesulitan') || ambil('tingkatkesulitan') || 'sedang').toLowerCase(),
+    pembahasan: ambil('pembahasan')
+  };
+  const potonganPertanyaan = (s) => { const teks = String(s).replace(/<[^>]*>/g, '').trim(); return teks.length > 60 ? teks.slice(0, 60) + '…' : teks; };
+  if (tipe === 'menjodohkan') {
+    // Tiap kolom Opsi berisi satu pasangan "Item kiri = Pasangan kanan"
+    // (pemisah boleh = , -> , → atau |). Sisi kanan diacak otomatis, kunci dihitung.
+    const pasangan = [];
+    ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].forEach(h => {
+      const teks = ambil('opsi' + h).replace(/<[^>]*>/g, '').trim();
+      if (!teks) return;
+      const m = teks.split(/\s*(?:->|→|=|\|)\s*/);
+      if (m.length >= 2 && m[0] && m[1]) pasangan.push([m[0].trim(), m.slice(1).join(' ').trim()]);
+      else if (peringatan) peringatan.push(`"${potonganPertanyaan(pertanyaan)}": opsi "${teks}" bukan pasangan (tulis dengan format "kiri = kanan") — dilewati.`);
+    });
+    if (pasangan.length < 2 && peringatan) peringatan.push(`"${potonganPertanyaan(pertanyaan)}": soal Jodohkan butuh minimal 2 pasangan ("kiri = kanan" pada kolom Opsi A, B, ...).`);
+    const kiri = pasangan.map(x => x[0]);
+    let urut = pasangan.map((_, i) => i);
+    if (urut.length > 1) { urut = urut.slice(1).concat(urut.slice(0, 1)); } // putar 1 posisi: tidak sejajar dgn kiri
+    const kanan = urut.map(i => pasangan[i][1]);
+    const kunci = {};
+    kiri.forEach((_, i) => { kunci[i] = urut.indexOf(i); });
+    item.opsi_json = JSON.stringify({ kiri, kanan });
+    item.kunci_json = JSON.stringify(kunci);
+    return item;
+  }
+  if (tipe === 'pilihan_ganda' || tipe === 'checkbox' || tipe === 'benar_salah') {
+    const opsi = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map(h => ambil('opsi' + h)).filter(Boolean);
+    item.opsi_json = JSON.stringify(opsi.length ? opsi : ['Benar', 'Salah']);
+    const opsiUntukCocok = opsi.length ? opsi : ['Benar', 'Salah'];
+    const kunciStr = ambil('kunci') || ambil('kuncijawaban');
+    if (tipe === 'checkbox') {
+      const idx = kunciStr.split(/[,|]/).map(s => hurufKunciKeIndeks_(s, opsiUntukCocok)).filter(i => i !== -1);
+      if (idx.length === 0 && kunciStr && peringatan) {
+        peringatan.push(`"${potonganPertanyaan(pertanyaan)}": kunci "${kunciStr}" tidak dikenali (bukan huruf opsi A-H atau teks opsi yang cocok) — TIDAK ADA jawaban yang ditandai benar, mohon perbaiki manual di Bank Soal.`);
+      }
+      item.kunci_json = JSON.stringify(idx);
+    } else {
+      const idxTunggal = hurufKunciKeIndeks_(kunciStr, opsiUntukCocok);
+      if (idxTunggal === -1 && peringatan) {
+        peringatan.push(`"${potonganPertanyaan(pertanyaan)}": kunci "${kunciStr}" tidak dikenali (bukan huruf opsi A-H, Benar/Salah, atau teks opsi yang cocok) — soal ini DIIMPOR TANPA KUNCI (ditandai ⚠ Belum ada kunci di Kelola Soal), mohon tetapkan manual lewat tombol Ubah.`);
+      }
+      item.kunci_json = idxTunggal === -1 ? '' : JSON.stringify(idxTunggal);
+    }
+  } else {
+    item.tipe = 'uraian';
+    item.opsi_json = '';
+    const kataKunci = (ambil('kunci') || ambil('kuncijawaban')).split(',').map(s => s.trim()).filter(Boolean);
+    item.kunci_json = JSON.stringify({ kataKunci });
+  }
+  return item;
+}
+
+// Ubah baris array-of-array (header di baris pertama) jadi daftar objek soal,
+// dipakai untuk hasil XLSX.utils.sheet_to_json({header:1}) MAUPUN hasil parse
+// <table> HTML dari dokumen Word (lihat Guru.importSoalDariDocx). `peringatan`
+// (opsional, array): diteruskan ke barisTabelJadiSoal_ -- lihat penjelasan di sana.
+function barisTabelKeSoalList_(rows, guruId, kategoriDefault, petaGambar, peringatan) {
+  if (!rows.length) return [];
+  const headerIdx = {};
+  rows[0].forEach((h, i) => { headerIdx[kunciHeader_(h)] = i; });
+  return rows.slice(1)
+    .map(r => barisTabelJadiSoal_(headerIdx, r, guruId, kategoriDefault, petaGambar, peringatan))
+    .filter(Boolean);
+}
+
+
+// Password otomatis meniru Kartu Login TKA asli: 6 angka + tanda bintang (contoh "187377*").
+function buatPasswordAcak() {
+  let angka = '';
+  for (let i = 0; i < 6; i++) angka += Math.floor(Math.random() * 10);
+  return angka + '*';
+}
+
+// Username otomatis meniru Kartu Login TKA asli: awalan "TP" + 13 angka (contoh "TP2206005700018").
+// Parameter `nama` tidak dipakai (dipertahankan supaya pemanggil lama tetap jalan). `sudahDipakai`
+// = daftar username yang ada; hasil dijamin tidak kembar (tanpa membedakan huruf besar/kecil).
+function buatUsernameDariNama(nama, sudahDipakai) {
+  const terpakai = new Set((sudahDipakai || []).filter(Boolean).map(u => String(u).toLowerCase()));
+  let kandidat;
+  do {
+    let angka = '';
+    for (let i = 0; i < 13; i++) angka += Math.floor(Math.random() * 10);
+    kandidat = 'TP' + angka;
+  } while (terpakai.has(kandidat.toLowerCase()));
+  return kandidat;
+}
+
+// Google Drive share link (https://drive.google.com/file/d/XXXX/view?usp=sharing)
+// tidak bisa langsung dipakai sebagai <img src>. Fungsi ini mengubahnya otomatis jadi
+// link tampilan langsung. Link gambar lain (imgur, hosting sekolah, dll) dibiarkan apa
+// adanya. Dipakai saat impor massal soal bergambar lewat kolom "gambar" di template.
+//
+// PENTING: sejak awal 2024 Google MEMATIKAN pola lama "drive.google.com/uc?export=view&id=..."
+// untuk hotlink <img src> lintas domain (lihat https://issuetracker.google.com/issues/319531488) --
+// pola itu sekarang tampil sebagai ikon "gambar rusak". Pola pengganti resmi yang masih berfungsi
+// adalah "drive.google.com/thumbnail?id=...&sz=...". Fungsi ini dipakai baik saat menyimpan URL
+// baru maupun (lewat urlGambarAman_ di bawah) saat MENAMPILKAN URL lama yang sudah kadung
+// tersimpan dengan pola lama, supaya logo/gambar soal yang sudah pernah diunggah ikut otomatis
+// terperbaiki tanpa guru perlu upload ulang.
+function idFileDrive_(url) {
+  const u = String(url || '').trim();
+  if (!u || u.indexOf('drive.google.com') === -1) return null;
+  const cocokFile = u.match(/drive\.google\.com\/file\/d\/([^/]+)/);
+  const cocokId = u.match(/[?&]id=([^&]+)/);
+  return cocokFile ? cocokFile[1] : (cocokId ? cocokId[1] : null);
+}
+// Beberapa pola hotlink Drive kadang tetap ditolak Google tergantung akun/wilayah/jaringan
+// (mis. "thumbnail?id=" bisa kena rate-limit, "uc?export=view" makin sering diblokir).
+// Daftar berurutan dari yang paling andal -> paling lawas, dipakai sebagai rantai
+// cadangan otomatis oleh listener "error" global di bawah supaya logo/gambar TIDAK
+// langsung tampil sebagai ikon "gambar rusak" begitu satu pola gagal.
+function kandidatUrlDrive_(fileId) {
+  return [
+    `https://lh3.googleusercontent.com/d/${fileId}=w1000`,
+    `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`,
+    `https://drive.google.com/uc?export=view&id=${fileId}`
+  ];
+}
+function normalisasiUrlGambar(url) {
+  const u = String(url || '').trim();
+  if (!u) return '';
+  const fileId = idFileDrive_(u);
+  return fileId ? kandidatUrlDrive_(fileId)[0] : u;
+}
+// Dipakai di SEMUA tempat yang menampilkan gambar (src="...") -- termasuk data lama yang
+// mungkin masih tersimpan dengan pola "uc?export=view" dari sebelum perbaikan ini.
+function urlGambarAman_(url) {
+  return normalisasiUrlGambar(url);
+}
+// Versi <img ...> siap-pakai (dipasang lewat innerHTML) yang membawa penanda
+// data-drive-id/data-drive-tahap supaya listener "error" global bisa otomatis
+// mencoba pola URL Drive berikutnya kalau pola pertama gagal dimuat, dan baru
+// menyerah (tampil rapi, bukan ikon "gambar rusak") setelah semua pola dicoba.
+function tagGambarAman_(url, kelas, altText) {
+  const u = String(url || '').trim();
+  if (!u) return '';
+  const kelasAttr = kelas ? ` class="${escapeHtml_(kelas)}"` : '';
+  const altAttr = ` alt="${escapeHtml_(altText || '')}"`;
+  const fileId = idFileDrive_(u);
+  if (!fileId) return `<img${kelasAttr}${altAttr} src="${escapeHtml_(u)}" decoding="async">`;
+  const src = kandidatUrlDrive_(fileId)[0];
+  return `<img${kelasAttr}${altAttr} src="${escapeHtml_(src)}" data-drive-id="${escapeHtml_(fileId)}" data-drive-tahap="1" decoding="async">`;
+}
+// Versi untuk kasus yang mengisi <img>.src lewat JS langsung (preview upload, dsb.)
+// alih-alih lewat innerHTML -- tetap dipasangi penanda fallback yang sama.
+function pasangSrcGambarAman_(imgEl, url) {
+  const u = String(url || '').trim();
+  if (!u) { imgEl.removeAttribute('src'); imgEl.removeAttribute('data-drive-id'); return; }
+  const fileId = idFileDrive_(u);
+  if (!fileId) { imgEl.src = u; imgEl.removeAttribute('data-drive-id'); return; }
+  imgEl.dataset.driveId = fileId;
+  imgEl.dataset.driveTahap = '1';
+  imgEl.src = kandidatUrlDrive_(fileId)[0];
+}
+// Listener global (capture phase, supaya kepicu untuk <img> di mana saja termasuk yang
+// baru disisipkan lewat innerHTML): begitu sebuah <img> gagal dimuat, coba pola Drive
+// berikutnya di rantai kandidatUrlDrive_. Kalau logo (di dalam .app-logo-slot) habis
+// semua kandidat, kembalikan ke ikon bawaan. Untuk gambar lain, ganti jadi kotak
+// placeholder rapi ("Gambar tidak dapat dimuat") alih-alih ikon "gambar rusak" bawaan browser.
+document.addEventListener('error', function (ev) {
+  const img = ev.target;
+  if (!img || img.tagName !== 'IMG' || !img.dataset || !img.dataset.driveId) return;
+  const fileId = img.dataset.driveId;
+  const tahap = Number(img.dataset.driveTahap || '1');
+  const kandidat = kandidatUrlDrive_(fileId);
+  if (tahap < kandidat.length) {
+    img.dataset.driveTahap = String(tahap + 1);
+    img.src = kandidat[tahap];
+    return;
+  }
+  const slotLogo = img.closest('.app-logo-slot');
+  if (slotLogo) {
+    slotLogo.innerHTML = '<i class="fa-solid fa-graduation-cap"></i>';
+    return;
+  }
+  const placeholder = document.createElement('div');
+  placeholder.className = 'gambar-gagal-muat' + (img.className ? ' ' + img.className : '');
+  placeholder.textContent = '🖼 Gambar tidak dapat dimuat';
+  if (img.parentNode) img.parentNode.replaceChild(placeholder, img);
+}, true);
+
+// ----------------------------------------------------------------------------
+// RUMUS WORD (OMML) -> LaTeX untuk IMPOR .docx
+//
+// MASALAH LAMA: rumus yang dibuat lewat Insert > Equation di Word (pecahan,
+// pangkat, akar, tanda coret, dst) disimpan Word sbg elemen OMML <m:oMath>.
+// mammoth.js TIDAK mengenal OMML, jadi seluruh rumus DIBUANG diam-diam saat
+// import (mis. "1 cm = 1/100 m" hanya tersisa "1 cm = , maka:").
+//
+// SOLUSI: sebelum dokumen diberikan ke mammoth, setiap <m:oMath> diganti dgn
+// sebuah run teks biasa berisi "$...LaTeX...$" (format yang sudah dirender
+// KaTeX di seluruh aplikasi: pertanyaan, opsi, pembahasan). Jadi tampilan rumus
+// di aplikasi = rumus di Word.
+// ----------------------------------------------------------------------------
+const NS_OMML_ = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
+const NS_WORD_ = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const NS_XML_ = 'http://www.w3.org/XML/1998/namespace';
+
+function ommlAnak_(el, nama) {
+  for (const c of Array.from(el.children)) if (c.namespaceURI === NS_OMML_ && c.localName === nama) return c;
+  return null;
+}
+// Atribut m:val; elemen flag tanpa val (mis. <m:nor/>) dianggap BENAR.
+function ommlFlag_(el) {
+  if (!el) return false;
+  const v = el.getAttributeNS(NS_OMML_, 'val');
+  return v === null || v === '' ? true : !/^(0|false|off)$/i.test(v);
+}
+function ommlVal_(el) { return el ? el.getAttributeNS(NS_OMML_, 'val') : null; }
+
+const OMML_SIMBOL_ = {
+  '×': '\\times ', '÷': '\\div ', '−': '-', '–': '-', '—': '-', '·': '\\cdot ', '⋅': '\\cdot ', '°': '^\\circ ',
+  '≈': '\\approx ', '≠': '\\neq ', '≤': '\\leq ', '≥': '\\geq ', '±': '\\pm ', '∓': '\\mp ', '→': '\\rightarrow ',
+  '←': '\\leftarrow ', '↔': '\\leftrightarrow ', '⇒': '\\Rightarrow ', '⇌': '\\rightleftharpoons ', '∞': '\\infty ',
+  '∝': '\\propto ', '√': '\\surd ', '∑': '\\sum ', '∏': '\\prod ', '∫': '\\int ', '∆': '\\Delta ', 'µ': '\\mu ',
+  '∥': '\\parallel ', '⊥': '\\perp ', '∠': '\\angle ', '∴': '\\therefore ', '…': '\\ldots ', '′': "'", '″': "''",
+  '%': '\\%', '#': '\\#', '&': '\\&', '$': '\\$', '_': '\\_', '{': '\\{', '}': '\\}', '\\': '\\backslash ', '^': '\\^{}', '~': '\\sim ',
+  ' ': ' ', '\u00a0': ' ', '\u2009': ' ', '\u202f': ' '
+};
+const OMML_SUPER_ = { '⁰': '^{0}', '¹': '^{1}', '²': '^{2}', '³': '^{3}', '⁴': '^{4}', '⁵': '^{5}', '⁶': '^{6}', '⁷': '^{7}', '⁸': '^{8}', '⁹': '^{9}', '⁻': '^{-}', '⁺': '^{+}',
+  '₀': '_{0}', '₁': '_{1}', '₂': '_{2}', '₃': '_{3}', '₄': '_{4}', '₅': '_{5}', '₆': '_{6}', '₇': '_{7}', '₈': '_{8}', '₉': '_{9}' };
+const OMML_ESC_TEKS_ = { '\\': '\\textbackslash{}', '{': '\\{', '}': '\\}', '$': '\\$', '&': '\\&', '#': '\\#', '%': '\\%', '_': '\\_', '^': '\\^{}', '~': '\\~{}', '<': '\\textless{}', '>': '\\textgreater{}', '|': '\\textbar{}', '"': '\\textquotedbl{}' };
+function ommlTeksBiasa_(s) {
+  // Teks "normal" (m:nor) -> \text{...} (spasi persis seperti di Word). Karakter di luar ASCII
+  // (×, −, ρ, ², dst) tidak punya huruf di mode teks KaTeX, jadi diselipkan sbg simbol matematika.
+  let out = '', buf = '';
+  const kosongkan = () => { if (buf) { out += '\\text{' + buf + '}'; buf = ''; } };
+  for (const ch of String(s)) {
+    if (/[\u00a0\u2009\u202f]/.test(ch)) { buf += ' '; continue; }
+    if (Object.prototype.hasOwnProperty.call(OMML_ESC_TEKS_, ch)) { buf += OMML_ESC_TEKS_[ch]; continue; }
+    if (/^[\x20-\x7e]$/.test(ch)) { buf += ch; continue; }
+    kosongkan();
+    if (Object.prototype.hasOwnProperty.call(OMML_SUPER_, ch)) out += OMML_SUPER_[ch];
+    else if (Object.prototype.hasOwnProperty.call(OMML_SIMBOL_, ch)) out += OMML_SIMBOL_[ch];
+    else out += ch;
+  }
+  kosongkan();
+  return out;
+}
+function ommlTeksMatematika_(s) {
+  // Teks "matematika" (italik Word): spasi diabaikan kecuali di antara huruf/angka.
+  s = String(s).replace(/(\d),(?=\d)/g, '$1{,}');
+  let out = '';
+  const arr = Array.from(s);
+  arr.forEach((ch, i) => {
+    if (ch === ' ' || ch === '\u00a0' || ch === '\u2009' || ch === '\u202f') {
+      const kiri = arr[i - 1], kanan = arr[i + 1];
+      if (kiri && kanan && /[\p{L}\p{N}]/u.test(kiri) && /[\p{L}\p{N}]/u.test(kanan)) out += '\\ ';
+      return;
+    }
+    out += Object.prototype.hasOwnProperty.call(OMML_SUPER_, ch) ? OMML_SUPER_[ch] : (Object.prototype.hasOwnProperty.call(OMML_SIMBOL_, ch) ? OMML_SIMBOL_[ch] : ch);
+  });
+  return out;
+}
+
+const OMML_NARY_ = { '∑': '\\sum', '∏': '\\prod', '∐': '\\coprod', '∫': '\\int', '∬': '\\iint', '∭': '\\iiint', '∮': '\\oint', '⋃': '\\bigcup', '⋂': '\\bigcap', '⋁': '\\bigvee', '⋀': '\\bigwedge' };
+const OMML_AKSEN_ = { '\u0302': '\\hat', '\u0303': '\\tilde', '\u0304': '\\bar', '\u0305': '\\overline', '\u0307': '\\dot', '\u0308': '\\ddot', '\u20d7': '\\vec', '\u0301': '\\acute', '\u0300': '\\grave', '\u030c': '\\check', '\u0306': '\\breve', '^': '\\hat', '~': '\\tilde', '¯': '\\bar', 'ˉ': '\\bar', '→': '\\vec', '⃗': '\\vec' };
+const OMML_KURUNG_ = { '': '.', '{': '\\{', '}': '\\}', '⟨': '\\langle', '⟩': '\\rangle', '〈': '\\langle', '〉': '\\rangle', '⌊': '\\lfloor', '⌋': '\\rfloor', '⌈': '\\lceil', '⌉': '\\rceil', '‖': '\\|', '∥': '\\|', '|': '|', '(': '(', ')': ')', '[': '[', ']': ']' };
+
+function ommlAnakKeLatex_(el) {
+  return Array.from(el.children).map(ommlKeLatex_).join('');
+}
+function ommlBungkus_(s) { return '{' + s + '}'; }
+
+function ommlKeLatex_(el) {
+  if (!el || el.namespaceURI !== NS_OMML_) return '';
+  const n = el.localName;
+  const sub = (nama) => { const c = ommlAnak_(el, nama); return c ? ommlAnakKeLatex_(c) : ''; };
+  switch (n) {
+    case 'r': {
+      const pr = ommlAnak_(el, 'rPr');
+      const nor = pr && ommlFlag_(ommlAnak_(pr, 'nor'));
+      const sty = pr ? ommlVal_(ommlAnak_(pr, 'sty')) : null;
+      const teks = Array.from(el.children).filter(c => c.namespaceURI === NS_OMML_ && c.localName === 't').map(c => c.textContent).join('');
+      if (!teks) return '';
+      if (nor) return ommlTeksBiasa_(teks);
+      const m = ommlTeksMatematika_(teks);
+      // Kata multi-huruf (mis. "Ph", "kg") dibuat tegak bila gaya Word = plain (p/b)
+      if ((sty === 'p' || sty === 'b') && /^[A-Za-z]{2,}$/.test(teks)) return '\\mathrm{' + teks + '}';
+      if (sty === 'b' || sty === 'bi') return '\\boldsymbol{' + m + '}';
+      return m;
+    }
+    case 'f': {
+      const tipe = ommlVal_(ommlAnak_(ommlAnak_(el, 'fPr') || el, 'type'));
+      const a = sub('num'), b = sub('den');
+      if (tipe === 'noBar') return '{' + a + '\\atop ' + b + '}';
+      if (tipe === 'lin') return ommlBungkus_(a) + '/' + ommlBungkus_(b);
+      return '\\frac' + ommlBungkus_(a) + ommlBungkus_(b);
+    }
+    case 'sSup': return ommlBungkus_(sub('e')) + '^' + ommlBungkus_(sub('sup'));
+    case 'sSub': return ommlBungkus_(sub('e')) + '_' + ommlBungkus_(sub('sub'));
+    case 'sSubSup': return ommlBungkus_(sub('e')) + '_' + ommlBungkus_(sub('sub')) + '^' + ommlBungkus_(sub('sup'));
+    case 'sPre': return '{}_' + ommlBungkus_(sub('sub')) + '^' + ommlBungkus_(sub('sup')) + ommlBungkus_(sub('e'));
+    case 'rad': {
+      const pr = ommlAnak_(el, 'radPr');
+      const hide = pr && ommlFlag_(ommlAnak_(pr, 'degHide'));
+      const deg = sub('deg');
+      return hide || !deg.trim() ? '\\sqrt' + ommlBungkus_(sub('e')) : '\\sqrt[' + deg + ']' + ommlBungkus_(sub('e'));
+    }
+    case 'd': {
+      const pr = ommlAnak_(el, 'dPr');
+      const ambilChr = (nama, def) => { const c = pr && ommlAnak_(pr, nama); if (!c) return def; const v = c.getAttributeNS(NS_OMML_, 'val'); return v === null ? def : v; };
+      const beg = ambilChr('begChr', '('), end = ambilChr('endChr', ')'), sep = ambilChr('sepChr', '|');
+      const isi = Array.from(el.children).filter(c => c.namespaceURI === NS_OMML_ && c.localName === 'e').map(ommlAnakKeLatex_);
+      const k = (c) => Object.prototype.hasOwnProperty.call(OMML_KURUNG_, c) ? OMML_KURUNG_[c] : c;
+      return '\\left' + k(beg) + ' ' + isi.join(sep === '|' ? '\\mid ' : (sep || '')) + ' \\right' + k(end);
+    }
+    case 'nary': {
+      const pr = ommlAnak_(el, 'naryPr');
+      const chrEl = pr && ommlAnak_(pr, 'chr');
+      const chr = chrEl ? (chrEl.getAttributeNS(NS_OMML_, 'val') || '') : '∫';
+      const op = OMML_NARY_[chr] || (chr ? chr : '');
+      const subHide = pr && ommlFlag_(ommlAnak_(pr, 'subHide'));
+      const supHide = pr && ommlFlag_(ommlAnak_(pr, 'supHide'));
+      const b = subHide ? '' : sub('sub'), a = supHide ? '' : sub('sup');
+      return op + (b ? '_' + ommlBungkus_(b) : '') + (a ? '^' + ommlBungkus_(a) : '') + ' ' + ommlBungkus_(sub('e'));
+    }
+    case 'func': {
+      const nama = sub('fName').trim();
+      const fn = /^[A-Za-z]+$/.test(nama) ? '\\operatorname{' + nama + '}' : nama;
+      return fn + '\\,' + ommlBungkus_(sub('e'));
+    }
+    case 'acc': {
+      const pr = ommlAnak_(el, 'accPr');
+      const chrEl = pr && ommlAnak_(pr, 'chr');
+      const chr = chrEl ? (chrEl.getAttributeNS(NS_OMML_, 'val') || '\u0302') : '\u0302';
+      return (OMML_AKSEN_[chr] || '\\hat') + ommlBungkus_(sub('e'));
+    }
+    case 'bar': {
+      const pr = ommlAnak_(el, 'barPr');
+      const pos = pr ? ommlVal_(ommlAnak_(pr, 'pos')) : null;
+      return (pos === 'bot' ? '\\underline' : '\\overline') + ommlBungkus_(sub('e'));
+    }
+    case 'borderBox': {
+      const pr = ommlAnak_(el, 'borderBoxPr');
+      const isi = sub('e');
+      const f = (nama) => pr && ommlFlag_(ommlAnak_(pr, nama));
+      // Tanda coret (mis. mencoret angka nol saat menyederhanakan pecahan)
+      if (f('strikeH') || f('strikeV') || f('strikeBLTR') || f('strikeTLBR')) return '\\cancel' + ommlBungkus_(isi);
+      if (f('hideTop') && f('hideBot') && f('hideLeft') && f('hideRight')) return isi;
+      return '\\boxed' + ommlBungkus_(isi);
+    }
+    case 'groupChr': {
+      const pr = ommlAnak_(el, 'groupChrPr');
+      const pos = pr ? ommlVal_(ommlAnak_(pr, 'pos')) : null;
+      return (pos === 'top' ? '\\overbrace' : '\\underbrace') + ommlBungkus_(sub('e'));
+    }
+    case 'limLow': return '\\underset' + ommlBungkus_(sub('lim')) + ommlBungkus_(sub('e'));
+    case 'limUpp': return '\\overset' + ommlBungkus_(sub('lim')) + ommlBungkus_(sub('e'));
+    case 'eqArr': {
+      const baris = Array.from(el.children).filter(c => c.namespaceURI === NS_OMML_ && c.localName === 'e').map(ommlAnakKeLatex_);
+      return '\\begin{aligned}' + baris.join(' \\\\ ') + '\\end{aligned}';
+    }
+    case 'm': {
+      const baris = Array.from(el.children).filter(c => c.namespaceURI === NS_OMML_ && c.localName === 'mr').map(mr =>
+        Array.from(mr.children).filter(c => c.namespaceURI === NS_OMML_ && c.localName === 'e').map(ommlAnakKeLatex_).join(' & '));
+      return '\\begin{matrix}' + baris.join(' \\\\ ') + '\\end{matrix}';
+    }
+    case 'box': case 'phant': case 'e': case 'num': case 'den': case 'sub': case 'sup': case 'deg': case 'lim': case 'fName': case 'oMath': case 'oMathPara':
+      return ommlAnakKeLatex_(el);
+    default:
+      return ''; // properti (…Pr, ctrlPr) dan elemen lain: dilewati
+  }
+}
+
+// Ganti semua <m:oMath> di dokumen XML dgn run teks "$latex$". Mengembalikan jumlah yg diganti.
+function ganti_omml_dalam_xml_(doc) {
+  let jumlah = 0;
+  const buatRun = (teks) => {
+    const r = doc.createElementNS(NS_WORD_, 'w:r');
+    const t = doc.createElementNS(NS_WORD_, 'w:t');
+    t.setAttributeNS(NS_XML_, 'xml:space', 'preserve');
+    t.textContent = teks;
+    r.appendChild(t);
+    return r;
+  };
+  const gantiSatu = (node, daftarOMath) => {
+    const induk = node.parentNode;
+    if (!induk) return;
+    daftarOMath.forEach((om, i) => {
+      const latex = ommlKeLatex_(om).replace(/\s+/g, ' ').trim();
+      if (!latex) return;
+      if (i > 0) { const br = doc.createElementNS(NS_WORD_, 'w:r'); br.appendChild(doc.createElementNS(NS_WORD_, 'w:br')); induk.insertBefore(br, node); }
+      induk.insertBefore(buatRun('$' + latex + '$'), node);
+      jumlah++;
+    });
+    induk.removeChild(node);
+  };
+  Array.from(doc.getElementsByTagNameNS(NS_OMML_, 'oMathPara')).forEach(p =>
+    gantiSatu(p, Array.from(p.children).filter(c => c.namespaceURI === NS_OMML_ && c.localName === 'oMath')));
+  Array.from(doc.getElementsByTagNameNS(NS_OMML_, 'oMath')).forEach(om => { if (om.parentNode) gantiSatu(om, [om]); });
+  return jumlah;
+}
+
+// Buka .docx (zip), ubah rumus OMML -> "$LaTeX$", kembalikan ArrayBuffer .docx baru
+// yang siap dibaca mammoth. Bila gagal/tak ada rumus, dokumen asli dikembalikan apa adanya.
+async function siapkanDocxUntukMammoth_(arrayBuffer) {
+  const hasil = { buffer: arrayBuffer, jumlahRumus: 0, gagal: false };
+  try {
+    await muatPustaka_('jszip');
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    const berkas = Object.keys(zip.files).filter(n => /^word\/(document|header\d*|footer\d*|footnotes|endnotes)\.xml$/.test(n));
+    for (const nama of berkas) {
+      const xml = await zip.file(nama).async('string');
+      if (xml.indexOf('oMath') === -1) continue;
+      const doc = new DOMParser().parseFromString(xml, 'application/xml');
+      if (doc.getElementsByTagName('parsererror').length) continue;
+      const n = ganti_omml_dalam_xml_(doc);
+      if (!n) continue;
+      zip.file(nama, new XMLSerializer().serializeToString(doc));
+      hasil.jumlahRumus += n;
+    }
+    if (hasil.jumlahRumus > 0) hasil.buffer = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
+  } catch (err) {
+    console.error('Konversi rumus Word gagal:', err);
+    hasil.gagal = true;
+    hasil.buffer = arrayBuffer;
+  }
+  return hasil;
+}
+
+// Sel tabel Word -> teks kaya untuk Pertanyaan/Opsi/Pembahasan. Satu paragraf polos
+// -> teks polos (sama seperti data lama); beberapa paragraf / ada format (tebal, miring,
+// pangkat, gambar) -> HTML, supaya baris baru, tebal, dst. TIDAK hilang seperti textContent.
+function htmlSelKaya_(td) {
+  const html = td.innerHTML.trim();
+  if (!html) return '';
+  if (!td.querySelector('img') && !td.textContent.trim()) return '';
+  const anak = Array.from(td.children);
+  if (anak.length === 1 && anak[0].tagName === 'P' && !anak[0].children.length && !td.querySelector('img')) return td.textContent.trim();
+  return html;
+}
+
+// Uraikan data URI (dihasilkan mammoth.images.dataUri saat membaca gambar yang ditempel
+// langsung di dokumen Word) jadi bagian-bagian siap kirim ke action 'uploadGambar':
+// {mimeType, base64, ekstensi}. Mengembalikan null kalau bukan data URI gambar yang valid.
+function dataUriKeBagian_(dataUri) {
+  const cocok = /^data:([^;]+);base64,(.+)$/i.exec(String(dataUri || ''));
+  if (!cocok) return null;
+  const mimeType = cocok[1];
+  const base64 = cocok[2];
+  const ekstensi = (mimeType.split('/')[1] || 'png').split('+')[0]; // mis. "svg+xml" -> "svg"
+  return { mimeType, base64, ekstensi };
+}
+
+// PERF IMPOR: jalankan `tugas(item, indeks)` untuk semua item dgn paling banyak
+// `batas` yang berjalan bersamaan (kumpulan pekerja). Dipakai utk unggah gambar
+// paralel -- sebelumnya satu per satu (1 gambar = 1 round-trip Drive ~2-5 detik).
+async function jalankanParalel_(items, batas, tugas) {
+  const hasil = new Array(items.length);
+  let berikut = 0;
+  async function pekerja() {
+    while (true) {
+      const i = berikut++;
+      if (i >= items.length) return;
+      hasil[i] = await tugas(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(batas, items.length) }, pekerja));
+  return hasil;
+}
+
+// PERF IMPOR: perkecil gambar sebelum diunggah. Foto dari kamera/Word sering 2-6 MB,
+// padahal tampilan soal hanya memakai lebar maks ~1000px (thumbnail?sz=w1000).
+// Gambar kecil dibiarkan apa adanya. Gagal memperkecil -> pakai gambar asli.
+async function perkecilGambar_(bagian) {
+  try {
+    if (!/^image\/(jpeg|png|webp|bmp)$/i.test(bagian.mimeType)) return bagian;
+    if (bagian.base64.length < 150000) return bagian; // < ~110 KB: tidak perlu
+    const biner = Uint8Array.from(atob(bagian.base64), c => c.charCodeAt(0));
+    const blob = new Blob([biner], { type: bagian.mimeType });
+    const bmp = await createImageBitmap(blob);
+    const MAKS = 1000;
+    const skala = Math.min(1, MAKS / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * skala));
+    const h = Math.max(1, Math.round(bmp.height * skala));
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(bmp, 0, 0, w, h);
+    if (bmp.close) bmp.close();
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    const baru = dataUrl.split(',')[1];
+    if (!baru || baru.length >= bagian.base64.length) return bagian; // tidak lebih kecil
+    return { mimeType: 'image/jpeg', base64: baru, ekstensi: 'jpg' };
+  } catch (e) {
+    return bagian;
+  }
+}
+
+// ---------------- Akses mentah ke database Mode Lokal (dipakai tombol paksa
+// kirim/tarik data di Pengaturan, lihat Guru.kirimDataLokalKeSheet/tarikDataDariSheet) ----------------
+const LOCAL_DB_KEY = 'cbt_local_db_v1';
+function bacaDbLokalMentah() {
+  try { LocalBackend.flush(); } catch (e) { /* belum ada penulisan tertunda */ }
+  const kosong = () => ({ guru: [], siswa: [], bankSoal: [], ujian: [], sesi: [], log: [] });
+  try {
+    const raw = localStorage.getItem(LOCAL_DB_KEY);
+    const db = raw ? JSON.parse(raw) : null;
+    if (!db || typeof db !== 'object') return kosong();
+    return Object.assign(kosong(), db);
+  } catch (e) { return kosong(); }
+}
+function tulisDbLokalMentah(db) {
+  try { localStorage.setItem(LOCAL_DB_KEY, JSON.stringify(db)); return true; }
+  catch (e) { toast('Gagal menulis ke penyimpanan lokal (mungkin penuh).', 'error'); return false; }
+}
+
+// ---------------- Meta tampilan tiap "Mapel" (kartu di grid Bank Soal) ----------------
+// Murni kosmetik (token acak 6 karakter + warna kartu) supaya tampilan kartu Mapel
+// terasa seperti aplikasi CBT sekolah pada umumnya — TIDAK dipakai untuk validasi
+// token ujian sungguhan (itu tetap kolom "token" di sheet Ujian, lihat tab Kelola
+// Ujian). Disimpan per-perangkat di localStorage, terpisah dari data soal supaya
+// tetap ringan & tidak perlu kolom baru di Sheets untuk sekadar hiasan kartu.
+const MAPEL_META_KEY = 'cbt_mapel_meta_v1';
+const MAPEL_WARNA_LIST = ['#16a97e', '#4a5cf0', '#f5a524', '#e0433d', '#7b5cf5', '#0ea5b7'];
+function bacaSemuaMetaMapel_() {
+  try { return JSON.parse(localStorage.getItem(MAPEL_META_KEY) || '{}'); } catch (e) { return {}; }
+}
+function ambilMetaMapel_(kategori, tandaiBuatan) {
+  const semua = bacaSemuaMetaMapel_();
+  const kunci = String(kategori || '').toLowerCase();
+  let berubah = false;
+  if (!semua[kunci]) {
+    semua[kunci] = {
+      token: buatTokenAman_(),
+      warna: MAPEL_WARNA_LIST[Object.keys(semua).length % MAPEL_WARNA_LIST.length]
+    };
+    berubah = true;
+  }
+  // Mapel yang dibuat lewat "Tambah Mapel Baru" (nama asli disimpan) tetap muncul
+  // sebagai kartu walau belum punya soal, supaya tidak hilang sebelum diisi.
+  if (tandaiBuatan && !semua[kunci].buatan) { semua[kunci].buatan = String(kategori).trim(); berubah = true; }
+  if (berubah) { try { localStorage.setItem(MAPEL_META_KEY, JSON.stringify(semua)); } catch (e) {} }
+  return semua[kunci];
+}
+function hapusMapelBuatan_(kategori) {
+  const semua = bacaSemuaMetaMapel_();
+  const kunci = String(kategori || '').toLowerCase();
+  if (semua[kunci]) { delete semua[kunci].buatan; try { localStorage.setItem(MAPEL_META_KEY, JSON.stringify(semua)); } catch (e) {} }
+}
+
+// ----------------------------------------------------------------------------
+// STATE GLOBAL
+// ----------------------------------------------------------------------------
+const state = {
+  user: null,          // { id, nama, role, kelas? }
+  deviceId: null,
+  role: 'siswa',        // role yg dipilih di layar login
+  guru: {
+    bankSoal: [], ujianList: [], daftarSiswa: [], tema: null, kategoriTerpilihUjian: [],
+    // viewBankSoal: 'grid' (kartu per Mapel/kategori), 'kelola' (daftar soal 1 kategori,
+    // dgn tab tipe soal), 'arsip' (grid kartu per kategori arsip), atau 'arsip-kategori'
+    // (daftar soal 1 kategori arsip) — lihat Guru.bukaKelolaSoal/kembaliKeGridMapel/
+    // bukaArsipSoal/bukaArsipKategori.
+    viewBankSoal: 'grid', kategoriKelola: '', kategoriArsipKelola: '', tipeTabKelola: 'pilihan_ganda'
+  },
+  ujian: null,          // ujian aktif yg dipilih siswa (dari cekToken)
+  sesiId: null,
+  soal: [],
+  jawaban: {},
+  ragu: [],
+  idxSoal: 0,
+  sisaDetik: 0,
+  maxPelanggaran: 999,
+  pelanggaran: 0,
+  timerHandle: null,
+  autosaveHandle: null,
+  pingHandle: null,
+  autoRefreshHandle: null,
+  submitting: false
+};
+
+// ----------------------------------------------------------------------------
+// UTIL: device id, toast, api call
+// ----------------------------------------------------------------------------
+function getDeviceId() {
+  let id = localStorage.getItem('cbt_device_id');
+  if (!id) {
+    id = 'dev_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('cbt_device_id', id);
+  }
+  return id;
+}
+
+function toast(msg, jenis) {
+  const box = document.getElementById('toast');
+  const el = document.createElement('div');
+  el.className = 'toast-item' + (jenis ? ' ' + jenis : '');
+  el.textContent = msg;
+  box.appendChild(el);
+  setTimeout(() => el.remove(), 4200);
+}
+
+// ----------------------------------------------------------------------------
+// DIALOG PROFESIONAL (pengganti confirm() / prompt() / alert() bawaan browser)
+//   await Dialog.konfirmasi({ judul, pesan, tipe, ikon, rincian, ketik, teksYa, teksBatal }) -> true / false
+//   await Dialog.input({ judul, pesan, label, nilai, chips, validasi, ... })                 -> teks / null (batal)
+//   await Dialog.info({ judul, pesan, daftar, tipe })                                        -> true
+// tipe: 'danger' (merah) | 'warning' (kuning) | 'info' (biru/tema) | 'success' (hijau)
+// Di dalam pesan, **teks** ditebalkan; "\n" jadi baris baru; semua teks otomatis di-escape (aman dari HTML).
+// Papan ketik: Esc = batal, Enter = lanjut, Tab terkunci di dalam dialog.
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// GAYA DIALOG disuntikkan dari JS (bukan hanya style.css): browser/GitHub Pages sering menyimpan style.css lama di
+// cache, sehingga dialog konfirmasi tampil TANPA gaya (jatuh ke bawah halaman, tombol di belakangnya masih bisa
+// diklik, dialog menumpuk). Dengan disuntik dari app.js, dialog dijamin tampil di tengah layar & menutupi halaman.
+// ----------------------------------------------------------------------------
+const VERSI_APLIKASI = '43';
+const CSS_SEGAR = `
+/* Tombol "Segarkan" di halaman portal guru (Rekap Nilai, Log Pelanggaran, dll.) */
+.btn-segarkan { display: inline-flex; align-items: center; gap: .45rem; white-space: nowrap; }
+.btn-segarkan.sedang { pointer-events: none; opacity: .8; }
+.btn-segarkan.sedang i { animation: segar-putar .8s linear infinite; }
+@keyframes segar-putar { to { transform: rotate(360deg); } }
+.segar-info { font-size: .78rem; color: var(--c-muted); white-space: nowrap; }
+.segar-info.gagal { color: var(--c-danger); font-weight: 600; }
+.filter-cek { display: inline-flex; align-items: center; gap: .4rem; padding: .4rem .8rem; border: 1px solid var(--c-line); border-radius: 999px; font-size: .85rem; white-space: nowrap; cursor: pointer; user-select: none; }
+.filter-cek input { width: auto; margin: 0; }
+.filter-cek.ada { color: var(--c-danger); font-weight: 600; border-color: var(--c-danger); }
+`;
+const CSS_FSBUKTI = `
+/* Penutup "wajib layar penuh" di halaman unggah bukti orak-orik */
+#bukti-fs-overlay { position: fixed; inset: 0; z-index: 8900; display: flex; align-items: center; justify-content: center; padding: 1.2rem; background: rgba(14, 18, 40, .92); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+#bukti-fs-overlay.hidden { display: none; }
+#bukti-fs-overlay .fs-kartu { width: min(440px, 100%); box-sizing: border-box; padding: 1.8rem 1.4rem 1.4rem; text-align: center; background: var(--c-surface); color: var(--c-text); border-radius: 22px; box-shadow: 0 24px 60px rgba(0, 0, 0, .45); }
+#bukti-fs-overlay .fs-ikon { width: 64px; height: 64px; margin: 0 auto .9rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 1.7rem; color: #fff; background: var(--c-accent, #f5a524); }
+#bukti-fs-overlay h3 { margin: 0 0 .5rem; font-size: 1.2rem; }
+#bukti-fs-overlay p { margin: 0 0 1.2rem; color: var(--c-muted); line-height: 1.55; font-size: .92rem; }
+#bukti-fs-overlay button { width: 100%; }
+`;
+const CSS_SHEET = `
+/* Lembar pilihan sumber foto (tombol "+" di halaman unggah bukti orak-orik) */
+.bk-sheet-backdrop { position: fixed; inset: 0; z-index: 9000; display: flex; align-items: center; justify-content: center; padding: 1rem; background: rgba(14, 18, 40, .5); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: dlg-fade .15s ease-out; }
+.bk-sheet { width: min(400px, 100%); box-sizing: border-box; padding: 1.3rem 1.2rem 1.1rem; background: var(--c-surface); color: var(--c-text); border-radius: 20px; box-shadow: 0 24px 60px rgba(10, 15, 40, .4); animation: dlg-pop .2s cubic-bezier(.2, .9, .3, 1.15); }
+.bk-sheet .bk-sheet-judul { font-weight: 700; font-size: 1.1rem; text-align: center; }
+.bk-sheet .bk-sheet-sub { margin: .25rem 0 1rem; font-size: .82rem; text-align: center; color: var(--c-muted); }
+.bk-sheet .bk-sheet-opsi, .bk-sheet .bk-sheet-opsi:active {
+  display: flex; align-items: center; gap: .9rem; width: 100%; box-sizing: border-box; margin-bottom: .65rem; padding: .85rem 1rem; text-align: left; cursor: pointer;
+  color: var(--c-text); background: var(--c-surface); border: 1.5px solid var(--c-line); border-radius: 14px; box-shadow: 0 3px 10px rgba(10, 15, 40, .08); transform: none; filter: none;
+}
+.bk-sheet .bk-sheet-opsi:hover { background: color-mix(in srgb, var(--c-primary) 7%, var(--c-surface)); border-color: var(--c-primary); box-shadow: 0 8px 18px color-mix(in srgb, var(--c-primary) 22%, transparent); transform: translateY(-1px); filter: none; }
+.bk-sheet .bk-sheet-ikon { flex-shrink: 0; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; border-radius: 14px; color: var(--c-on-primary); background: var(--c-primary); }
+.bk-sheet .bk-sheet-teks { flex: 1; display: flex; flex-direction: column; gap: .1rem; }
+.bk-sheet .bk-sheet-teks b { font-size: .95rem; }
+.bk-sheet .bk-sheet-teks small { font-size: .75rem; line-height: 1.35; color: var(--c-muted); }
+.bk-sheet .bk-sheet-panah { font-size: .8rem; color: var(--c-muted); }
+.bk-sheet .bk-sheet-batal, .bk-sheet .bk-sheet-batal:hover, .bk-sheet .bk-sheet-batal:active { width: 100%; padding: .7rem; font-weight: 600; cursor: pointer; color: var(--c-muted); background: transparent; border: 0; box-shadow: none; transform: none; filter: none; }
+.bk-sheet .bk-sheet-batal:hover { color: var(--c-text); }
+`;
+const CSS_KAMERA = `
+/* Modal kamera web (laptop/PC): pratinjau langsung + tombol jepret */
+.kc-backdrop { position: fixed; inset: 0; z-index: 9100; display: flex; align-items: center; justify-content: center; padding: 1rem; background: rgba(10, 12, 28, .72); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: dlg-fade .15s ease-out; }
+.kc-panel { width: min(760px, 100%); max-height: calc(100vh - 2rem); box-sizing: border-box; display: flex; flex-direction: column; gap: .8rem; padding: 1rem 1.1rem 1.1rem; overflow-y: auto; background: var(--c-surface); color: var(--c-text); border-radius: 20px; box-shadow: 0 28px 70px rgba(0, 0, 0, .45); animation: dlg-pop .2s cubic-bezier(.2, .9, .3, 1.15); }
+.kc-panel .kc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.kc-panel .kc-judul { font-weight: 700; font-size: 1.05rem; }
+.kc-panel .kc-sub { margin-top: .15rem; font-size: .78rem; color: var(--c-muted); }
+.kc-panel .kc-tutup, .kc-panel .kc-tutup:active { flex-shrink: 0; width: 36px; height: 36px; padding: 0; border-radius: 50%; cursor: pointer; color: var(--c-text); background: var(--c-bg); border: 1px solid var(--c-line); box-shadow: none; transform: none; filter: none; }
+.kc-panel .kc-tutup:hover { color: #fff; background: var(--c-danger); border-color: var(--c-danger); }
+.kc-stage { position: relative; aspect-ratio: 16 / 9; max-height: 60vh; width: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #000; border-radius: 14px; }
+.kc-stage video, .kc-stage img { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+.kc-stage .kc-info { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .7rem; padding: 1.2rem; text-align: center; font-size: .9rem; line-height: 1.55; color: #fff; background: rgba(0, 0, 0, .6); }
+.kc-stage .kc-info i { font-size: 1.6rem; }
+.kc-stage .kc-info.galat i { color: #fca5a5; }
+.kc-aksi { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .7rem; min-height: 56px; }
+.kc-panel .kc-btn, .kc-panel .kc-btn:active { display: inline-flex; align-items: center; gap: .45rem; padding: .65rem 1.1rem; font-size: .88rem; font-weight: 700; cursor: pointer; border-radius: 12px; color: var(--c-text); background: var(--c-surface); border: 1.5px solid var(--c-line); box-shadow: 0 3px 10px rgba(10, 15, 40, .1); transform: none; filter: none; }
+.kc-panel .kc-btn:hover { border-color: var(--c-primary); color: var(--c-primary); transform: translateY(-1px); }
+.kc-panel .kc-btn.utama, .kc-panel .kc-btn.utama:active { color: var(--c-on-primary); background: var(--c-primary); border-color: var(--c-primary); box-shadow: 0 6px 14px color-mix(in srgb, var(--c-primary) 40%, transparent); }
+.kc-panel .kc-btn.utama:hover { color: var(--c-on-primary); transform: translateY(-1px); }
+.kc-panel .kc-rana, .kc-panel .kc-rana:active { position: relative; width: 68px; height: 68px; padding: 0; cursor: pointer; border-radius: 50%; background: #fff; border: 5px solid var(--c-primary); box-shadow: 0 6px 18px rgba(0, 0, 0, .3); transform: none; filter: none; }
+.kc-panel .kc-rana::after { content: ""; position: absolute; inset: 6px; border-radius: 50%; background: var(--c-primary); transition: transform .1s ease; }
+.kc-panel .kc-rana:hover { transform: scale(1.05); background: #fff; border-color: var(--c-primary); }
+.kc-panel .kc-rana:active::after { transform: scale(.85); }
+.kc-panel .kc-rana:disabled { opacity: .45; cursor: not-allowed; }
+`;
+const CSS_GALERI = `
+/* Penampil gambar galeri bukti (guru): kanvas + alat perbesar/perkecil/putar */
+.bg-panel .bg-stage { position: relative; flex: 1; min-width: 0; height: min(64vh, 620px); min-height: 300px; overflow: hidden; background: #1a1e2c; border: 1px solid var(--c-line); border-radius: 12px; touch-action: none; user-select: none; -webkit-user-select: none; cursor: zoom-in; }
+.bg-panel .bg-stage.geser { cursor: grab; }
+.bg-panel .bg-stage.menggeser { cursor: grabbing; }
+.bg-panel .bg-stage img { position: absolute; left: 50%; top: 50%; max-width: none; max-height: none; transform-origin: center center; will-change: transform; pointer-events: none; opacity: 0; transition: opacity .15s ease; }
+.bg-panel .bg-stage img.siap { opacity: 1; }
+.bg-panel .bg-stage .bg-galat { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 1.5rem; text-align: center; font-size: .88rem; color: #cbd5e1; }
+.bg-panel .bg-stage .bg-galat.hidden { display: none; }
+.bg-panel .bg-tools { position: absolute; left: 50%; bottom: .8rem; transform: translateX(-50%); z-index: 2; display: flex; align-items: center; gap: .2rem; padding: .3rem .45rem; background: rgba(18, 22, 38, .86); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); border-radius: 14px; box-shadow: 0 8px 22px rgba(0, 0, 0, .45); cursor: default; }
+.bg-panel .bg-tools button, .bg-panel .bg-tools button:active { display: inline-flex; align-items: center; gap: .4rem; padding: .5rem .7rem; font-size: .78rem; font-weight: 600; white-space: nowrap; cursor: pointer; color: #fff; background: transparent; border: 0; border-radius: 10px; box-shadow: none; transform: none; filter: none; }
+.bg-panel .bg-tools button:hover { background: rgba(255, 255, 255, .18); }
+.bg-panel .bg-tools button:disabled { opacity: .35; cursor: not-allowed; background: transparent; }
+.bg-panel .bg-tools .bg-zoom { min-width: 3.4rem; text-align: center; font-size: .78rem; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+.bg-panel .bg-tools .bg-sekat { width: 1px; height: 22px; margin: 0 .25rem; background: rgba(255, 255, 255, .28); }
+.bg-panel .bg-bar { flex-wrap: wrap; }
+.bg-panel .bg-petunjuk { flex: 1; text-align: center; font-size: .72rem; opacity: .85; }
+@media (max-width: 640px) { .bg-panel .bg-tools .bg-lbl { display: none; } .bg-panel .bg-tools button { padding: .5rem .6rem; } .bg-panel .bg-petunjuk { display: none; } .bg-panel .bg-stage { height: 56vh; } }
+`;
+const CSS_KUNCI = `
+/* Penjaga halaman unggah bukti: banner kunci + cegah tarik-untuk-muat-ulang di HP */
+.bukti-kunci { display: flex; align-items: center; gap: .6rem; margin: 0 0 1rem; padding: .65rem .9rem; text-align: left; font-size: .82rem; font-weight: 600; line-height: 1.4; color: var(--c-text); background: color-mix(in srgb, #f59e0b 15%, var(--c-surface)); border: 1px solid color-mix(in srgb, #f59e0b 55%, transparent); border-radius: 12px; }
+.bukti-kunci i { font-size: 1.05rem; color: #d97706; }
+.bukti-kunci.terbuka { background: color-mix(in srgb, var(--c-success) 13%, var(--c-surface)); border-color: color-mix(in srgb, var(--c-success) 45%, transparent); }
+.bukti-kunci.terbuka i { color: var(--c-success); }
+.bukti-kunci.hidden { display: none; }
+html.bukti-terkunci, body.bukti-terkunci { overscroll-behavior-y: contain; }
+`;
+const CSS_DIALOG = `/* ============================================================================
+   DIALOG PROFESIONAL v24 — pengganti confirm()/prompt()/alert() bawaan browser
+   Dipakai di seluruh Portal Guru. Warna ikut variabel tema (33 gaya & mode gelap).
+   ============================================================================ */
+.dlg-backdrop {
+  position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 1rem;
+  background: rgba(14, 18, 40, .55); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px);
+  animation: dlg-fade .16s ease-out;
+}
+.dlg-backdrop.keluar { animation: dlg-fade-out .17s ease-in forwards; }
+.dlg-card {
+  --dlg-tone: var(--c-primary); --dlg-on: var(--c-on-primary);
+  width: min(450px, 100%); max-height: calc(100vh - 2rem); overflow-y: auto; box-sizing: border-box;
+  background: var(--c-surface); color: var(--c-text); text-align: center;
+  padding: 1.9rem 1.6rem 1.4rem; border-radius: 20px;
+  box-shadow: 0 28px 70px rgba(10, 15, 40, .38), 0 0 0 1px color-mix(in srgb, var(--c-text) 7%, transparent);
+  animation: dlg-pop .22s cubic-bezier(.2, .9, .3, 1.15);
+}
+.dlg-card.dlg-danger  { --dlg-tone: var(--c-danger);  --dlg-on: #fff; }
+.dlg-card.dlg-warning { --dlg-tone: #dd8f0b;          --dlg-on: #fff; }
+.dlg-card.dlg-success { --dlg-tone: var(--c-success); --dlg-on: #fff; }
+.dlg-ikon {
+  width: 64px; height: 64px; margin: 0 auto 1.1rem; border-radius: 50%; font-size: 1.7rem;
+  display: flex; align-items: center; justify-content: center; color: var(--dlg-tone);
+  background: color-mix(in srgb, var(--dlg-tone) 13%, var(--c-surface));
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--dlg-tone) 7%, transparent);
+}
+.dlg-judul { margin: 0 0 .55rem; font-size: 1.2rem; font-weight: 700; line-height: 1.3; color: var(--c-text); }
+.dlg-pesan { margin: 0; font-size: .93rem; line-height: 1.65; color: var(--c-muted); }
+.dlg-pesan strong, .dlg-rincian strong, .dlg-daftar strong { color: var(--c-text); font-weight: 700; }
+
+.dlg-rincian {
+  margin: 1.1rem 0 0; padding: .3rem .95rem; text-align: left; font-size: .85rem;
+  background: var(--c-bg); border: 1px solid var(--c-line); border-radius: 12px;
+}
+.dlg-rincian > div { display: flex; justify-content: space-between; gap: 1rem; padding: .5rem 0; }
+.dlg-rincian > div + div { border-top: 1px dashed var(--c-line); }
+.dlg-rincian dt { color: var(--c-muted); flex-shrink: 0; }
+.dlg-rincian dd { margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.dlg-daftar {
+  margin: 1rem 0 0; padding: .6rem .9rem .6rem 1.9rem; max-height: 220px; overflow-y: auto; text-align: left;
+  font-size: .82rem; line-height: 1.55; color: var(--c-text);
+  background: var(--c-bg); border: 1px solid var(--c-line); border-radius: 12px;
+}
+.dlg-daftar li { padding: .2rem 0; }
+
+.dlg-field { margin-top: 1.1rem; text-align: left; }
+.dlg-field label { display: block; margin-bottom: .4rem; font-size: .8rem; font-weight: 600; color: var(--c-text); }
+.dlg-input {
+  width: 100%; box-sizing: border-box; padding: .72rem .85rem; font: inherit; font-size: .92rem; resize: vertical;
+  color: var(--c-text); background: var(--c-surface); border: 1.5px solid var(--c-line); border-radius: 12px;
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+.dlg-input:focus { outline: none; border-color: var(--dlg-tone); box-shadow: 0 0 0 3px color-mix(in srgb, var(--dlg-tone) 20%, transparent); }
+.dlg-input.dlg-salah { border-color: var(--c-danger); }
+.dlg-ketik { text-align: center; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.dlg-error { margin-top: .4rem; font-size: .78rem; color: var(--c-danger); }
+.dlg-error:empty { display: none; }
+.dlg-chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .6rem; }
+.dlg-chip {
+  padding: .3rem .75rem; font-size: .76rem; font-weight: 500; cursor: pointer; border-radius: 99px; transform: none; box-shadow: none;
+  color: var(--c-text); background: var(--c-bg); border: 1px solid var(--c-line);
+}
+.dlg-chip:hover { color: var(--dlg-tone); border-color: var(--dlg-tone); background: color-mix(in srgb, var(--dlg-tone) 7%, var(--c-bg)); }
+
+.dlg-aksi { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; margin-top: 1.5rem; }
+.dlg-aksi.satu { grid-template-columns: 1fr; }
+.dlg-btn {
+  padding: .82rem 1rem; font-size: .92rem; font-weight: 700; cursor: pointer; border-radius: 12px;
+  border: 1.5px solid transparent; transform: none; transition: filter .12s ease, background .12s ease;
+}
+.dlg-batal { color: var(--c-text); background: var(--c-surface); border-color: var(--c-line); box-shadow: none; }
+.dlg-batal:hover { background: var(--c-bg); }
+.dlg-ya { color: var(--dlg-on); background: var(--dlg-tone); box-shadow: 0 6px 16px color-mix(in srgb, var(--dlg-tone) 34%, transparent); }
+.dlg-ya:hover:not(:disabled) { filter: brightness(1.07); }
+.dlg-ya:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+.dlg-btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--dlg-tone) 45%, transparent); outline-offset: 2px; }
+
+@keyframes dlg-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dlg-fade-out { to { opacity: 0; } }
+@keyframes dlg-pop { from { opacity: 0; transform: translateY(12px) scale(.94); } to { opacity: 1; transform: none; } }
+@media (max-width: 480px) {
+  .dlg-card { padding: 1.5rem 1.15rem 1.15rem; }
+  .dlg-aksi { grid-template-columns: 1fr; }
+  .dlg-ya { order: -1; }
+}
+
+`;
+function injectGayaDialog_() {
+  if (document.getElementById('dlg-gaya')) return;
+  const el = document.createElement('style');
+  el.id = 'dlg-gaya';
+  el.textContent = CSS_DIALOG + CSS_SEGAR + CSS_FSBUKTI + CSS_SHEET + CSS_KAMERA + CSS_GALERI + CSS_KUNCI;
+  document.head.appendChild(el);
+}
+injectGayaDialog_();
+
+// Bila style.css yang dimuat browser bukan versi terbaru (cache usang), tampilkan peringatan + tombol perbarui.
+function periksaVersiTampilan_() {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue('--versi-css').replace(/["'\s]/g, '');
+    if (v === VERSI_APLIKASI || document.getElementById('banner-versi')) return;
+    const b = document.createElement('div');
+    b.id = 'banner-versi';
+    b.setAttribute('role', 'alert');
+    b.setAttribute('style', 'position:fixed;left:0;right:0;top:0;z-index:20000;display:flex;gap:.8rem;align-items:center;justify-content:center;flex-wrap:wrap;padding:.65rem 1rem;background:#b45309;color:#fff;font:600 14px/1.4 system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.3)');
+    const t = document.createElement('span');
+    t.textContent = 'Tampilan aplikasi belum diperbarui (masih tersimpan di cache browser). Klik tombol di samping agar semua tampilan benar.';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = 'Muat Ulang Tampilan';
+    btn.setAttribute('style', 'padding:.4rem .9rem;border:0;border-radius:99px;background:#fff;color:#92400e;font:700 13px system-ui,sans-serif;cursor:pointer');
+    btn.onclick = async () => {
+      btn.disabled = true; btn.textContent = 'Memperbarui...';
+      const alamat = [location.href.split('#')[0]];
+      const css = document.querySelector('link[rel="stylesheet"][href*="style.css"]'), js = document.querySelector('script[src*="app.js"]');
+      if (css) alamat.push(css.href); if (js) alamat.push(js.src);
+      try { await Promise.all(alamat.map(u => fetch(u, { cache: 'reload' }))); } catch (e) { /* tetap muat ulang */ }
+      location.reload();
+    };
+    b.appendChild(t); b.appendChild(btn);
+    document.body.appendChild(b);
+  } catch (e) { /* abaikan */ }
+}
+if (document.readyState === 'complete') periksaVersiTampilan_(); else window.addEventListener('load', periksaVersiTampilan_);
+
+const Dialog = {
+  _aktif: null, _antrean: [],
+  _ikon: { danger: 'fa-triangle-exclamation', warning: 'fa-circle-exclamation', info: 'fa-circle-info', success: 'fa-circle-check' },
+
+  _fmt(teks) {
+    return escapeHtml_(String(teks == null ? '' : teks))
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\n/g, '<br>');
+  },
+
+  konfirmasi(o) { return Dialog._tampil(o || {}); },
+  input(o) { return Dialog._tampil(Object.assign({}, o, { input: o })); },
+  info(o) { return Dialog._tampil(Object.assign({ tanpaBatal: true, teksYa: 'Mengerti' }, o)); },
+
+  _tampil(o) {
+    // Hanya SATU dialog pada satu waktu. Klik ganda / tombol yang ditekan lagi saat dialog terbuka diabaikan
+    // (dianggap batal), jadi dialog tidak menumpuk. Dialog "info" (hanya informasi) diantre, bukan dibuang.
+    if (Dialog._aktif) {
+      if (o.tanpaAntre) return Promise.resolve(true); // peringatan berulang (mis. tombol Back ditekan berkali-kali): abaikan
+      if (o.tanpaBatal) return new Promise(res => { Dialog._antrean.push(() => Dialog._tampil(o).then(res)); });
+      return Promise.resolve(o.input ? null : false);
+    }
+    return new Promise(resolve => {
+      const tipe = o.tipe || 'info';
+      const ikon = o.ikon || Dialog._ikon[tipe] || Dialog._ikon.info;
+      const uid = 'dlg' + Date.now().toString(36) + Math.floor(Math.random() * 1e4);
+      const sebelumnya = document.activeElement;
+
+      const rincianHtml = (o.rincian && o.rincian.length)
+        ? '<dl class="dlg-rincian">' + o.rincian.filter(r => r && r[1] !== '' && r[1] != null)
+            .map(r => `<div><dt>${escapeHtml_(r[0])}</dt><dd>${Dialog._fmt(r[1])}</dd></div>`).join('') + '</dl>'
+        : '';
+      const daftarHtml = (o.daftar && o.daftar.length)
+        ? '<ul class="dlg-daftar">' + o.daftar.map(t => `<li>${Dialog._fmt(t)}</li>`).join('') + '</ul>'
+        : '';
+
+      let fieldHtml = '';
+      const i = o.input;
+      if (i) {
+        const attr = `id="${uid}-in" class="dlg-input" placeholder="${escapeHtml_(i.placeholder || '')}" autocomplete="off" spellcheck="false"` +
+          (i.maksimal ? ` maxlength="${i.maksimal}"` : '');
+        const kontrol = i.multiline
+          ? `<textarea ${attr} rows="3">${escapeHtml_(i.nilai || '')}</textarea>`
+          : `<input ${attr} type="${i.jenisInput || 'text'}" value="${escapeHtml_(i.nilai || '')}"${i.jenisInput === 'number' ? ' step="any"' : ''}>`;
+        const chips = (i.chips || []).map((c, n) =>
+          `<button type="button" class="dlg-chip" data-chip="${n}">${escapeHtml_(typeof c === 'object' ? c.label : c)}</button>`).join('');
+        fieldHtml = `<div class="dlg-field"><label for="${uid}-in">${escapeHtml_(i.label || '')}</label>${kontrol}` +
+          (chips ? `<div class="dlg-chips">${chips}</div>` : '') + `<div class="dlg-error" role="alert"></div></div>`;
+      }
+      if (o.ketik) {
+        fieldHtml += `<div class="dlg-field"><label for="${uid}-kt">Ketik <strong>${escapeHtml_(o.ketik)}</strong> untuk melanjutkan</label>` +
+          `<input id="${uid}-kt" class="dlg-input dlg-ketik" autocomplete="off" spellcheck="false" placeholder="${escapeHtml_(o.ketik)}"></div>`;
+      }
+
+      const wrap = document.createElement('div');
+      wrap.className = 'dlg-backdrop';
+      wrap.innerHTML = `<div class="dlg-card dlg-${tipe}" role="alertdialog" aria-modal="true" aria-labelledby="${uid}-j"${o.pesan ? ` aria-describedby="${uid}-p"` : ''}>
+        <div class="dlg-ikon"><i class="fa-solid ${ikon}"></i></div>
+        <h3 class="dlg-judul" id="${uid}-j">${escapeHtml_(o.judul || '')}</h3>
+        ${o.pesan ? `<p class="dlg-pesan" id="${uid}-p">${Dialog._fmt(o.pesan)}</p>` : ''}
+        ${rincianHtml}${daftarHtml}${fieldHtml}
+        <div class="dlg-aksi${o.tanpaBatal ? ' satu' : ''}">
+          ${o.tanpaBatal ? '' : `<button type="button" class="dlg-btn dlg-batal" data-aksi="batal">${escapeHtml_(o.teksBatal || 'Batal')}</button>`}
+          <button type="button" class="dlg-btn dlg-ya" data-aksi="ya">${escapeHtml_(o.teksYa || 'Ya, Lanjutkan')}</button>
+        </div></div>`;
+      document.body.appendChild(wrap);
+      Dialog._aktif = wrap;
+      // Kunci halaman di belakang dialog: tidak bisa diklik, difokus (Tab), atau dibaca pembaca layar.
+      const dikunci = [];
+      Array.from(document.body.children).forEach(el => {
+        if (el !== wrap && el.tagName !== 'SCRIPT' && !el.inert) { el.inert = true; dikunci.push(el); }
+      });
+
+      const kartu = wrap.firstElementChild;
+      const elIn = kartu.querySelector('.dlg-input:not(.dlg-ketik)');
+      const elKetik = kartu.querySelector('.dlg-ketik');
+      const btnYa = kartu.querySelector('.dlg-ya');
+      const elErr = kartu.querySelector('.dlg-error');
+      let selesai = false;
+
+      const tutup = (hasil) => {
+        if (selesai) return;
+        selesai = true;
+        document.removeEventListener('keydown', onKey, true);
+        dikunci.forEach(el => { el.inert = false; });
+        Dialog._aktif = null;
+        wrap.classList.add('keluar');
+        setTimeout(() => wrap.remove(), 170);
+        const berikut = Dialog._antrean.shift();
+        if (berikut) setTimeout(berikut, 200);
+        try { if (sebelumnya && sebelumnya.focus && document.contains(sebelumnya)) sebelumnya.focus({ preventScroll: true }); } catch (e) { /* abaikan */ }
+        resolve(hasil);
+      };
+      const batal = () => tutup(i ? null : false);
+      const lanjut = () => {
+        if (btnYa.disabled) return;
+        if (elIn) {
+          const v = elIn.value;
+          let err = '';
+          if (i.wajib && !v.trim()) err = i.pesanWajib || 'Kolom ini wajib diisi.';
+          else if (i.validasi) err = i.validasi(v) || '';
+          if (err) { elErr.textContent = err; elIn.classList.add('dlg-salah'); elIn.focus(); return; }
+          tutup(v);
+        } else {
+          tutup(true);
+        }
+      };
+
+      const perbaruiKetik = () => { if (elKetik) btnYa.disabled = elKetik.value.trim().toUpperCase() !== String(o.ketik).toUpperCase(); };
+      perbaruiKetik();
+      if (elKetik) elKetik.addEventListener('input', perbaruiKetik);
+      if (elIn) elIn.addEventListener('input', () => { elErr.textContent = ''; elIn.classList.remove('dlg-salah'); });
+
+      const onKey = (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); o.tanpaBatal ? lanjut() : batal(); return; }
+        if (e.key === 'Enter' && !e.shiftKey) {
+          const t = e.target;
+          if (t && t.tagName === 'TEXTAREA' && !(e.ctrlKey || e.metaKey)) return;
+          if (t && t.closest && t.closest('.dlg-batal, .dlg-chip')) return; // biarkan tombolnya bekerja sendiri
+          e.preventDefault(); e.stopPropagation(); lanjut(); return;
+        }
+        if (e.key === 'Tab') {
+          const fok = Array.from(kartu.querySelectorAll('input, textarea, button')).filter(el => !el.disabled && el.offsetParent !== null);
+          if (!fok.length) return;
+          const awal = fok[0], akhir = fok[fok.length - 1];
+          if (!kartu.contains(document.activeElement)) { e.preventDefault(); awal.focus(); }
+          else if (e.shiftKey && document.activeElement === awal) { e.preventDefault(); akhir.focus(); }
+          else if (!e.shiftKey && document.activeElement === akhir) { e.preventDefault(); awal.focus(); }
+        }
+      };
+      document.addEventListener('keydown', onKey, true);
+
+      let mulaiDiLatar = false;
+      wrap.addEventListener('mousedown', (e) => { mulaiDiLatar = e.target === wrap; });
+      wrap.addEventListener('click', (e) => {
+        if (e.target === wrap && mulaiDiLatar) { o.tanpaBatal ? lanjut() : batal(); return; }
+        const chip = e.target.closest('[data-chip]');
+        if (chip && elIn) {
+          const c = i.chips[Number(chip.dataset.chip)];
+          const nilai = typeof c === 'object' ? (c.nilai != null ? c.nilai : c.label) : c;
+          if (typeof c === 'object' && c.sisip) {
+            const a = elIn.selectionStart != null ? elIn.selectionStart : elIn.value.length;
+            const b = elIn.selectionEnd != null ? elIn.selectionEnd : a;
+            elIn.value = elIn.value.slice(0, a) + nilai + elIn.value.slice(b);
+            try { elIn.setSelectionRange(a + nilai.length, a + nilai.length); } catch (err) { /* tipe number */ }
+          } else {
+            elIn.value = nilai;
+          }
+          elErr.textContent = ''; elIn.classList.remove('dlg-salah'); elIn.focus();
+          return;
+        }
+        const aksi = e.target.closest('[data-aksi]');
+        if (!aksi) return;
+        aksi.dataset.aksi === 'ya' ? lanjut() : batal();
+      });
+
+      requestAnimationFrame(() => {
+        const fokus = elIn || elKetik || (tipe === 'danger' && kartu.querySelector('.dlg-batal')) || btnYa;
+        fokus.focus();
+        if (elIn && elIn.select) elIn.select();
+      });
+    });
+  }
+};
+
+// ----------------------------------------------------------------------------
+// PESAN HASIL BERDASARKAN RENTANG NILAI
+// Guru bisa mengisi pesan berbeda untuk tiap nilai (0, 1, 2, ..., 100) — manual atau lewat import Word.
+// Default di bawah masih berupa rentang (diperluas otomatis ke tiap nilai di editor).
+// Jika guru tidak mengubah apa pun (kolom pesan_nilai kosong) atau mengosongkan
+// satu pesan, otomatis dipakai pesan DEFAULT di bawah ini.
+// ----------------------------------------------------------------------------
+const DEFAULT_PESAN_NILAI = [
+  { min: 0, max: 0, pesan: "Nilai Anda 0. Jangan berkecil hati, ini bisa diperbaiki. Segera temui guru mata pelajaran untuk jadwal remedial dan pelajari kembali materinya dari awal." },
+  { min: 1, max: 5, pesan: "Nilai Anda masih sangat rendah. Mulailah belajar lagi dari konsep paling dasar dan segera hubungi guru untuk jadwal remedial." },
+  { min: 6, max: 10, pesan: "Nilai Anda masih sangat rendah. Pelajari kembali materi dengan tenang dan bertahap, lalu temui guru untuk bimbingan remedial." },
+  { min: 11, max: 15, pesan: "Anda baru menguasai sebagian kecil materi. Ulangi catatan dan contoh soal, lalu hubungi guru untuk jadwal remedial." },
+  { min: 16, max: 20, pesan: "Nilai Anda masih rendah. Fokus pada materi yang belum dipahami dan minta bimbingan guru pada sesi remedial." },
+  { min: 21, max: 25, pesan: "Ada sedikit kemajuan, tetapi pemahaman Anda masih perlu ditingkatkan. Latihan soal secara rutin dan ikuti remedial." },
+  { min: 26, max: 30, pesan: "Nilai Anda masih di bawah harapan. Perbanyak latihan soal dan jangan ragu bertanya kepada guru saat remedial." },
+  { min: 31, max: 35, pesan: "Anda sudah memahami sebagian materi. Lengkapi bagian yang masih lemah dan hubungi guru untuk informasi remedial." },
+  { min: 36, max: 40, pesan: "Terus semangat! Masih banyak bagian yang bisa diperbaiki. Pelajari kembali materi yang keliru dan ikuti remedial." },
+  { min: 41, max: 45, pesan: "Pemahaman Anda mulai terbentuk. Tingkatkan lagi dengan membahas soal-soal yang salah bersama guru atau teman." },
+  { min: 46, max: 50, pesan: "Anda sudah di tengah jalan. Dengan belajar lebih giat, nilai Anda bisa naik. Hubungi guru untuk jadwal remedial." },
+  { min: 51, max: 55, pesan: "Hasil Anda sudah cukup lumayan, tetapi belum mencapai target. Periksa kembali jawaban yang keliru dan ikuti remedial." },
+  { min: 56, max: 60, pesan: "Anda sudah cukup memahami materi. Sedikit usaha lagi untuk mencapai target, jadi pelajari bagian yang masih salah." },
+  { min: 61, max: 65, pesan: "Hasil yang cukup baik, hanya perlu sedikit peningkatan. Pelajari kembali soal yang salah dan konsultasikan dengan guru." },
+  { min: 66, max: 70, pesan: "Anda hampir mencapai target. Teliti lagi bagian yang keliru, lalu hubungi guru bila perlu mengikuti remedial." },
+  { min: 71, max: 75, pesan: "Anda sudah sangat dekat dengan target. Jika nilai belum mencapai KKM, ikuti remedial dan perbaiki bagian yang masih keliru." },
+  { min: 76, max: 80, pesan: "Hasil yang baik! Anda sudah menguasai sebagian besar materi. Tetap rajin berlatih." },
+  { min: 81, max: 85, pesan: "Hasil yang bagus! Pemahaman Anda sudah kuat. Pertahankan dan terus asah kemampuan Anda." },
+  { min: 86, max: 90, pesan: "Hasil yang sangat bagus! Anda menguasai materi dengan baik. Terus pertahankan semangat belajar Anda." },
+  { min: 91, max: 95, pesan: "Luar biasa! Anda menguasai hampir seluruh materi. Pertahankan prestasi ini." },
+  { min: 96, max: 99, pesan: "Hebat sekali! Nilai Anda nyaris sempurna. Tinggal sedikit lagi menuju nilai tertinggi." },
+  { min: 100, max: 100, pesan: "Sempurna! Nilai 100. Selamat atas hasil yang luar biasa dan terima kasih atas kerja keras Anda!" }
+];
+
+function parsePesanNilai_(raw) {
+  if (!raw) return [];
+  try {
+    const arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) { return []; }
+}
+
+// Mengembalikan teks pesan untuk sebuah nilai. Urutan prioritas:
+// (1) pesan buatan guru yang rentangnya cocok & tidak kosong,
+// (2) pesan default yang rentangnya cocok.
+// Kategori hasil yang ditampilkan ke siswa (menggantikan Lulus / Perlu Remedial):
+// Kurang < 50 | Memadai 50 s.d. < 76,67 | Baik >= 76,67 | Istimewa >= 95,00. Tiap kategori punya warna sendiri.
+function kategoriNilai_(nilai) {
+  const n = Number(nilai) || 0;
+  if (n >= 95) return { kode: 'istimewa', label: 'ISTIMEWA', warna: '#7c3aed', latar: 'rgba(124,58,237,.12)', ikon: 'fa-solid fa-award' };
+  if (n >= 76.67) return { kode: 'baik', label: 'BAIK', warna: '#16a34a', latar: 'rgba(22,163,74,.12)', ikon: 'fa-solid fa-thumbs-up' };
+  if (n >= 50) return { kode: 'memadai', label: 'MEMADAI', warna: '#d97706', latar: 'rgba(245,158,11,.16)', ikon: 'fa-solid fa-circle-half-stroke' };
+  return { kode: 'kurang', label: 'KURANG', warna: '#dc3545', latar: 'rgba(220,53,69,.12)', ikon: 'fa-solid fa-triangle-exclamation' };
+}
+// Badge kategori (Kurang/Memadai/Baik/Istimewa) untuk sisi guru — memakai kategoriNilai_ yang sama dengan layar siswa.
+function badgeKategori_(nilai) {
+  const k = kategoriNilai_(nilai);
+  return `<span class="badge kat-badge" style="background:${k.latar};color:${k.warna};border:1px solid ${k.warna}">${k.label.charAt(0) + k.label.slice(1).toLowerCase()}</span>`;
+}
+function labelKategori_(nilai) { const l = kategoriNilai_(nilai).label; return l.charAt(0) + l.slice(1).toLowerCase(); }
+function pesanUntukNilai_(nilai, pesanNilaiRaw) {
+  const n = Math.round(Number(nilai) || 0);
+  const cocok = r => n >= Number(r.min) && n <= Number(r.max);
+  const buatanGuru = parsePesanNilai_(pesanNilaiRaw).find(r => cocok(r) && String(r.pesan || '').trim());
+  if (buatanGuru) return String(buatanGuru.pesan).trim();
+  const bawaan = DEFAULT_PESAN_NILAI.find(cocok);
+  return bawaan ? bawaan.pesan : '';
+}
+
+function escapeHtml_(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function teksSoalHtml(str) { return escapeHtml_(str).replace(/\n/g, '<br>'); }
+
+// ----------------------------------------------------------------------------
+// RICH TEXT: dipakai pada kotak Pertanyaan & Opsi Jawaban di form soal supaya
+// guru bisa mengatur bold/underline/warna dst (lihat UI.rtExec, UI.rtSaveSelection
+// & elemen ber-class "rich-editable"). Semua HTML hasil kotak ini dibersihkan
+// (sanitasi) sebelum disimpan maupun ditampilkan, hanya tag/atribut pemformatan
+// teks dasar yang diizinkan — supaya aman dari HTML/skrip yang tidak diinginkan.
+// ----------------------------------------------------------------------------
+const RT_TAG_DIIZINKAN = { B: 1, STRONG: 1, I: 1, EM: 1, U: 1, S: 1, STRIKE: 1, SPAN: 1, BR: 1, DIV: 1, P: 1, FONT: 1, SUB: 1, SUP: 1, IMG: 1, UL: 1, OL: 1, LI: 1 };
+const RT_STYLE_DIIZINKAN = /^(color|background-color|text-decoration|font-weight|font-style|font-family|font-size)\s*:/i;
+// src gambar inline (disisipkan lewat tombol 🖼 di toolbar) boleh berupa data:
+// URL (Mode Lokal) atau http(s) URL (Mode Server/Drive) -- selain itu dibuang.
+const RT_IMG_SRC_AMAN = /^(https?:|data:image\/)/i;
+
+function sanitasiHtmlKaya_(html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = String(html == null ? '' : html);
+  (function bersihkan(node) {
+    Array.from(node.childNodes).forEach(anak => {
+      if (anak.nodeType === 1) { // element node
+        if (!RT_TAG_DIIZINKAN[anak.tagName]) {
+          // tag tak dikenal (mis. <script>, <img> nyasar, dsb) -> buang tag-nya,
+          // tapi pertahankan isinya (teks/anak-anaknya) supaya konten tidak hilang
+          while (anak.firstChild) node.insertBefore(anak.firstChild, anak);
+          node.removeChild(anak);
+          return;
+        }
+        Array.from(anak.attributes).forEach(attr => {
+          if (attr.name === 'style') {
+            const aman = attr.value.split(';').map(s => s.trim())
+              .filter(s => RT_STYLE_DIIZINKAN.test(s)).join('; ');
+            if (aman) anak.setAttribute('style', aman); else anak.removeAttribute('style');
+          } else if (attr.name === 'color' && anak.tagName === 'FONT') {
+            // biarkan atribut color pada <font> (dihasilkan execCommand foreColor di sebagian browser)
+          } else if (attr.name === 'src' && anak.tagName === 'IMG') {
+            // PENTING: sebelumnya atribut src ikut dibuang di baris "else" bawah ini --
+            // akibatnya SEMUA <img> di teks kaya (soal/opsi) tampil kosong/hilang meski
+            // gambarnya berhasil diunggah. Sekarang src dipertahankan selama URL-nya aman
+            // (http/https atau data:image/...), selain itu dibuang.
+            if (!RT_IMG_SRC_AMAN.test(attr.value)) anak.removeAttribute('src');
+          } else {
+            anak.removeAttribute(attr.name);
+          }
+        });
+        bersihkan(anak);
+      } else if (anak.nodeType !== 3) {
+        node.removeChild(anak); // buang comment dsb, teks (nodeType 3) dibiarkan
+      }
+    });
+  })(tpl.content);
+  return tpl.innerHTML;
+}
+
+function isiKayaOtomatis_(str) { return /<[a-z][\s\S]*>/i.test(String(str || '')); }
+
+// Dipakai untuk menampilkan konten yang BISA berupa teks polos lama (sebelum
+// fitur format kaya ada) ATAU HTML hasil kotak rich text baru — supaya data
+// lama tetap tampil benar tanpa perlu migrasi.
+function kontenSoalHtml(str) {
+  const s = String(str == null ? '' : str);
+  if (!s) return '';
+  if (isiKayaOtomatis_(s)) return rapikanKontenKaya_(sanitasiHtmlKaya_(s));
+  // teks polos: buang baris kosong di awal/akhir & ringkas >2 baris kosong beruntun
+  return teksSoalHtml(s.replace(/\r\n?/g, '\n').replace(/^\s*\n+/, '').replace(/\s+$/, '').replace(/\n{3,}/g, '\n\n'));
+}
+
+// Merapikan HTML teks kaya: membuang elemen/baris kosong di awal & akhir serta meringkas
+// <br> / <div> / <p> kosong beruntun. Tanpa ini, pembahasan hasil impor/tempel dari Word
+// yang berekor banyak baris kosong membuat kartu detail jawaban "bisa di-scroll tapi kosong".
+function rapikanKontenKaya_(html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = String(html == null ? '' : html);
+  const teksKosong = t => !String(t).replace(/[\s\u00a0\u200b]/g, '');
+  const kosong = n => n.nodeType === 3 ? teksKosong(n.textContent)
+    : (n.nodeType === 1 && n.tagName !== 'IMG' && !n.querySelector('img') && (n.tagName === 'BR' || teksKosong(n.textContent)));
+  const pangkas = node => {
+    while (node.lastChild && kosong(node.lastChild)) node.removeChild(node.lastChild);
+    while (node.firstChild && kosong(node.firstChild)) node.removeChild(node.firstChild);
+    if (node.lastChild && node.lastChild.nodeType === 1) pangkas(node.lastChild);
+  };
+  pangkas(tpl.content);
+  const sebelumnya = n => { let p = n.previousSibling; while (p && p.nodeType === 3 && teksKosong(p.textContent)) p = p.previousSibling; return p; };
+  Array.from(tpl.content.querySelectorAll('br')).forEach(br => {
+    const p1 = sebelumnya(br);
+    if (p1 && p1.nodeType === 1 && p1.tagName === 'BR') {
+      const p2 = sebelumnya(p1);
+      if (p2 && p2.nodeType === 1 && p2.tagName === 'BR') br.remove();
+    }
+  });
+  Array.from(tpl.content.querySelectorAll('div, p')).forEach(el => {
+    const prev = el.previousElementSibling;
+    if (prev && (prev.tagName === 'DIV' || prev.tagName === 'P') && kosong(el) && kosong(prev)) el.remove();
+  });
+  return tpl.innerHTML;
+}
+
+function richTeksKosong_(html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = String(html == null ? '' : html);
+  return !tpl.content.textContent.trim();
+}
+
+function renderMatika(el) {
+  if (window.renderMathInElement) {
+    try {
+      renderMathInElement(el, { delimiters: [{ left: '$', right: '$', display: false }], throwOnError: false });
+    } catch (e) { /* abaikan error render */ }
+  }
+}
+
+// Membangun HTML 1 soal (pertanyaan + gambar + opsi/kotak jawaban sesuai
+// tipe). Dipakai OLEH DUA TEMPAT: ExamEngine.renderSoal (layar ujian siswa
+// sungguhan, interaktif = true) dan Pratinjau Soal di Portal Guru (Guru.
+// pratinjauSatuSoal/pratinjauKategoriSoal, interaktif = false). Sengaja 1
+// fungsi yang sama supaya pratinjau di Portal Guru dijamin SAMA PERSIS
+// dengan yang dilihat siswa -- tidak ada kode render terpisah yang bisa
+// menyimpang seiring waktu. opts.jawaban dipakai untuk menandai opsi yang
+// sudah dipilih (kosong/diabaikan saat pratinjau, karena pratinjau tidak
+// mewakili jawaban siswa mana pun).
+function renderKontenSoal(soal, opts) {
+  opts = opts || {};
+  if (opts.anbk && window.Anbk) return Anbk.renderSoal(soal, opts);
+  const interaktif = opts.interaktif !== false;
+  const jawaban = opts.jawaban || {};
+  const tandaiKunci = Array.isArray(opts.tandaiKunci) ? opts.tandaiKunci : [];
+  const tagKunci = (i) => tandaiKunci.includes(i) ? '<span class="opsi-kunci-tag">✔ Kunci</span>' : '';
+  let html = '';
+  if (opts.nomor && opts.total) html += `<div class="no">Soal ${opts.nomor} dari ${opts.total}</div>`;
+  // opts.pecah (hanya layar ujian siswa): bagian soal (teks + gambar) dibungkus .soal-kiri dan pilihan jawaban
+  // .soal-kanan, supaya pada layar lebar bisa tampil dua kolom -- soal di kiri, jawaban selalu terlihat di kanan.
+  if (opts.pecah) html += '<div class="soal-kiri">';
+  html += `<div class="pertanyaan">${kontenSoalHtml(soal.pertanyaan)}</div>`;
+  if (soal.gambar) html += tagGambarAman_(soal.gambar, 'gambar-soal', 'Gambar soal');
+  if (opts.pecah) html += '</div><div class="soal-kanan">';
+
+  // Setiap item opsi bisa berupa string polos (data lama) atau objek
+  // { teks, gambar } (format baru yang mendukung teks berformat & gambar opsi).
+  const opsiObj = (o) => (o && typeof o === 'object') ? o : { teks: o || '', gambar: '' };
+
+  if (soal.tipe === 'pilihan_ganda' || soal.tipe === 'benar_salah') {
+    html += '<div class="opsi-list">' + (soal.opsi || []).map((o, i) => {
+      const item = opsiObj(o);
+      const selected = jawaban[soal.id] === i;
+      const onclick = interaktif ? ` onclick="ExamEngine.pilihJawabanTunggal('${soal.id}', ${i})"` : '';
+      return `<label class="opsi-item ${selected ? 'selected' : ''}${interaktif ? '' : ' opsi-readonly'}${tandaiKunci.includes(i) ? ' opsi-kunci' : ''}"${onclick}>
+        <span class="opsi-huruf">${String.fromCharCode(65 + i)}</span>
+        <span class="opsi-konten">${kontenSoalHtml(item.teks)}${item.gambar ? tagGambarAman_(item.gambar, 'opsi-gambar-tampil', 'Gambar opsi') : ''}</span>${tagKunci(i)}
+      </label>`;
+    }).join('') + '</div>';
+  } else if (soal.tipe === 'checkbox') {
+    const dipilih = jawaban[soal.id] || [];
+    html += '<div class="opsi-list">' + (soal.opsi || []).map((o, i) => {
+      const item = opsiObj(o);
+      const selected = dipilih.includes(i);
+      const onclick = interaktif ? ` onclick="ExamEngine.toggleJawabanGanda('${soal.id}', ${i})"` : '';
+      return `<label class="opsi-item ${selected ? 'selected' : ''}${interaktif ? '' : ' opsi-readonly'}${tandaiKunci.includes(i) ? ' opsi-kunci' : ''}"${onclick}>
+        <span class="opsi-huruf">${selected ? '&#10003;' : String.fromCharCode(65 + i)}</span>
+        <span class="opsi-konten">${kontenSoalHtml(item.teks)}${item.gambar ? tagGambarAman_(item.gambar, 'opsi-gambar-tampil', 'Gambar opsi') : ''}</span>${tagKunci(i)}
+      </label>`;
+    }).join('') + '</div>';
+  } else if (soal.tipe === 'menjodohkan') {
+    const jwb = jawaban[soal.id] || {};
+    html += (soal.opsi.kiri || []).map((teksKiri, i) => `
+      <div class="match-row">
+        <div class="kiri">${escapeHtml_(teksKiri)}</div>
+        <select ${interaktif ? `onchange="ExamEngine.pilihJodoh('${soal.id}', ${i}, this.value)"` : 'disabled'}>
+          <option value="">— pilih pasangan —</option>
+          ${(soal.opsi.kanan || []).map((teksKanan, j) => `<option value="${j}" ${String(jwb[i]) === String(j) ? 'selected' : ''}>${escapeHtml_(teksKanan)}</option>`).join('')}
+        </select>
+      </div>`).join('');
+  } else { // uraian
+    const isi = jawaban[soal.id] || '';
+    html += `<textarea rows="8" placeholder="Tulis jawaban Anda di sini..." ${interaktif ? `oninput="ExamEngine.isiJawabanUraian('${soal.id}', this.value)"` : 'readonly'}>${escapeHtml_(isi)}</textarea>`;
+  }
+  if (opts.pecah) html += '</div>';
+  return html;
+}
+
+// Jika CONFIG.API_URL diisi -> kirim ke backend Google Apps Script (POST,
+// Content-Type text/plain agar tidak memicu CORS preflight yang tidak
+// didukung baik oleh Apps Script Web App). Jika tidak -> pakai LocalBackend
+// (localStorage) sehingga aplikasi tetap berfungsi penuh tanpa setup apa pun.
+//
+// Otomatis mencoba ulang (retry) beberapa kali dengan jeda kalau terjadi
+// kegagalan JARINGAN (bukan kegagalan logika seperti password salah) —
+// berguna saat banyak siswa online bersamaan dan sesekali ada koneksi yang
+// lambat/putus sesaat. Backend sendiri (lihat Code.gs) sudah dirancang
+// supaya operasi paling sering (autosave dsb.) TIDAK memerlukan retry ini
+// dalam kondisi normal karena tidak lagi berebut kunci server.
+const MAKS_PERCOBAAN_API = 3;
+async function api(action, payload) {
+  const body = Object.assign({ action }, payload || {});
+  mulaiLoading();
+  try {
+    if (!modeServerAktif()) {
+      try {
+        return await LocalBackend.route(action, body);
+      } catch (err) {
+        console.error(err);
+        return { ok: false, error: 'Kesalahan lokal: ' + (err && err.message ? err.message : String(err)) };
+      }
+    }
+    let errTerakhir = null;
+    for (let percobaan = 1; percobaan <= MAKS_PERCOBAAN_API; percobaan++) {
+      try {
+        const res = await fetch(efektifApiUrl(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(body)
+        });
+        return await res.json();
+      } catch (err) {
+        errTerakhir = err;
+        if (percobaan < MAKS_PERCOBAAN_API) {
+          await new Promise(r => setTimeout(r, 600 * percobaan)); // 600ms, lalu 1200ms
+        }
+      }
+    }
+    toast('Gagal terhubung ke server: ' + errTerakhir.message, 'error');
+    return { ok: false, error: String(errTerakhir) };
+  } finally {
+    selesaiLoading();
+  }
+}
+
+// ============================================================================
+// LOCAL BACKEND — implementasi API yang sama persis kontraknya dengan Code.gs,
+// tapi menyimpan semua data di localStorage browser ini. Dipakai otomatis
+// kapan pun CONFIG.API_URL kosong, supaya aplikasi "siap pakai" tanpa
+// perlu deploy Google Apps Script terlebih dahulu.
+// ============================================================================
+const LocalBackend = (function () {
+  const DB_KEY = 'cbt_local_db_v1';
+  let db = null;
+
+  function defaultTemaLocal() {
+    return { primary: '#e58a72', secondary: '#6f9f94', accent: '#e9b44c', bg: '#faf6f1', text: '#2d2a26' };
+  }
+
+  function muat() {
+    if (db) return db;
+    let raw = null;
+    try { raw = localStorage.getItem(DB_KEY); } catch (e) {}
+    try { db = raw ? JSON.parse(raw) : null; } catch (e) { db = null; }
+    if (!db || typeof db !== 'object') db = {};
+    db.guru = db.guru || [];
+    db.siswa = db.siswa || [];
+    db.bankSoal = db.bankSoal || [];
+    db.ujian = db.ujian || [];
+    db.sesi = db.sesi || [];
+    db.log = db.log || [];
+    db.buktiOrek = db.buktiOrek || [];
+    db.config = db.config || {};
+    if (db.guru.length === 0) {
+      db.guru.push({ id: 'G001', username: 'admin', password: 'admin123', nama: 'Administrator', tema_json: JSON.stringify(defaultTemaLocal()) });
+    }
+    return db;
+  }
+
+  // PERFORMA (Mode Lokal): JSON.stringify seluruh database (bisa berisi banyak gambar)
+  // lalu menulisnya ke localStorage di SETIAP aksi -- termasuk tiap jawaban & ping --
+  // membuat aplikasi tersendat. Sekarang penulisan digabung (maks. 1x per 400 ms) dan
+  // dipaksa tuntas saat halaman ditutup/disembunyikan, jadi data tetap aman.
+  let _simpanTimer = null;
+  function tulisSekarang() {
+    clearTimeout(_simpanTimer); _simpanTimer = null;
+    if (!db) return true;
+    try {
+      localStorage.setItem(DB_KEY, JSON.stringify(db));
+      return true;
+    } catch (e) {
+      toast('Penyimpanan lokal penuh/gagal — coba hapus gambar soal berukuran besar, atau gunakan mode Server.', 'error');
+      return false;
+    }
+  }
+  function simpan() {
+    if (_simpanTimer === null) _simpanTimer = setTimeout(tulisSekarang, 400);
+    return true;
+  }
+  window.addEventListener('pagehide', () => { if (_simpanTimer !== null) tulisSekarang(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && _simpanTimer !== null) tulisSekarang(); });
+
+  function clone(x) { return JSON.parse(JSON.stringify(x)); }
+  function genId(prefix) { return prefix + '_' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-5); }
+  function cariIdx(list, id) { return list.findIndex(x => String(x.id) === String(id)); }
+
+  function shuffleSeeded(arr, seedStr) {
+    let seed = 0;
+    for (let i = 0; i < seedStr.length; i++) seed = (seed * 31 + seedStr.charCodeAt(i)) >>> 0;
+    const a = arr.slice();
+    function rand() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
+    for (let j = a.length - 1; j > 0; j--) {
+      const k = Math.floor(rand() * (j + 1));
+      const tmp = a[j]; a[j] = a[k]; a[k] = tmp;
+    }
+    return a;
+  }
+
+  // `idxOrder` (opsional): peta posisi-tampil -> indeks-opsi-asli, KHUSUS untuk
+  // soal yang opsinya diacak per siswa (lihat opsiAcakMap di action 'mulaiUjian').
+  // PENTING: siswa memilih & menjawab berdasarkan POSISI YANG TAMPIL di layarnya
+  // (yang sudah diacak), sedangkan `kunci` di bawah selalu memakai INDEKS OPSI
+  // ASLI (urutan sebelum diacak, sesuai saat guru membuat soal). Tanpa
+  // menerjemahkan lewat idxOrder di sini, soal dengan opsi teracak akan
+  // dianggap salah setiap kali posisi jawaban yang benar bergeser dari indeks
+  // aslinya -- walau kunci jawaban yang diisi guru sudah 100% benar. Ini
+  // sebelumnya adalah BUG: skorSoal() membandingkan posisi-tampil langsung ke
+  // kunci tanpa penerjemahan ini.
+  function skorSoal(soal, jwb, idxOrder) {
+    const bobot = Number(soal.bobot) || 0;
+    if (jwb === undefined || jwb === null || jwb === '') return 0;
+    let kunci;
+    kunci = parseKunciJson_(soal.kunci_json);
+    if (kunci === null) return 0;
+    const keIndeksAsli = (posisiTampil) => {
+      const p = Number(posisiTampil);
+      return (Array.isArray(idxOrder) && idxOrder[p] !== undefined) ? Number(idxOrder[p]) : p;
+    };
+    switch (soal.tipe) {
+      case 'pilihan_ganda':
+      case 'benar_salah':
+        return keIndeksAsli(jwb) === Number(kunci) ? bobot : 0;
+      case 'checkbox': {
+        const benar = Array.isArray(kunci) ? kunci.map(Number) : [];
+        const pilihan = Array.isArray(jwb) ? jwb.map(p => keIndeksAsli(p)) : [];
+        const cocok = pilihan.filter(p => benar.indexOf(p) !== -1).length;
+        const salah = pilihan.filter(p => benar.indexOf(p) === -1).length;
+        const proporsi = benar.length > 0 ? Math.max(cocok - salah, 0) / benar.length : 0;
+        return Math.round(proporsi * bobot * 100) / 100;
+      }
+      case 'menjodohkan': {
+        const totalPasang = Object.keys(kunci).length;
+        if (totalPasang === 0) return 0;
+        let benarPasang = 0;
+        Object.keys(kunci).forEach(k => { if (jwb && String(jwb[k]) === String(kunci[k])) benarPasang++; });
+        return Math.round((benarPasang / totalPasang) * bobot * 100) / 100;
+      }
+      case 'uraian': {
+        const kataKunci = (kunci.kataKunci || []).map(k => String(k).toLowerCase().trim()).filter(Boolean);
+        if (kataKunci.length === 0) return 0;
+        const teks = String(jwb).toLowerCase();
+        const ditemukan = kataKunci.filter(k => teks.indexOf(k) !== -1).length;
+        return Math.round((ditemukan / kataKunci.length) * bobot * 100) / 100;
+      }
+      default: return 0;
+    }
+  }
+
+  // Bagian PERHITUNGAN MURNI (tanpa efek samping) dipisah dari
+  // hitungDanSelesaikanSesi supaya bisa dipakai ULANG oleh action
+  // 'hitungUlangNilaiUjian' (Guru.hitungUlangNilai) untuk menghitung ulang
+  // nilai sesi yang SUDAH SELESAI -- tanpa ikut mengubah status/tanggal
+  // selesai/jawaban tersimpan, hanya nilai & status lulusnya saja.
+  function hitungNilaiDariJawaban_(D, sesi, jawaban) {
+    const urutan = JSON.parse(sesi.urutan_json || '{}');
+    const opsiAcakMap = urutan.opsiAcak || {};
+    const ujian = D.ujian.find(u => u.id === sesi.ujian_id);
+    const soalMap = {}; D.bankSoal.forEach(s => soalMap[s.id] = s);
+    let totalBobot = 0, totalDapat = 0, detail = [];
+    (urutan.order || []).forEach(sid => {
+      const soal = soalMap[sid];
+      if (!soal) return;
+      const bobot = Number(soal.bobot) || 0;
+      totalBobot += bobot;
+      const skor = skorSoal(soal, jawaban[sid], opsiAcakMap[sid]);
+      totalDapat += skor;
+      detail.push({ id: sid, tipe: soal.tipe, bobot, skor });
+    });
+    const nilaiAkhir = totalBobot > 0 ? Math.round((totalDapat / totalBobot) * 10000) / 100 : 0;
+    const nilaiLulus = ujian ? Number(ujian.nilai_lulus) || 0 : 0;
+    const lulus = nilaiAkhir >= nilaiLulus;
+    return { nilai: nilaiAkhir, lulus, detail };
+  }
+
+  // Detail jawaban per soal untuk ditampilkan ke SISWA setelah ujian selesai
+  // (soal yang dijawab salah/benar, jawaban siswa, kunci, pembahasan), supaya
+  // siswa & guru bisa sama-sama memeriksa jika ada kunci yang keliru.
+  // Semua posisi opsi dikembalikan dalam urutan TAMPIL milik siswa tsb (setelah
+  // diacak), sehingga kunci & jawaban bisa dibandingkan langsung di layar.
+  function bangunDetailJawaban_(D, sesi) {
+    const urutan = JSON.parse(sesi.urutan_json || '{}');
+    const opsiAcakMap = urutan.opsiAcak || {};
+    let jawaban = {}; try { jawaban = JSON.parse(sesi.jawaban_json || '{}'); } catch (e) { jawaban = {}; }
+    const soalMap = {}; D.bankSoal.forEach(s => soalMap[s.id] = s);
+    const items = [];
+    (urutan.order || []).forEach(sid => {
+      const soal = soalMap[sid];
+      if (!soal) return;
+      const bobot = Number(soal.bobot) || 0;
+      const idxOrder = opsiAcakMap[sid];
+      const jwb = jawaban[sid];
+      const skor = skorSoal(soal, jwb, idxOrder);
+      let kunci = null; kunci = parseKunciJson_(soal.kunci_json);
+      let opsi = null, kunciTampil = null;
+      if (soal.tipe === 'pilihan_ganda' || soal.tipe === 'checkbox' || soal.tipe === 'benar_salah') {
+        const opsiAsli = JSON.parse(soal.opsi_json || '[]');
+        const order = Array.isArray(idxOrder) ? idxOrder : opsiAsli.map((_, i) => i);
+        opsi = order.map(i => opsiAsli[i]);
+        const daftarKunci = soal.tipe === 'checkbox' ? (Array.isArray(kunci) ? kunci : []) : (kunci === null || kunci === undefined || kunci === '' ? [] : [kunci]);
+        kunciTampil = daftarKunci.map(k => order.indexOf(Number(k))).filter(i => i >= 0);
+      } else if (soal.tipe === 'menjodohkan') {
+        opsi = JSON.parse(soal.opsi_json || '{}');
+        kunciTampil = kunci && typeof kunci === 'object' ? kunci : {};
+      } else {
+        kunciTampil = { kataKunci: (kunci && Array.isArray(kunci.kataKunci)) ? kunci.kataKunci : [] };
+      }
+      const kosong = jwb === undefined || jwb === null || jwb === '' ||
+        (Array.isArray(jwb) && jwb.length === 0) ||
+        (soal.tipe === 'menjodohkan' && (typeof jwb !== 'object' || Object.keys(jwb).filter(k => jwb[k] !== '' && jwb[k] !== null && jwb[k] !== undefined).length === 0));
+      const uraianTanpaRubrik = soal.tipe === 'uraian' && kunciTampil.kataKunci.filter(k => String(k).trim()).length === 0;
+      let status;
+      if (kosong) status = 'kosong';
+      else if (uraianTanpaRubrik) status = 'manual';
+      else if (bobot > 0 && skor >= bobot) status = 'benar';
+      else if (skor > 0) status = 'sebagian';
+      else status = 'salah';
+      items.push({ id: sid, tipe: soal.tipe, pertanyaan: soal.pertanyaan, gambar: soal.gambar || '', opsi, jawaban: kosong ? null : jwb, kunciTampil, bobot, skor, status, pembahasan: soal.pembahasan || '' });
+    });
+    return items;
+  }
+
+  function hitungDanSelesaikanSesi(D, sesi, jawaban, statusAkhir) {
+    const hasil = hitungNilaiDariJawaban_(D, sesi, jawaban);
+    sesi.status = statusAkhir;
+    sesi.selesai = new Date().toISOString();
+    sesi.jawaban_json = JSON.stringify(jawaban);
+    sesi.nilai = hasil.nilai;
+    sesi.lulus = hasil.lulus;
+    simpan();
+    return hasil;
+  }
+
+  // Status Blokir Akun Siswa (setara statusBlokirSiswa_ di Code.gs)
+  // Mode bukti orak-orik per ujian: '' | 'wajib' | 'opsional'
+  function modeBuktiLokal(u) {
+    const m = u ? String(u.bukti_orek || '').toLowerCase() : '';
+    return (m === 'wajib' || m === 'opsional') ? m : '';
+  }
+  function fotoBuktiLokal(b) { return { id: b.id, nama: b.nama, bytes: b.bytes, waktu: b.waktu, url: b.url, urlAsli: b.url }; }
+  function infoBlokirLokal(s) {
+    return { aktif: !!s && String(s.blokir || '').toLowerCase() === 'ya', alasan: (s && s.blokir_alasan) || '', sejak: (s && s.blokir_sejak) || '' };
+  }
+  function pesanBlokirLokal(b) {
+    return 'Akun Anda sedang diblokir oleh guru, jadi belum bisa mengikuti ujian.' + (b.alasan ? ' Alasan: ' + b.alasan + '.' : '') + ' Hubungi guru untuk membuka blokir.';
+  }
+
+  async function route(action, data) {
+    const D = muat();
+    switch (action) {
+      case 'login': {
+        const role = data.role;
+        const username = String(data.username || '').trim();
+        const password = String(data.password || '');
+        const deviceId = String(data.deviceId || '');
+        if (role === 'guru') {
+          const guru = D.guru.find(g => g.username === username);
+          if (!guru || String(guru.password) !== password) return { ok: false, error: 'Username atau password guru salah.' };
+          return { ok: true, user: { id: guru.id, nama: guru.nama, username: guru.username, role: 'guru' } };
+        }
+        if (role === 'siswa') {
+          const siswa = D.siswa.find(s => String(s.username).trim().toLowerCase() === username.toLowerCase() && String(s.password).trim() === password.trim());
+          if (!siswa) return { ok: false, error: 'Username atau password siswa salah.' };
+          const lockAktif = D.config.deviceLockAktif !== false; // default Aktif (perilaku lama) kecuali sudah pernah dimatikan
+          const now = new Date();
+          const lastPing = siswa.last_ping ? new Date(siswa.last_ping) : null;
+          const staleMs = 15 * 60 * 1000;
+          const deviceLocked = lockAktif && siswa.device_id && lastPing && (now - lastPing) < staleMs && siswa.device_id !== deviceId;
+          if (deviceLocked) return { ok: false, error: 'Akun ini sedang aktif di perangkat lain. Tutup sesi di perangkat tersebut atau tunggu beberapa menit, lalu coba lagi.' };
+          siswa.device_id = deviceId; siswa.last_ping = now.toISOString();
+          simpan();
+          return { ok: true, user: { id: siswa.id, nama: siswa.nama, username: siswa.username, kelas: siswa.kelas, role: 'siswa', deviceId, blokir: infoBlokirLokal(siswa), nisn: String(siswa.nisn || ''), jenis_kelamin: siswa.jenis_kelamin || '', tempat_lahir: siswa.tempat_lahir || '', tanggal_lahir: siswa.tanggal_lahir || '' } };
+        }
+        return { ok: false, error: 'Role tidak valid.' };
+      }
+      case 'logout': {
+        if (data.role === 'siswa' && data.siswaId) {
+          const s = D.siswa.find(x => x.id === data.siswaId);
+          if (s) { s.device_id = ''; s.last_ping = ''; simpan(); }
+        }
+        return { ok: true };
+      }
+      case 'ping': {
+        let blokirPing = null;
+        if (data.role === 'siswa' && data.siswaId) {
+          const s = D.siswa.find(x => x.id === data.siswaId);
+          if (s) {
+            const lockAktif = D.config.deviceLockAktif !== false;
+            if (lockAktif && s.device_id && data.deviceId && s.device_id !== data.deviceId) return { ok: false, error: 'Sesi diambil alih oleh perangkat lain.' };
+            s.last_ping = new Date().toISOString();
+            simpan();
+            blokirPing = infoBlokirLokal(s);
+          }
+        }
+        return { ok: true, blokir: blokirPing };
+      }
+      case 'getPengaturanTokenSiswa': return { ok: true, aktif: D.config.tampilTokenSiswa !== false };
+      case 'simpanPengaturanTokenSiswa': {
+        D.config.tampilTokenSiswa = data.aktif === true || String(data.aktif).toLowerCase() === 'true';
+        simpan();
+        return { ok: true, aktif: D.config.tampilTokenSiswa };
+      }
+      case 'getTokenAktif': {
+        const tampil = D.config.tampilTokenSiswa !== false;
+        const now = new Date();
+        const list = D.ujian.filter(u => {
+          if (u.status !== 'aktif') return false;
+          if (u.mulai && now < new Date(u.mulai)) return false;
+          const batas = u.selesai ? new Date(new Date(u.selesai).getTime() + (Number(u.toleransi_menit) || 0) * 60000) : null;
+          return !(batas && now > batas);
+        }).map(u => ({ judul: u.judul, token: tampil ? u.token : '' }));
+        return { ok: true, tampil, ujian: list };
+      }
+      case 'getPengaturanLock': {
+        return { ok: true, aktif: D.config.deviceLockAktif !== false };
+      }
+      case 'simpanPengaturanLock': {
+        D.config.deviceLockAktif = !!data.aktif;
+        simpan();
+        return { ok: true, aktif: D.config.deviceLockAktif };
+      }
+      case 'simpanSoal': {
+        const soal = JSON.parse(data.soal);
+        if (soal.id) {
+          const idx = cariIdx(D.bankSoal, soal.id);
+          if (idx > -1) { D.bankSoal[idx] = Object.assign({}, D.bankSoal[idx], soal); simpan(); return { ok: true, id: soal.id }; }
+        }
+        soal.id = genId('S');
+        soal.dibuat = new Date().toISOString();
+        soal.status = soal.status || 'aktif';
+        D.bankSoal.push(soal);
+        simpan();
+        return { ok: true, id: soal.id };
+      }
+      case 'importSoal': {
+        const list = JSON.parse(data.soalList);
+        const ids = [];
+        list.forEach(soal => {
+          soal.id = genId('S');
+          soal.dibuat = new Date().toISOString();
+          soal.status = soal.status || 'aktif';
+          D.bankSoal.push(soal);
+          ids.push(soal.id);
+        });
+        simpan();
+        return { ok: true, count: ids.length, ids };
+      }
+      case 'hapusSoal': {
+        const idx = cariIdx(D.bankSoal, data.id);
+        if (idx > -1) D.bankSoal.splice(idx, 1);
+        simpan();
+        return { ok: true };
+      }
+      case 'hapusSoalBanyak': {
+        const ids = new Set(JSON.parse(data.ids || '[]').map(String));
+        const sebelum = D.bankSoal.length;
+        D.bankSoal = D.bankSoal.filter(s => !ids.has(String(s.id)));
+        simpan();
+        return { ok: true, count: sebelum - D.bankSoal.length };
+      }
+      case 'ubahStatusSoalBanyak': {
+        const ids = new Set(JSON.parse(data.ids || '[]').map(String));
+        let n = 0;
+        D.bankSoal.forEach(s => { if (ids.has(String(s.id))) { s.status = data.status || 'aktif'; n++; } });
+        simpan();
+        return { ok: true, count: n };
+      }
+      case 'getBankSoal': {
+        let list = clone(D.bankSoal);
+        if (data.guruId) list = list.filter(s => s.guru_id === data.guruId);
+        if (data.kategori) list = list.filter(s => samaTeks_(s.kategori, data.kategori));
+        if (data.subkategori) list = list.filter(s => samaTeks_(s.subkategori, data.subkategori));
+        return { ok: true, data: list };
+      }
+      case 'simpanUjian': {
+        const ujian = JSON.parse(data.ujian);
+        if (ujian.id) {
+          const idx = cariIdx(D.ujian, ujian.id);
+          if (idx > -1) { D.ujian[idx] = Object.assign({}, D.ujian[idx], ujian); simpan(); return { ok: true, id: ujian.id }; }
+        }
+        ujian.id = genId('U');
+        if (!ujian.token) ujian.token = buatTokenAman_();
+        ujian.status = ujian.status || 'aktif';
+        D.ujian.push(ujian);
+        simpan();
+        return { ok: true, id: ujian.id, token: ujian.token };
+      }
+      case 'hapusUjian': {
+        const idx = cariIdx(D.ujian, data.id);
+        if (idx > -1) D.ujian.splice(idx, 1);
+        simpan();
+        return { ok: true };
+      }
+      case 'getDaftarUjian': {
+        let list = clone(D.ujian);
+        if (data.guruId) list = list.filter(u => u.guru_id === data.guruId);
+        return { ok: true, data: list };
+      }
+      case 'getRekapNilai': {
+        const sesiList = D.sesi.filter(s => s.ujian_id === data.ujianId && s.status !== 'berlangsung');
+        const siswaMap = {}; D.siswa.forEach(s => siswaMap[s.id] = s);
+        const rekap = sesiList.map(s => {
+          const siswa = siswaMap[s.siswa_id] || {};
+          return { sesiId: s.id, siswaId: s.siswa_id, nama: siswa.nama || '(tidak dikenal)', kelas: siswa.kelas || '-', nilai: s.nilai, lulus: s.lulus, pelanggaran: s.pelanggaran, mulai: s.mulai, selesai: s.selesai, status: s.status };
+        });
+        rekap.forEach(r => { r.bukti = (D.buktiOrek || []).filter(b => b.sesi_id === r.sesiId).map(fotoBuktiLokal); });
+        return { ok: true, data: rekap, buktiMode: modeBuktiLokal(D.ujian.find(u => u.id === data.ujianId)) };
+      }
+      // Menghitung ULANG nilai SEMUA sesi yang sudah selesai/diblokir di satu
+      // ujian, memakai jawaban yang SUDAH TERSIMPAN (tidak diubah) tapi lewat
+      // logika penilaian TERBARU (mis. setelah perbaikan bug opsi teracak).
+      // Guru dari Portal Guru -> Rekap Nilai -> tombol "Hitung Ulang Nilai".
+      // Hanya menulis ulang kolom nilai/lulus kalau memang BERUBAH, supaya
+      // tetap aman dipanggil berkali-kali tanpa efek samping tambahan.
+      case 'hitungUlangNilaiUjian': {
+        const sesiList = D.sesi.filter(s => s.ujian_id === data.ujianId && s.status !== 'berlangsung');
+        let totalBerubah = 0;
+        sesiList.forEach(sesi => {
+          let jawaban = {}; try { jawaban = JSON.parse(sesi.jawaban_json || '{}'); } catch (e) {}
+          const hasil = hitungNilaiDariJawaban_(D, sesi, jawaban);
+          if (Number(sesi.nilai) !== Number(hasil.nilai) || String(sesi.lulus) !== String(hasil.lulus)) {
+            sesi.nilai = hasil.nilai;
+            sesi.lulus = hasil.lulus;
+            totalBerubah++;
+          }
+        });
+        simpan();
+        return { ok: true, totalDiperiksa: sesiList.length, totalBerubah };
+      }
+      case 'getAnalisisSoal': {
+        const ujian = D.ujian.find(u => u.id === data.ujianId);
+        if (!ujian) return { ok: false, error: 'Ujian tidak ditemukan.' };
+        const soalIds = String(ujian.soal_ids || '').split(',').filter(Boolean);
+        const soalMap = {}; D.bankSoal.forEach(s => soalMap[s.id] = s);
+        const siswaMap = {}; D.siswa.forEach(s => siswaMap[s.id] = s);
+        const sesiList = D.sesi.filter(s => s.ujian_id === data.ujianId && s.status !== 'berlangsung');
+        const totalPeserta = sesiList.length;
+
+        const agregat = {};
+        soalIds.forEach(sid => { agregat[sid] = { benar: 0, sebagian: 0, salah: 0, kosong: 0 }; });
+
+        const jawabanSiswa = sesiList.map(sesi => {
+          const siswa = siswaMap[sesi.siswa_id] || {};
+          let jawaban = {}; try { jawaban = JSON.parse(sesi.jawaban_json || '{}'); } catch (e) {}
+          let urutanSesi = {}; try { urutanSesi = JSON.parse(sesi.urutan_json || '{}'); } catch (e) {}
+          const opsiAcakMap = urutanSesi.opsiAcak || {};
+          const detail = {};
+          soalIds.forEach(sid => {
+            const soal = soalMap[sid];
+            if (!soal) { detail[sid] = 'na'; return; }
+            const jwb = jawaban[sid];
+            const kosong = (jwb === undefined || jwb === null || jwb === '' || (Array.isArray(jwb) && jwb.length === 0));
+            if (kosong) { detail[sid] = 'kosong'; agregat[sid].kosong++; return; }
+            const bobot = Number(soal.bobot) || 0;
+            const skor = skorSoal(soal, jwb, opsiAcakMap[sid]);
+            let status;
+            if (bobot > 0 && skor >= bobot - 0.001) { status = 'benar'; agregat[sid].benar++; }
+            else if (skor > 0) { status = 'sebagian'; agregat[sid].sebagian++; }
+            else { status = 'salah'; agregat[sid].salah++; }
+            detail[sid] = status;
+          });
+          return { siswaId: sesi.siswa_id, nama: siswa.nama || '(tidak dikenal)', kelas: siswa.kelas || '-', nilai: sesi.nilai, lulus: sesi.lulus, jawabanDetail: detail };
+        });
+
+        const analisisSoal = soalIds.map((sid, i) => {
+          const soal = soalMap[sid];
+          const agg = agregat[sid];
+          const persenBenar = totalPeserta > 0 ? Math.round((agg.benar / totalPeserta) * 1000) / 10 : 0;
+          let kesulitanOtomatis;
+          if (totalPeserta === 0) kesulitanOtomatis = '-';
+          else if (persenBenar >= 70) kesulitanOtomatis = 'mudah';
+          else if (persenBenar >= 40) kesulitanOtomatis = 'sedang';
+          else kesulitanOtomatis = 'sulit';
+          return {
+            soalId: sid, nomor: i + 1,
+            pertanyaan: soal ? soal.pertanyaan : '(soal ini sudah dihapus dari Bank Soal)',
+            tipe: soal ? soal.tipe : '-',
+            tingkatKesulitanGuru: soal ? (soal.tingkat_kesulitan || 'sedang') : '-',
+            bobot: soal ? (Number(soal.bobot) || 0) : 0,
+            jumlahBenar: agg.benar, jumlahSebagianBenar: agg.sebagian, jumlahSalah: agg.salah, jumlahKosong: agg.kosong,
+            persenBenar, kesulitanOtomatis
+          };
+        });
+
+        return { ok: true, totalPeserta, soal: analisisSoal, siswa: jawabanSiswa };
+      }
+      case 'getLogPelanggaran': {
+        let logs = clone(D.log);
+        if (data.ujianId) logs = logs.filter(l => l.ujian_id === data.ujianId);
+        return { ok: true, data: logs };
+      }
+      case 'resetDevice': {
+        const s = D.siswa.find(x => x.id === data.siswaId);
+        if (s) { s.device_id = ''; s.last_ping = ''; simpan(); }
+        return { ok: true };
+      }
+      case 'resetDeviceKelas': {
+        const kelas = String(data.kelas || '').trim();
+        let count = 0;
+        D.siswa.forEach(s => {
+          if (kelas && String(s.kelas || '').trim() !== kelas) return;
+          if (s.device_id) count++;
+          s.device_id = ''; s.last_ping = '';
+        });
+        simpan();
+        return { ok: true, count };
+      }
+      case 'getPemantauanUjian': {
+        const ujian = D.ujian.find(u => u.id === data.ujianId);
+        if (!ujian) return { ok: false, error: 'Ujian tidak ditemukan.' };
+        const siswaMap = {}; D.siswa.forEach(s => siswaMap[s.id] = s);
+        const durasiMs = (Number(ujian.durasi_menit) || 0) * 60000;
+        const now = new Date();
+        const hasil = D.sesi.filter(s => s.ujian_id === data.ujianId).map(s => {
+          const siswa = siswaMap[s.siswa_id] || {};
+          let urutan = {}; try { urutan = JSON.parse(s.urutan_json || '{}'); } catch (e) {}
+          const totalSoal = (urutan.order || []).length;
+          let jawaban = {}; try { jawaban = JSON.parse(s.jawaban_json || '{}'); } catch (e) {}
+          const terjawab = Object.keys(jawaban).filter(k => {
+            const v = jawaban[k];
+            return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0);
+          }).length;
+          let sisaDetik = null;
+          if (s.status === 'berlangsung' && s.mulai) {
+            const tambahanMs = (Number(s.tambahan_detik) || 0) * 1000;
+            const sisaMs = durasiMs + tambahanMs - (now - new Date(s.mulai));
+            sisaDetik = Math.max(Math.floor(sisaMs / 1000), 0);
+          }
+          return {
+            sesiId: s.id, siswaId: s.siswa_id, nama: siswa.nama || '(tidak dikenal)', kelas: siswa.kelas || '-',
+            status: s.status, pelanggaran: Number(s.pelanggaran) || 0,
+            terjawab, totalSoal, sisaDetik, tambahanDetik: Number(s.tambahan_detik) || 0,
+            mulai: s.mulai, selesai: s.selesai, nilai: s.nilai, lulus: s.lulus
+          };
+        });
+        return { ok: true, data: hasil, maxPelanggaran: Number(ujian.max_pelanggaran) || 999 };
+      }
+      case 'pemantauanTambahWaktu': {
+        const sesi = D.sesi.find(s => s.id === data.sesiId);
+        if (!sesi) return { ok: false, error: 'Sesi tidak ditemukan.' };
+        sesi.tambahan_detik = (Number(sesi.tambahan_detik) || 0) + (Number(data.menit) || 0) * 60;
+        simpan();
+        return { ok: true, tambahanDetik: sesi.tambahan_detik };
+      }
+      case 'pemantauanForceFinish': {
+        const sesi = D.sesi.find(s => s.id === data.sesiId);
+        if (!sesi) return { ok: false, error: 'Sesi tidak ditemukan.' };
+        if (sesi.status === 'selesai') return { ok: true, sudahSelesai: true, nilai: sesi.nilai, lulus: sesi.lulus };
+        const jawaban = JSON.parse(sesi.jawaban_json || '{}');
+        const hasil = hitungDanSelesaikanSesi(D, sesi, jawaban, 'selesai');
+        return { ok: true, nilai: hasil.nilai, lulus: hasil.lulus };
+      }
+      case 'pemantauanHapusPelanggaran': {
+        const sesi = D.sesi.find(s => s.id === data.sesiId);
+        if (!sesi) return { ok: false, error: 'Sesi tidak ditemukan.' };
+        sesi.pelanggaran = 0;
+        if (sesi.status === 'diblokir') { sesi.status = 'berlangsung'; sesi.selesai = ''; sesi.nilai = ''; sesi.lulus = ''; }
+        simpan();
+        return { ok: true, status: sesi.status };
+      }
+      case 'hapusNilaiSiswa': {
+        const ids = new Set(JSON.parse(data.sesiIds || '[]').map(String));
+        D.sesi = D.sesi.filter(x => !ids.has(String(x.id)));
+        D.buktiOrek = (D.buktiOrek || []).filter(b => !ids.has(String(b.sesi_id))); // foto bukti ikut dibersihkan
+        if (Array.isArray(D.log)) D.log = D.log.filter(l => !ids.has(String(l.sesi_id)));
+        simpan();
+        return { ok: true, count: ids.size };
+      }
+      case 'pemantauanReset': {
+        const idx = cariIdx(D.sesi, data.sesiId);
+        if (idx > -1) D.sesi.splice(idx, 1);
+        simpan();
+        return { ok: true };
+      }
+      case 'importSiswa': {
+        const list = JSON.parse(data.siswaList);
+        list.forEach(s => { s.id = genId('SW'); s.device_id = ''; s.last_ping = ''; D.siswa.push(s); });
+        simpan();
+        return { ok: true, count: list.length };
+      }
+      case 'getDaftarSiswa': {
+        let list = D.siswa.map(s => ({
+          id: s.id, username: s.username, password: s.password, nama: s.nama, kelas: s.kelas,
+          nisn: String(s.nisn || ''), jenis_kelamin: s.jenis_kelamin || '', tempat_lahir: s.tempat_lahir || '', tanggal_lahir: s.tanggal_lahir || '',
+          online: !!s.device_id, deviceId: s.device_id || '', lastPing: s.last_ping || '',
+          blokir: infoBlokirLokal(s).aktif, blokirAlasan: s.blokir_alasan || '', blokirSejak: s.blokir_sejak || ''
+        }));
+        if (data.kelas) list = list.filter(s => s.kelas === data.kelas);
+        return { ok: true, data: list };
+      }
+      case 'blokirSiswa': {
+        const s = D.siswa.find(x => x.id === data.siswaId);
+        if (!s) return { ok: false, error: 'Siswa tidak ditemukan.' };
+        const aktif = data.aktif === true || String(data.aktif).toLowerCase() === 'true';
+        s.blokir = aktif ? 'ya' : '';
+        s.blokir_alasan = aktif ? String(data.alasan || '').trim().slice(0, 200) : '';
+        s.blokir_sejak = aktif ? new Date().toISOString() : '';
+        simpan();
+        return { ok: true, aktif };
+      }
+      case 'updateSiswa': {
+        const siswa = JSON.parse(data.siswa);
+        const s = D.siswa.find(x => x.id === siswa.id);
+        if (!s) return { ok: false, error: 'Siswa tidak ditemukan.' };
+        Object.assign(s, siswa);
+        simpan();
+        return { ok: true };
+      }
+      case 'hapusSiswa': {
+        D.siswa = D.siswa.filter(s => s.id !== data.id);
+        simpan();
+        return { ok: true };
+      }
+      case 'hapusKelas': {
+        const kelas = String(data.kelas || '');
+        if (!kelas) return { ok: false, error: 'Nama kelas tidak boleh kosong.' };
+        const sebelum = D.siswa.length;
+        D.siswa = D.siswa.filter(s => s.kelas !== kelas);
+        simpan();
+        return { ok: true, count: sebelum - D.siswa.length };
+      }
+      case 'updateAkunGuru': {
+        const g = D.guru.find(x => x.id === data.guruId);
+        if (!g) return { ok: false, error: 'Akun guru tidak ditemukan.' };
+        if (String(g.password) !== String(data.passwordLama || '')) return { ok: false, error: 'Password saat ini salah.' };
+        const usernameBaru = String(data.username || '').trim();
+        if (!usernameBaru) return { ok: false, error: 'Username tidak boleh kosong.' };
+        const dipakaiGuruLain = D.guru.some(x => x.username === usernameBaru && x.id !== data.guruId);
+        if (dipakaiGuruLain) return { ok: false, error: 'Username sudah dipakai akun guru lain.' };
+        g.username = usernameBaru;
+        g.nama = String(data.nama || g.nama);
+        if (data.password) g.password = String(data.password);
+        simpan();
+        return { ok: true, user: { id: g.id, nama: g.nama, role: 'guru', username: g.username } };
+      }
+      case 'simpanTema': {
+        const g = D.guru.find(x => x.id === data.guruId) || D.guru[0];
+        if (g) { g.tema_json = data.tema; simpan(); }
+        return { ok: true };
+      }
+      case 'getTema': {
+        let g = D.guru.find(x => x.id === data.guruId) || D.guru[0];
+        let tema = defaultTemaLocal();
+        try { if (g && g.tema_json) tema = JSON.parse(g.tema_json); } catch (e) {}
+        return { ok: true, tema };
+      }
+      case 'uploadGambar': {
+        return { ok: true, url: `data:${data.mimeType};base64,${data.base64}` };
+      }
+      // ---- Bukti orak-orik jawaban (Mode Lokal: foto disimpan di perangkat ini) ----
+      case 'uploadBuktiOrek': {
+        const sesi = D.sesi.find(x => x.id === data.sesiId);
+        if (!sesi) return { ok: false, error: 'Sesi tidak ditemukan.' };
+        if (String(sesi.siswa_id) !== String(data.siswaId)) return { ok: false, error: 'Sesi ini bukan milik Anda.' };
+        if (sesi.status === 'berlangsung') return { ok: false, error: 'Selesaikan ujian dulu sebelum mengunggah bukti.' };
+        if (!modeBuktiLokal(D.ujian.find(u => u.id === sesi.ujian_id))) return { ok: false, error: 'Unggah bukti orak-orik tidak diaktifkan untuk ujian ini.' };
+        if (!/^image\/(jpeg|png|webp|gif)$/i.test(String(data.mimeType || ''))) return { ok: false, error: 'Format gambar tidak didukung.' };
+        const b64 = String(data.base64 || '');
+        if (!b64) return { ok: false, error: 'Data foto kosong.' };
+        D.buktiOrek = D.buktiOrek || [];
+        const ada = D.buktiOrek.filter(b => b.sesi_id === sesi.id);
+        const dup = data.kunci ? ada.find(b => b.kunci === data.kunci) : null;
+        if (dup) return Object.assign({ ok: true, jumlah: ada.length, ulang: true }, fotoBuktiLokal(dup));
+        if (ada.length >= 10) return { ok: false, error: 'Maksimal 10 foto per ujian.' };
+        const bytes = Math.floor(b64.length * 3 / 4) - ((b64.match(/=+$/) || [''])[0].length);
+        const baris = { id: genId('BO'), sesi_id: sesi.id, siswa_id: sesi.siswa_id, ujian_id: sesi.ujian_id, kunci: data.kunci || '',
+          nama: String(data.filename || 'bukti.jpg').slice(0, 120), bytes, waktu: new Date().toISOString(), url: `data:${data.mimeType};base64,${b64}` };
+        D.buktiOrek.push(baris);
+        if (!tulisSekarang()) { D.buktiOrek.pop(); return { ok: false, error: 'Penyimpanan perangkat penuh, foto tidak tersimpan. Hapus foto lain atau gunakan mode Server.' }; }
+        return Object.assign({ ok: true, jumlah: ada.length + 1 }, fotoBuktiLokal(baris));
+      }
+      case 'getBuktiOrek': {
+        const sesi = D.sesi.find(x => x.id === data.sesiId);
+        if (!sesi) return { ok: false, error: 'Sesi tidak ditemukan.' };
+        if (data.siswaId && String(sesi.siswa_id) !== String(data.siswaId)) return { ok: false, error: 'Sesi ini bukan milik Anda.' };
+        return { ok: true, data: (D.buktiOrek || []).filter(b => b.sesi_id === sesi.id).map(fotoBuktiLokal), mode: modeBuktiLokal(D.ujian.find(u => u.id === sesi.ujian_id)) };
+      }
+      case 'hapusBuktiOrek': {
+        const sesi = D.sesi.find(x => x.id === data.sesiId);
+        if (!sesi) return { ok: false, error: 'Sesi tidak ditemukan.' };
+        if (data.siswaId && String(sesi.siswa_id) !== String(data.siswaId)) return { ok: false, error: 'Sesi ini bukan milik Anda.' };
+        D.buktiOrek = (D.buktiOrek || []).filter(b => !(b.id === data.id && b.sesi_id === sesi.id));
+        simpan();
+        return { ok: true, jumlah: D.buktiOrek.filter(b => b.sesi_id === sesi.id).length };
+      }
+      case 'simpanBranding': {
+        D.config.namaAplikasi = String(data.namaAplikasi || '').trim();
+        D.config.logoUrl = String(data.logoUrl || '');
+        simpan();
+        return { ok: true };
+      }
+      case 'getBranding': {
+        const c = D.config || {};
+        return { ok: true, branding: { namaAplikasi: c.namaAplikasi || '', logoUrl: c.logoUrl || '' } };
+      }
+      case 'cekToken': {
+        const sBlokirCek = data.siswaId ? D.siswa.find(x => x.id === data.siswaId) : null;
+        if (sBlokirCek && infoBlokirLokal(sBlokirCek).aktif) return { ok: false, error: pesanBlokirLokal(infoBlokirLokal(sBlokirCek)) };
+        const ujian = D.ujian.find(u => u.token === String(data.token || '').toUpperCase());
+        if (!ujian) return { ok: false, error: 'Token ujian tidak ditemukan.' };
+        const now = new Date();
+        if (ujian.mulai && now < new Date(ujian.mulai)) return { ok: false, error: 'Ujian belum dibuka.' };
+        const batasTelat = ujian.selesai ? new Date(new Date(ujian.selesai).getTime() + (Number(ujian.toleransi_menit) || 0) * 60000) : null;
+        if (batasTelat && now > batasTelat) return { ok: false, error: 'Waktu akses ujian sudah berakhir.' };
+        if (ujian.status !== 'aktif') return { ok: false, error: 'Ujian ini sedang tidak aktif.' };
+        const lanjutan = !!D.sesi.find(s => s.ujian_id === ujian.id && s.siswa_id === data.siswaId && s.status !== 'selesai' && s.status !== 'diblokir');
+        return { ok: true, ujian: { id: ujian.id, judul: ujian.judul, durasiMenit: ujian.durasi_menit, kategori: ujian.kategori, lanjutan } };
+      }
+      case 'mulaiUjian': {
+        const sBlokirMulai = D.siswa.find(x => x.id === data.siswaId);
+        if (sBlokirMulai && infoBlokirLokal(sBlokirMulai).aktif) return { ok: false, error: pesanBlokirLokal(infoBlokirLokal(sBlokirMulai)) };
+        const ujian = D.ujian.find(u => u.id === data.ujianId);
+        if (!ujian) return { ok: false, error: 'Ujian tidak ditemukan.' };
+        let existing = D.sesi.find(s => s.ujian_id === data.ujianId && s.siswa_id === data.siswaId);
+        if (existing && existing.status === 'selesai') {
+          // Pemulihan: bukti WAJIB tapi belum ada foto sama sekali -> arahkan ke halaman unggah
+          if (modeBuktiLokal(ujian) === 'wajib' && !(D.buktiOrek || []).some(b => b.sesi_id === existing.id)) {
+            return { ok: true, perluBukti: true, sesiId: existing.id, nilai: existing.nilai, lulus: existing.lulus, buktiOrek: 'wajib', judul: ujian.judul };
+          }
+          return { ok: false, error: 'Anda sudah menyelesaikan ujian ini.' };
+        }
+        if (existing && existing.status === 'diblokir') return { ok: false, error: 'Sesi ujian Anda telah diblokir karena pelanggaran. Hubungi guru.' };
+
+        const soalIds = String(ujian.soal_ids || '').split(',').filter(Boolean);
+        const soalMap = {}; D.bankSoal.forEach(s => soalMap[s.id] = s);
+        let urutan, jawaban, ragu, sesiObj;
+
+        if (existing) {
+          urutan = JSON.parse(existing.urutan_json || '{}');
+          jawaban = JSON.parse(existing.jawaban_json || '{}');
+          ragu = JSON.parse(existing.ragu_json || '[]');
+          sesiObj = existing;
+        } else {
+          let order = soalIds.slice();
+          if (String(ujian.acak_soal) === 'true' || ujian.acak_soal === true) order = shuffleSeeded(order, data.siswaId + data.ujianId);
+          const opsiAcakMap = {};
+          order.forEach(sid => {
+            const soal = soalMap[sid];
+            if (soal && (soal.tipe === 'pilihan_ganda' || soal.tipe === 'checkbox' || soal.tipe === 'benar_salah')) {
+              const opsi = JSON.parse(soal.opsi_json || '[]');
+              let idxArr = opsi.map((_, i) => i);
+              if (String(ujian.acak_opsi) === 'true' || ujian.acak_opsi === true) idxArr = shuffleSeeded(idxArr, data.siswaId + data.ujianId + sid);
+              opsiAcakMap[sid] = idxArr;
+            }
+          });
+          urutan = { order, opsiAcak: opsiAcakMap };
+          jawaban = {}; ragu = [];
+          const mulai = new Date().toISOString();
+          sesiObj = { id: genId('SES'), ujian_id: data.ujianId, siswa_id: data.siswaId, device_id: data.deviceId, mulai, selesai: '', status: 'berlangsung', pelanggaran: 0, urutan_json: JSON.stringify(urutan), jawaban_json: '{}', ragu_json: '[]', nilai: '', lulus: '', last_ping: mulai };
+          D.sesi.push(sesiObj);
+        }
+        simpan();
+
+        const opsiAcakMap = urutan.opsiAcak || {};
+        const soalUntukSiswa = urutan.order.map(sid => {
+          const s = soalMap[sid];
+          if (!s) return null;
+          let opsi = null;
+          if (s.tipe === 'pilihan_ganda' || s.tipe === 'checkbox' || s.tipe === 'benar_salah') {
+            const opsiAsli = JSON.parse(s.opsi_json || '[]');
+            const idxOrder = opsiAcakMap[sid] || opsiAsli.map((_, i) => i);
+            opsi = idxOrder.map(i => opsiAsli[i]);
+          } else if (s.tipe === 'menjodohkan') {
+            opsi = JSON.parse(s.opsi_json || '{}');
+          }
+          return { id: s.id, tipe: s.tipe, pertanyaan: s.pertanyaan, gambar: s.gambar, opsi, bobot: s.bobot };
+        }).filter(Boolean);
+
+        const durasiMs = (Number(ujian.durasi_menit) || 0) * 60000;
+        const tambahanMs = (Number(sesiObj.tambahan_detik) || 0) * 1000;
+        const sisaMs = durasiMs + tambahanMs - (new Date() - new Date(sesiObj.mulai));
+
+        return {
+          ok: true, sesiId: sesiObj.id, soal: soalUntukSiswa, jawabanTersimpan: jawaban, raguTersimpan: ragu,
+          sisaDetik: Math.max(Math.floor(sisaMs / 1000), 0),
+          maxPelanggaran: Number(ujian.max_pelanggaran) || 999,
+          pelanggaranSaatIni: existing ? Number(existing.pelanggaran) || 0 : 0
+        };
+      }
+      case 'simpanJawaban': {
+        const sesi = D.sesi.find(s => s.id === data.sesiId);
+        if (!sesi) return { ok: false, error: 'Sesi tidak ditemukan.' };
+        if (sesi.status !== 'berlangsung') return { ok: false, error: 'Sesi sudah tidak aktif.' };
+        sesi.jawaban_json = data.jawaban; sesi.ragu_json = data.ragu || '[]'; sesi.last_ping = new Date().toISOString();
+        simpan();
+        return { ok: true };
+      }
+      case 'lapor': {
+        const sesi = D.sesi.find(s => s.id === data.sesiId);
+        if (!sesi) return { ok: false, error: 'Sesi tidak ditemukan.' };
+        if (sesi.status !== 'berlangsung') return { ok: true, blokir: false };
+        sesi.pelanggaran = (Number(sesi.pelanggaran) || 0) + 1;
+        D.log.push({ id: genId('LOG'), sesi_id: data.sesiId, siswa_id: sesi.siswa_id, ujian_id: sesi.ujian_id, waktu: new Date().toISOString(), jenis: data.jenis || 'tidak diketahui' });
+        const ujian = D.ujian.find(u => u.id === sesi.ujian_id);
+        const maxPelanggaran = ujian ? Number(ujian.max_pelanggaran) || 999 : 999;
+        simpan();
+        if (sesi.pelanggaran >= maxPelanggaran) {
+          const jawaban = JSON.parse(data.jawaban || sesi.jawaban_json || '{}');
+          const hasil = hitungDanSelesaikanSesi(D, sesi, jawaban, 'diblokir');
+          return { ok: true, blokir: true, pelanggaran: sesi.pelanggaran, nilai: hasil.nilai, lulus: hasil.lulus };
+        }
+        return { ok: true, blokir: false, pelanggaran: sesi.pelanggaran };
+      }
+      case 'catatAktivitas': {
+        const sesi = D.sesi.find(s => s.id === data.sesiId);
+        if (sesi && sesi.status === 'berlangsung') {
+          D.log.push({ id: genId('LOG'), sesi_id: sesi.id, siswa_id: sesi.siswa_id, ujian_id: sesi.ujian_id, waktu: new Date().toISOString(), jenis: String(data.jenis || 'tidak diketahui').slice(0, 40), detail: String(data.detail || '').slice(0, 120) });
+          simpan();
+        }
+        return { ok: true };
+      }
+      case 'getLogPelanggaran': {
+        const daftar = D.log.filter(l => String(l.sesi_id) === String(data.sesiId)).sort((a, b) => new Date(a.waktu) - new Date(b.waktu));
+        return { ok: true, data: daftar.map(l => ({ waktu: l.waktu, jenis: l.jenis, detail: l.detail || '' })) };
+      }
+      case 'submitUjian': {
+        const sesi = D.sesi.find(s => s.id === data.sesiId);
+        if (!sesi) return { ok: false, error: 'Sesi tidak ditemukan.' };
+        const modeBuktiSub = modeBuktiLokal(D.ujian.find(u => u.id === sesi.ujian_id));
+        if (sesi.status === 'selesai') return { ok: true, nilai: sesi.nilai, lulus: sesi.lulus, sudahSelesai: true, buktiOrek: modeBuktiSub };
+        const jawaban = JSON.parse(data.jawaban || '{}');
+        const hasil = hitungDanSelesaikanSesi(D, sesi, jawaban, 'selesai');
+        return { ok: true, nilai: hasil.nilai, lulus: hasil.lulus, detail: hasil.detail, buktiOrek: modeBuktiSub };
+      }
+      case 'getDetailJawaban': {
+        const sesi = D.sesi.find(s => s.id === data.sesiId);
+        if (!sesi) return { ok: false, error: 'Sesi tidak ditemukan.' };
+        if (data.siswaId && String(sesi.siswa_id) !== String(data.siswaId)) return { ok: false, error: 'Sesi ini bukan milik Anda.' };
+        if (sesi.status === 'berlangsung') return { ok: false, error: 'Detail jawaban baru bisa dilihat setelah ujian selesai.' };
+        const ujian = D.ujian.find(u => u.id === sesi.ujian_id);
+        const dariGuru = !data.siswaId && !!data.guruId && D.guru.some(g => String(g.id) === String(data.guruId));
+        if (!dariGuru && ujian && String(ujian.tampil_detail) === 'false') return { ok: false, error: 'Guru tidak mengaktifkan detail jawaban untuk ujian ini.' };
+        const items = bangunDetailJawaban_(D, sesi);
+        const tampilPembahasan = !(ujian && String(ujian.tampil_pembahasan).toLowerCase() === 'false');
+        if (!tampilPembahasan && data.siswaId) items.forEach(it => { it.pembahasan = ''; });
+        return { ok: true, judulUjian: ujian ? ujian.judul : '-', nilai: sesi.nilai, lulus: sesi.lulus, items, tampilPembahasan };
+      }
+      case 'getHasil': {
+        const sesi = D.sesi.find(s => s.id === data.sesiId);
+        if (!sesi) return { ok: false, error: 'Sesi tidak ditemukan.' };
+        const ujian = D.ujian.find(u => u.id === sesi.ujian_id);
+        return {
+          ok: true, selesai: sesi.status !== 'berlangsung', nilai: sesi.nilai, lulus: sesi.lulus, pelanggaran: sesi.pelanggaran,
+          judulUjian: ujian ? ujian.judul : '-',
+          pesanNilai: ujian && ujian.pesan_nilai ? ujian.pesan_nilai : '',
+          tampilDetail: !(ujian && String(ujian.tampil_detail) === 'false'),
+          instruksiRemedial: (sesi.lulus === false) ? (ujian && ujian.instruksi_remedial ? ujian.instruksi_remedial : '') : ''
+        };
+      }
+      default:
+        return { ok: false, error: 'Aksi tidak dikenal: ' + action };
+    }
+  }
+
+  return { route, flush: tulisSekarang };
+})();
+
+// ----------------------------------------------------------------------------
+// TEMA
+// ----------------------------------------------------------------------------
+const NAMA_APLIKASI_BAWAAN = 'ANBK SMP Negeri 2 Seririt';
+// ----------------------------------------------------------------------------
+// IDENTITAS APLIKASI (Logo & Nama CBT)
+// ----------------------------------------------------------------------------
+// Menerapkan nama & logo aplikasi ke semua tempat yang menampilkannya: judul
+// tab browser, kartu login (sebelum siswa/guru masuk), dan sidebar/topbar
+// Portal Guru maupun Portal Siswa. Dipanggil otomatis saat aplikasi dibuka
+// (lihat DOMContentLoaded di bawah) -- jadi begitu guru menyimpan identitas
+// baru di Pengaturan, semua perangkat siswa yang membuka/memuat ulang
+// aplikasi otomatis melihat logo & nama terbaru tanpa perlu update apa pun
+// di perangkat mereka.
+function terapkanBranding(branding) {
+  // Nama bawaan aplikasi. Nilai lama "CBT Sekolah" (bawaan versi sebelumnya) ikut diganti otomatis.
+  const namaTersimpan = (branding && branding.namaAplikasi) ? String(branding.namaAplikasi).trim() : '';
+  const nama = (namaTersimpan && namaTersimpan.toLowerCase() !== 'cbt sekolah') ? namaTersimpan : NAMA_APLIKASI_BAWAAN;
+  const logoUrl = branding && branding.logoUrl ? branding.logoUrl : '';
+
+  document.title = nama + ' — Sistem Ujian Online';
+  document.querySelectorAll('.app-brand-nama').forEach(el => { el.textContent = nama; });
+  document.querySelectorAll('.app-logo-slot').forEach(el => {
+    el.innerHTML = logoUrl
+      ? tagGambarAman_(logoUrl, '', 'Logo')
+      : `<i class="fa-solid fa-graduation-cap"></i>`;
+  });
+
+  // Ikon "Layar Utama" (Add to Home Screen di HP) & judul aplikasi iOS ikut
+  // memakai logo/nama terbaru begitu guru menyimpannya di Pengaturan >
+  // Identitas Aplikasi -- kalau logo belum pernah diisi, tetap pakai ikon
+  // bawaan (logo sementara "TEST") yang sudah disiapkan di folder icons/,
+  // supaya tetap ada ikon walau belum sempat diganti.
+  const favicon = document.getElementById('app-favicon');
+  const appleIcon = document.getElementById('app-apple-icon');
+  const appleTitle = document.getElementById('app-apple-title');
+  if (favicon) favicon.href = logoUrl || 'icons/logo-test-32.png';
+  if (appleIcon) appleIcon.href = logoUrl || 'icons/apple-touch-icon.png';
+  if (appleTitle) appleTitle.content = nama;
+}
+
+async function muatBrandingGlobal() {
+  const res = await api('getBranding', {});
+  if (res.ok) terapkanBranding(res.branding);
+}
+
+// ============================================================================
+// AUTH
+// ============================================================================
+const Auth = {
+  async login(ev) {
+    ev.preventDefault();
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    const errEl = document.getElementById('login-error');
+    errEl.textContent = '';
+    const tombol = document.getElementById('btn-login-submit');
+    const teksAsliTombol = tombol.textContent;
+    tombol.disabled = true;
+    tombol.textContent = 'Memproses...';
+    try {
+      const res = await api('login', { role: state.role, username, password, deviceId: state.deviceId });
+      if (!res.ok) {
+        errEl.textContent = (res.error || 'Login gagal.') + (!modeServerAktif()
+          ? ' ⚠ Aplikasi di perangkat ini belum terhubung ke server (Mode Lokal), jadi akun buatan guru tidak dikenali. Hubungi guru/pengawas.'
+          : '');
+        return;
+      }
+      state.user = res.user;
+      sessionStorage.setItem('cbt_user', JSON.stringify(res.user));
+
+      if (res.user.role === 'guru') {
+        UI.tampilkan('guru-portal');
+        document.getElementById('guru-nama-label').textContent = res.user.nama; const gbn = document.getElementById('guru-band-nama'); if (gbn) gbn.textContent = res.user.nama;
+        Guru.init();
+        pemanasanPustakaGuru_();
+      } else {
+        Anbk.tampilKonfirmasiData();
+        Siswa.terapkanStatusBlokir(res.user.blokir);
+        Siswa.mulaiPing();
+        BuktiUI.pulihkanTertunda(); // login ulang saat masih punya unggahan bukti tertunda -> langsung kembali ke halaman unggah
+      }
+    } finally {
+      tombol.disabled = false;
+      tombol.textContent = teksAsliTombol;
+    }
+  },
+
+  async logout() {
+    if (BuktiUI.peringatanKeluar()) return; // masih di langkah unggah bukti: tidak boleh keluar
+    BuktiTertunda.hapus();
+    if (state.user && state.user.role === 'siswa') {
+      await api('logout', { role: 'siswa', siswaId: state.user.id });
+    }
+    clearInterval(state.pingHandle);
+    clearInterval(state.autoRefreshHandle);
+    sessionStorage.removeItem('cbt_user');
+    state.user = null;
+    location.reload();
+  },
+
+  pulihkanSesiLogin() {
+    let raw = sessionStorage.getItem('cbt_user');
+    if (!raw) {
+      // Tab dimatikan/dimuat ulang browser (mis. saat kamera dibuka) dan sessionStorage hilang:
+      // bila siswa masih punya unggahan bukti tertunda, pulihkan akunnya dari catatan tersebut.
+      const t = BuktiTertunda.baca();
+      if (t && t.user && t.user.role === 'siswa' && String(t.user.id) === String(t.userId)) {
+        raw = JSON.stringify(t.user);
+        try { sessionStorage.setItem('cbt_user', raw); } catch (e) { /* abaikan */ }
+      }
+    }
+    if (!raw) return;
+    try {
+      const user = JSON.parse(raw);
+      state.user = user;
+      if (user.role === 'guru') {
+        UI.tampilkan('guru-portal');
+        document.getElementById('guru-nama-label').textContent = user.nama; const gbn2 = document.getElementById('guru-band-nama'); if (gbn2) gbn2.textContent = user.nama;
+        Guru.init();
+      } else {
+        Anbk.tampilKonfirmasiData();
+        Siswa.terapkanStatusBlokir(user.blokir);
+        Siswa.mulaiPing();
+        BuktiUI.pulihkanTertunda(); // halaman dimuat ulang saat masih di langkah unggah bukti -> kembali ke sana
+      }
+    } catch (e) { /* abaikan */ }
+  }
+};
+
+// ============================================================================
+// UI (navigasi umum, modal, tab)
+// ============================================================================
+// ----------------------------------------------------------------------------
+// RUMUS DI KOTAK EDITOR (Pertanyaan, Opsi, Pembahasan)
+// Sebelumnya rumus "$...$" tampil sbg teks mentah di kotak edit (mis. "$\\frac{1}{100}$") dan baru
+// jadi pecahan di tampilan siswa. Sekarang rumus langsung DIRENDER (seperti di Word) di dalam kotak
+// edit sbg 1 blok utuh (tidak bisa diedit per huruf); saat disimpan dikembalikan jadi "$...$".
+// Klik 2x pada rumus untuk mengubahnya; hapus dengan Backspace/Delete.
+// ----------------------------------------------------------------------------
+function rtTampilkanRumus_(el) {
+  if (!el || !window.renderMathInElement) return;
+  try { renderMathInElement(el, { delimiters: [{ left: '$', right: '$', display: false }], throwOnError: false }); } catch (e) { return; }
+  el.querySelectorAll('.katex').forEach(k => { k.setAttribute('contenteditable', 'false'); k.setAttribute('title', 'Klik 2x untuk mengubah rumus'); });
+}
+// Isi kotak editor -> HTML siap simpan (rumus yang sudah dirender dikembalikan jadi "$LaTeX$").
+function rtHtmlSerial_(el) {
+  const salin = el.cloneNode(true);
+  salin.querySelectorAll('.katex').forEach(k => {
+    const ann = k.querySelector('annotation[encoding="application/x-tex"]');
+    k.replaceWith(document.createTextNode(ann ? '$' + ann.textContent + '$' : (k.textContent || '')));
+  });
+  // pembungkus <span> tanpa atribut (dibuat auto-render KaTeX) dibuang supaya data tetap bersih
+  salin.querySelectorAll('span').forEach(sp => { if (!sp.attributes.length) sp.replaceWith(...Array.from(sp.childNodes)); });
+  salin.normalize();
+  return salin.innerHTML.trim();
+}
+// Render ulang seluruh isi kotak (mis. setelah rumus disisipkan/diubah).
+function rtRenderUlang_(el) {
+  el.innerHTML = rtHtmlSerial_(el);
+  rtTampilkanRumus_(el);
+}
+
+const UI = {
+  // ---------------- Rich text toolbar (Pertanyaan & Opsi Jawaban) ----------------
+  // Satu toolbar dipakai bersama untuk semua kotak ber-class "rich-editable"
+  // (pertanyaan maupun tiap opsi). _rtRange/_rtEditable menyimpan posisi kursor
+  // terakhir di kotak yang sedang diformat, supaya saat guru meng-klik tombol
+  // warna (yang memindahkan fokus ke <input type=color>) pemformatan tetap
+  // diterapkan ke teks yang sedang dipilih, bukan hilang begitu saja.
+  _rtRange: null,
+  _rtEditable: null,
+
+  rtSimpanSeleksi() {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    let node = range.commonAncestorContainer;
+    node = node.nodeType === 1 ? node : node.parentElement;
+    const editable = node && node.closest ? node.closest('.rich-editable') : null;
+    if (editable) { UI._rtRange = range.cloneRange(); UI._rtEditable = editable; }
+  },
+
+  rtPulihkanSeleksi() {
+    if (!UI._rtEditable) return false;
+    UI._rtEditable.focus();
+    if (UI._rtRange) {
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(UI._rtRange);
+    }
+    return true;
+  },
+
+  // cmd/value dipakai lewat document.execCommand — sudah usang (deprecated)
+  // tapi masih didukung luas di browser & paling ringkas untuk kebutuhan
+  // format dasar (bold/underline/warna) tanpa menambah pustaka pihak ketiga.
+  rtExec(cmd, value) {
+    if (!UI.rtPulihkanSeleksi()) return;
+    try { document.execCommand(cmd, false, value); } catch (e) { /* abaikan */ }
+    UI.rtSimpanSeleksi();
+  },
+
+  rtWarnaTeks(input) { UI.rtExec('foreColor', input.value); },
+  rtWarnaSorot(input) { UI.rtExec('hiliteColor', input.value); },
+  rtFont(select) { UI.rtExec('fontName', select.value); },
+  rtUkuran(select) { UI.rtExec('fontSize', select.value); },
+  async rtRumus() {
+    if (!UI.rtPulihkanSeleksi()) { toast('Klik dulu ke kotak Pertanyaan/Opsi yang ingin disisipi rumus.', 'error'); return; }
+    const rentang = UI._rtRange, sasaran = UI._rtEditable;
+    const formula = await Dialog.input({
+      judul: 'Sisipkan Rumus', ikon: 'fa-square-root-variable',
+      pesan: 'Tulis rumus dalam format **LaTeX** (tanpa tanda $). Rumus akan tampil rapi di soal.',
+      label: 'Rumus (LaTeX)', placeholder: 'x^2 + 1 = 0', teksYa: 'Sisipkan', wajib: true, pesanWajib: 'Tulis rumusnya dulu.',
+      chips: [
+        { label: 'pecahan', nilai: '\\frac{a}{b}', sisip: true }, { label: 'pangkat', nilai: 'x^{2}', sisip: true },
+        { label: 'akar', nilai: '\\sqrt{x}', sisip: true }, { label: 'π', nilai: '\\pi', sisip: true }
+      ]
+    });
+    UI._rtRange = rentang; UI._rtEditable = sasaran; UI.rtPulihkanSeleksi(); // fokus berpindah ke dialog -> pulihkan posisi kursor
+    if (!formula) return;
+    try { document.execCommand('insertText', false, `$${formula}$`); } catch (e) {}
+    if (UI._rtEditable) rtRenderUlang_(UI._rtEditable);
+    UI._rtRange = null;
+  },
+  // Sisip gambar LANGSUNG di tengah teks pertanyaan/opsi (beda dari kotak upload
+  // "Gambar Soal" di bawah, yang selalu tampil di bawah pertanyaan). Dipakai lewat
+  // tombol 🖼 di toolbar -> membuka file picker tersembunyi -> unggah -> sisip.
+  async rtSisipGambar(fileInput) {
+    const editableSasaran = UI._rtEditable;
+    const file = fileInput.files[0];
+    fileInput.value = '';
+    if (!file || !editableSasaran) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result.split(',')[1];
+      toast('Menyisipkan gambar...');
+      const res = await api('uploadGambar', { base64, filename: file.name, mimeType: file.type });
+      if (!res.ok) { toast('Gagal mengunggah gambar: ' + res.error, 'error'); return; }
+      UI._rtEditable = editableSasaran;
+      if (!UI.rtPulihkanSeleksi()) editableSasaran.focus();
+      try { document.execCommand('insertImage', false, res.url); } catch (e) {}
+      UI.rtSimpanSeleksi();
+    };
+    reader.readAsDataURL(file);
+  },
+
+  // Toolbar format kaya dipakai bersama utk kotak Pertanyaan (ukuran penuh) &
+  // tiap kotak Opsi Jawaban (ukuran "compact", label teks disembunyikan lewat
+  // CSS supaya muat berjajar di baris opsi, tapi tombolnya tetap sama persis).
+  htmlRichToolbar(compact) {
+    const idFile = 'rt-file-' + Math.random().toString(36).slice(2, 8);
+    return `<div class="rich-toolbar${compact ? ' compact' : ''}">
+      <select class="rt-select" title="Huruf" onmousedown="UI.rtSimpanSeleksi()" onchange="UI.rtFont(this)">
+        <option value="">Huruf</option>
+        <option value="Arial">Arial</option>
+        <option value="Georgia">Georgia</option>
+        <option value="'Times New Roman'">Times New Roman</option>
+        <option value="'Courier New'">Courier New</option>
+        <option value="'Comic Sans MS'">Comic Sans MS</option>
+      </select>
+      <select class="rt-select" title="Ukuran" onmousedown="UI.rtSimpanSeleksi()" onchange="UI.rtUkuran(this)">
+        <option value="">Ukuran</option>
+        <option value="2">Kecil</option>
+        <option value="3">Normal</option>
+        <option value="4">Sedang</option>
+        <option value="5">Besar</option>
+        <option value="6">Sangat Besar</option>
+      </select>
+      <span class="rt-label">FORMAT</span>
+      <button type="button" class="rt-btn" title="Tebal" onmousedown="event.preventDefault()" onclick="UI.rtExec('bold')"><b>B</b></button>
+      <button type="button" class="rt-btn" title="Miring" onmousedown="event.preventDefault()" onclick="UI.rtExec('italic')"><i>I</i></button>
+      <button type="button" class="rt-btn" title="Garis bawah" onmousedown="event.preventDefault()" onclick="UI.rtExec('underline')"><u>U</u></button>
+      <button type="button" class="rt-btn" title="Coret" onmousedown="event.preventDefault()" onclick="UI.rtExec('strikeThrough')"><s>S</s></button>
+      <input type="color" class="rt-color" title="Warna teks" value="#211334" onmousedown="UI.rtSimpanSeleksi()" onchange="UI.rtWarnaTeks(this)">
+      <input type="color" class="rt-color" title="Warna sorot (highlight)" value="#fff59d" onmousedown="UI.rtSimpanSeleksi()" onchange="UI.rtWarnaSorot(this)">
+      <span class="rt-label">PANGKAT</span>
+      <button type="button" class="rt-btn" title="Pangkat atas (superscript)" onmousedown="event.preventDefault()" onclick="UI.rtExec('superscript')">x²</button>
+      <button type="button" class="rt-btn" title="Pangkat bawah (subscript)" onmousedown="event.preventDefault()" onclick="UI.rtExec('subscript')">x<sub>n</sub></button>
+      <button type="button" class="rt-btn" title="Sisipkan rumus (LaTeX, format $...$)" onmousedown="event.preventDefault()" onclick="UI.rtRumus()">RUMUS Σ</button>
+      <button type="button" class="rt-btn" title="Sisipkan gambar di sini" onmousedown="event.preventDefault()" onclick="document.getElementById('${idFile}').click()">🖼</button>
+      <input type="file" id="${idFile}" accept="image/*" class="hidden" onchange="UI.rtSisipGambar(this)">
+      <button type="button" class="rt-btn" title="Hapus format" onmousedown="event.preventDefault()" onclick="UI.rtExec('removeFormat')">⌫</button>
+    </div>`;
+  },
+
+  // Tab tipe soal (PG Biasa/PG Kompleks/Benar-Salah/Jodohkan/Essay) di atas
+  // daftar soal halaman "Kelola Soal" -- lihat Guru.bukaKelolaSoal/gantiTipeTabKelola.
+  renderTipeTabs() {
+    const cont = document.getElementById('tipe-tabs-list');
+    if (!cont) return;
+    cont.innerHTML = TIPE_SOAL_TAB.map(t => `
+      <button type="button" class="tipe-tab-btn${t.tipe === state.guru.tipeTabKelola ? ' active' : ''}" onclick="Guru.gantiTipeTabKelola('${t.tipe}')">
+        <span class="tipe-tab-label">${t.label}</span>
+        <span class="tipe-tab-sub">${t.sub}</span>
+      </button>`).join('');
+  },
+
+  perbaruiLabelJumlahGambar(idInput, idLabel) {
+    const input = document.getElementById(idInput);
+    const label = document.getElementById(idLabel);
+    if (!input || !label) return;
+    label.textContent = input.files.length ? `(${input.files.length} dipilih)` : '';
+  },
+
+  pilihRole(role) {
+    state.role = role;
+    const bs = document.getElementById('btn-role-siswa'), bg = document.getElementById('btn-role-guru');
+    if (bs) bs.classList.toggle('active', role === 'siswa');
+    if (bg) bg.classList.toggle('active', role === 'guru');
+  },
+
+  tampilkan(idLayar) {
+    ['login-screen', 'guru-portal', 'siswa-portal', 'tes-konfirmasi-screen', 'ujian-screen', 'bukti-screen', 'hasil-screen', 'detail-screen'].forEach(id => {
+      document.getElementById(id).classList.toggle('hidden', id !== idLayar);
+    });
+  },
+
+  gantiTabGuru(tabId) {
+    document.querySelectorAll('#guru-portal .nav-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
+    // HP: judul top bar + tab aktif di bottom navigation mengikuti halaman.
+    const spanAktif = document.querySelector('#guru-portal .nav-tab[data-tab="' + tabId + '"] span');
+    const judulHP = document.getElementById('mobile-title-guru');
+    if (judulHP && spanAktif) judulHP.textContent = spanAktif.textContent;
+    const adaDiBar = !!document.querySelector('#bottom-nav-guru button[data-tab="' + tabId + '"]');
+    document.querySelectorAll('#bottom-nav-guru button').forEach(b => b.classList.toggle('active', adaDiBar ? b.dataset.tab === tabId : b.dataset.tab === 'menu'));
+    const mainEl = document.querySelector('#guru-portal .main'); if (mainEl) mainEl.scrollTop = 0; window.scrollTo(0, 0);
+    document.querySelectorAll('#guru-portal .main > section').forEach(s => s.classList.toggle('hidden', s.id !== tabId));
+    if (tabId === 'tab-dashboard') Guru.muatDashboard();
+    if (tabId === 'tab-bank-soal') Guru.muatBankSoal();
+    if (tabId === 'tab-ujian') Guru.muatDaftarUjian();
+    if (tabId === 'tab-rekap') Guru.muatPilihanUjianUntukSelect('pilih-ujian-rekap');
+    if (tabId === 'tab-analisis') Guru.muatPilihanUjianUntukSelect('pilih-ujian-analisis');
+    if (tabId === 'tab-pelanggaran') Guru.muatPilihanUjianUntukSelect('pilih-ujian-log');
+    if (tabId === 'tab-pemantauan') Guru.muatPilihanUjianUntukSelect('pilih-ujian-pemantauan');
+    if (tabId === 'tab-login') { Guru.muatStatusLogin(); Guru.muatPengaturanLockDevice(); }
+    if (tabId === 'tab-siswa') Guru.muatDaftarSiswa();
+    if (tabId === 'tab-pengaturan') { Guru.muatFormTema(); Guru.muatFormAkun(); Guru.muatFormBranding(); tampilkanBadgeMode(); }
+    UI.mulaiAutoRefreshGuru(tabId);
+    UI.tutupMenuMobile('guru');
+  },
+
+  // Menu HP: sidebar tampil sebagai panel yang meluncur dari samping (bukan
+  // selalu terlihat seperti di layar lebar), supaya tidak memakan tempat.
+  bukaMenuMobile(portal) {
+    document.getElementById('sidebar-' + portal).classList.add('open');
+    document.getElementById('sidebar-overlay-' + portal).classList.add('open');
+    document.body.style.overflow = 'hidden';
+  },
+
+  tutupMenuMobile(portal) {
+    const sidebar = document.getElementById('sidebar-' + portal);
+    const overlay = document.getElementById('sidebar-overlay-' + portal);
+    if (sidebar) sidebar.classList.remove('open');
+    if (overlay) overlay.classList.remove('open');
+    document.body.style.overflow = '';
+  },
+
+  // "Realtime": selama Mode Server aktif dan guru sedang membuka salah satu
+  // tab data, tarik ulang data dari Google Sheets secara berkala supaya
+  // perubahan dari perangkat lain (mis. siswa login/ujian berjalan di HP)
+  // ikut muncul tanpa perlu refresh manual.
+  mulaiAutoRefreshGuru(tabId) {
+    clearInterval(state.autoRefreshHandle);
+    if (!modeServerAktif()) return;
+    const refreshMap = {
+      'tab-dashboard': () => Guru.muatDashboard(),
+      'tab-bank-soal': () => Guru.muatBankSoal(),
+      'tab-ujian': () => Guru.muatDaftarUjian(),
+      'tab-siswa': () => Guru.muatDaftarSiswa(),
+      'tab-rekap': () => { if (document.getElementById('pilih-ujian-rekap').value) return Guru.muatRekap(); return false; },
+      'tab-analisis': () => { if (document.getElementById('pilih-ujian-analisis').value) return Guru.muatAnalisisSoal(); return false; },
+      'tab-pelanggaran': () => { if (document.getElementById('pilih-ujian-log').value) return Guru.muatLogPelanggaran(); return false; },
+      'tab-pemantauan': () => { if (document.getElementById('pilih-ujian-pemantauan').value) return Guru.muatPemantauan(); return false; },
+      'tab-login': () => Guru.muatStatusLogin()
+    };
+    const fn = refreshMap[tabId];
+    if (!fn) return;
+    // PERFORMA: (1) lewati saat tab/browser tidak sedang dilihat, (2) jangan menumpuk
+    // permintaan baru selagi yang sebelumnya belum selesai (Apps Script kadang butuh
+    // beberapa detik -- tanpa ini permintaan menumpuk & seluruh aplikasi terasa macet),
+    // (3) segarkan sekali begitu tab kembali dilihat.
+    let sedangJalan = false;
+    const putaran = async () => {
+      if (document.hidden || sedangJalan) return;
+      sedangJalan = true;
+      try { if ((await fn()) !== false) Guru.tandaiDiperbarui_(tabId); } catch (e) { /* abaikan, putaran berikutnya mencoba lagi */ } finally { sedangJalan = false; }
+    };
+    state.autoRefreshHandle = setInterval(putaran, CONFIG.REALTIME_POLL_MS);
+    if (state._autoRefreshVis) document.removeEventListener('visibilitychange', state._autoRefreshVis);
+    state._autoRefreshVis = () => { if (!document.hidden) putaran(); };
+    document.addEventListener('visibilitychange', state._autoRefreshVis);
+  },
+
+  bukaPengaturanServer() {
+    document.getElementById('server-url-input').value = getUrlServerTersimpan();
+    document.getElementById('server-status').textContent = modeServerAktif()
+      ? '✅ Status saat ini: Terhubung ke Server (Google Sheets).'
+      : 'ℹ️ Status saat ini: Mode Lokal — data hanya tersimpan di perangkat ini.';
+    document.getElementById('server-snippet-box').classList.add('hidden');
+    document.getElementById('modal-server').classList.remove('hidden');
+  },
+
+  async tesKoneksiServer() {
+    const url = document.getElementById('server-url-input').value.trim();
+    const statusEl = document.getElementById('server-status');
+    const snippetBox = document.getElementById('server-snippet-box');
+    snippetBox.classList.add('hidden');
+    if (!url) { statusEl.textContent = 'Isi URL Web App terlebih dahulu.'; return; }
+    statusEl.textContent = 'Menguji koneksi...';
+    try {
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'getTema' }) });
+      const data = await res.json();
+      if (data && data.ok) {
+        statusEl.textContent = '✅ Berhasil terhubung ke Google Sheets.';
+        document.getElementById('server-snippet-text').textContent = "API_URL: '" + url + "',";
+        snippetBox.classList.remove('hidden');
+      } else {
+        statusEl.textContent = '❌ Gagal: ' + (data && data.error ? data.error : 'Respons tidak dikenali. Pastikan URL & deployment (Who has access: Anyone) sudah benar.');
+      }
+    } catch (e) {
+      statusEl.textContent = '❌ Gagal terhubung: ' + e.message;
+    }
+  },
+
+  salinSnippetApiUrl() {
+    const teks = document.getElementById('server-snippet-text').textContent;
+    if (!teks) return;
+    navigator.clipboard.writeText(teks)
+      .then(() => toast('Baris kode disalin. Tempel ke app.js lalu upload ulang ke Netlify.', 'success'))
+      .catch(() => toast('Gagal menyalin otomatis — silakan salin manual dari kotak teksnya.', 'error'));
+  },
+
+  async simpanPengaturanServer() {
+    const url = document.getElementById('server-url-input').value.trim();
+    if (url && !/^https:\/\/script\.google(usercontent)?\.com\//.test(url)) {
+      const tetap = await Dialog.konfirmasi({
+        judul: 'URL Server Tidak Dikenali', tipe: 'warning', ikon: 'fa-link-slash',
+        pesan: 'URL ini tidak terlihat seperti URL Web App Google Apps Script (harus diawali **https://script.google.com/** dan berakhiran **/exec**).\n\nTetap simpan URL ini?',
+        teksYa: 'Tetap Simpan', teksBatal: 'Periksa Lagi'
+      });
+      if (!tetap) return;
+    }
+    setUrlServerTersimpan(url);
+    toast(url ? 'Pengaturan server disimpan untuk PERANGKAT INI SAJA. Untuk mengaktifkannya bagi semua siswa, salin cuplikan kode di atas ke app.js.' : 'Pengaturan server dikosongkan. Aplikasi kembali ke mode lokal.', 'success');
+    UI.tutupModal('modal-server');
+    setTimeout(() => location.reload(), 600);
+  },
+
+  hapusPengaturanServer() {
+    document.getElementById('server-url-input').value = '';
+    setUrlServerTersimpan('');
+    toast('Kembali ke mode lokal (data hanya di perangkat ini).', 'success');
+    UI.tutupModal('modal-server');
+    setTimeout(() => location.reload(), 600);
+  },
+
+  // tipePraset: dipakai saat membuka form "Tambah Soal" dari tombol di halaman
+  // Kelola Soal — soal baru langsung memakai tipe tab yang sedang aktif (PG
+  // Biasa/PG Kompleks/Benar-Salah/Jodohkan/Essay) tanpa guru perlu memilih ulang.
+  bukaModalSoal(soal, tipePraset) {
+    document.getElementById('modal-soal-title').textContent = soal ? 'Ubah Soal' : 'Tambah Soal';
+    document.getElementById('soal-id').value = soal ? soal.id : '';
+    document.getElementById('soal-pertanyaan-toolbar').innerHTML = UI.htmlRichToolbar(false);
+    document.getElementById('soal-kategori').value = soal ? soal.kategori : (state.guru.kategoriKelola || 'Kuis');
+    document.getElementById('soal-subkategori').value = soal && soal.subkategori ? soal.subkategori : '';
+    document.getElementById('soal-topik').value = soal && soal.topik ? soal.topik : '';
+    document.getElementById('soal-tipe').value = soal ? soal.tipe : (tipePraset || state.guru.tipeTabKelola || 'pilihan_ganda');
+    document.getElementById('soal-pertanyaan').innerHTML = soal ? kontenSoalHtml(soal.pertanyaan) : '';
+    rtTampilkanRumus_(document.getElementById('soal-pertanyaan'));
+    document.getElementById('soal-pembahasan-toolbar').innerHTML = UI.htmlRichToolbar(false);
+    document.getElementById('soal-pembahasan').innerHTML = soal && soal.pembahasan ? kontenSoalHtml(soal.pembahasan) : '';
+    rtTampilkanRumus_(document.getElementById('soal-pembahasan'));
+    document.getElementById('soal-bobot').value = soal ? soal.bobot : 10;
+    document.getElementById('soal-tingkat-kesulitan').value = soal && soal.tingkat_kesulitan ? soal.tingkat_kesulitan : 'sedang';
+    ['gambar', 'audio', 'video'].forEach(jenis => {
+      document.getElementById(`soal-${jenis}-url`).value = soal && soal[jenis] ? soal[jenis] : '';
+      const prev = document.getElementById(`soal-${jenis}-preview`);
+      if (soal && soal[jenis]) { if (jenis === 'gambar') pasangSrcGambarAman_(prev, soal[jenis]); else prev.src = soal[jenis]; prev.classList.remove('hidden'); } else { prev.classList.add('hidden'); }
+    });
+    UI.renderModalTipeTabs();
+    UI.renderFormOpsiSoal(soal);
+    document.getElementById('modal-soal').classList.remove('hidden');
+  },
+
+  // Tab tipe soal di ATAS form Tambah/Ubah Soal (dalam modal) — mengganti
+  // dropdown lama, sekaligus mengubah #soal-tipe & merender ulang bagian opsi.
+  renderModalTipeTabs() {
+    const cont = document.getElementById('soal-tipe-tabs');
+    if (!cont) return;
+    const tipeAktif = document.getElementById('soal-tipe').value;
+    cont.innerHTML = TIPE_SOAL_TAB.map(t => `
+      <button type="button" class="tipe-tab-btn${t.tipe === tipeAktif ? ' active' : ''}" onclick="UI.pilihTipeSoalModal('${t.tipe}')">
+        <span class="tipe-tab-label">${t.label}</span>
+        <span class="tipe-tab-sub">${t.sub}</span>
+      </button>`).join('');
+  },
+
+  pilihTipeSoalModal(tipe) {
+    document.getElementById('soal-tipe').value = tipe;
+    UI.renderModalTipeTabs();
+    UI.renderFormOpsiSoal();
+  },
+
+  renderFormOpsiSoal(soal) {
+    const tipe = document.getElementById('soal-tipe').value;
+    const cont = document.getElementById('soal-form-opsi');
+    let opsi = null, kunci = null;
+    if (soal) {
+      try { opsi = JSON.parse(soal.opsi_json || 'null'); } catch (e) {}
+      kunci = parseKunciJson_(soal.kunci_json);
+    }
+
+    if (tipe === 'pilihan_ganda' || tipe === 'checkbox' || tipe === 'benar_salah') {
+      const list = opsi || (tipe === 'benar_salah' ? ['Benar', 'Salah'] : ['', '', '', '']);
+      const bisaHapusTambah = tipe !== 'benar_salah';
+      let html = `<div class="opsi-jawaban-header">
+        <div>
+          <label style="margin-bottom:.1rem">OPSI JAWABAN</label>
+          <span class="subtitle" style="display:block;margin:0">${tipe === 'checkbox' ? 'Pilih kunci jawaban (bisa lebih dari satu)' : 'Pilih satu kunci jawaban'}</span>
+        </div>
+        <span class="badge umum" id="opsi-counter">${list.length}/8 opsi</span>
+      </div>`;
+      list.forEach((item, i) => {
+        const o = (item && typeof item === 'object') ? item : { teks: item || '', gambar: '' };
+        const checked = tipe === 'checkbox' ? (Array.isArray(kunci) && kunci.includes(i)) : (kunci !== null && kunci !== undefined && kunci !== '' && Number(kunci) === i);
+        html += UI.htmlBarisOpsi(i, o, tipe, checked, bisaHapusTambah);
+      });
+      if (bisaHapusTambah) html += `<button type="button" class="secondary small" id="btn-tambah-opsi" onclick="UI.tambahOpsiKosong()">+ Tambah Opsi</button>`;
+      cont.innerHTML = html;
+      cont.querySelectorAll('.opsi-teks-rich').forEach(rtTampilkanRumus_);
+      UI.perbaruiCounterOpsi();
+    } else if (tipe === 'menjodohkan') {
+      const kiri = (opsi && opsi.kiri) || ['', ''];
+      const kanan = (opsi && opsi.kanan) || ['', ''];
+      let html = '<label>Sisi Kiri (soal)</label>';
+      kiri.forEach((t, i) => html += `<input type="text" class="mj-kiri" value="${escapeHtml_(t)}" placeholder="Item kiri ${i + 1}" style="margin-bottom:.4rem">`);
+      html += '<button type="button" class="secondary small" onclick="UI.tambahBarisJodoh()">+ Tambah Baris</button>';
+      html += '<label style="margin-top:.8rem">Sisi Kanan (pasangan, urutan bebas)</label>';
+      kanan.forEach((t, i) => html += `<input type="text" class="mj-kanan" value="${escapeHtml_(t)}" placeholder="Item kanan ${i + 1}" style="margin-bottom:.4rem">`);
+      html += '<p class="subtitle" style="margin-top:.6rem">Kunci jawaban: masukkan nomor pasangan kanan (mulai dari 0) untuk tiap item kiri, dipisah koma sesuai urutan kiri. Contoh: 1,0,2</p>';
+      const kunciStr = kunci ? Object.values(kunci).join(',') : '';
+      html += `<input type="text" id="mj-kunci" value="${escapeHtml_(kunciStr)}" placeholder="contoh: 1,0,2">`;
+      cont.innerHTML = html;
+    } else {
+      const kataKunci = kunci && kunci.kataKunci ? kunci.kataKunci.join(', ') : '';
+      cont.innerHTML = `<label>Kata Kunci Penilaian Otomatis (pisah dengan koma)</label>
+        <input type="text" id="uraian-kata-kunci" value="${escapeHtml_(kataKunci)}" placeholder="contoh: fotosintesis, klorofil, karbon dioksida">
+        <p class="subtitle">Nilai dihitung otomatis berdasar proporsi kata kunci yang muncul di jawaban siswa. Kosongkan jika ingin dikoreksi manual lewat spreadsheet.</p>`;
+    }
+  },
+
+  // Markup satu baris opsi (dipakai renderFormOpsiSoal & tambahOpsiKosong) —
+  // tiap opsi punya toolbar format kaya sendiri (persis toolbar Pertanyaan,
+  // lihat UI.htmlRichToolbar) + unggah gambar opsi (opsional) + tombol hapus opsi.
+  htmlBarisOpsi(i, o, tipe, checked, bisaHapus) {
+    const teksHtml = kontenSoalHtml(o.teks || '');
+    const gambar = o.gambar || '';
+    const huruf = String.fromCharCode(65 + i);
+    return `<div class="opsi-row${checked ? ' opsi-row-benar' : ''}">
+      <div class="opsi-row-top">
+        <span class="opsi-huruf-label">${huruf}</span>
+        <div class="opsi-row-main">
+          ${UI.htmlRichToolbar(true)}
+          <div class="rich-editable opsi-teks-rich" contenteditable="true" data-placeholder="Opsi ${huruf}">${teksHtml}</div>
+        </div>
+        <input type="${tipe === 'checkbox' ? 'checkbox' : 'radio'}" name="opsi-benar" value="${i}" title="Tandai sebagai kunci jawaban" ${checked ? 'checked' : ''} onchange="UI.tandaiOpsiBenar(this)">
+        ${bisaHapus ? `<button type="button" class="opsi-hapus-x" title="Hapus opsi ini" onclick="UI.hapusOpsi(this)">✕</button>` : ''}
+      </div>
+      <div class="opsi-row-gambar">
+        <input type="file" accept="image/*" class="opsi-gambar-file" onchange="Guru.uploadGambarOpsi(event)">
+        <input type="hidden" class="opsi-gambar-url" value="${escapeHtml_(gambar)}">
+        ${gambar ? tagGambarAman_(gambar, 'opsi-gambar-preview', 'Pratinjau gambar opsi') : '<img class="opsi-gambar-preview hidden">'}
+        <button type="button" class="secondary small opsi-hapus-gambar${gambar ? '' : ' hidden'}" onclick="UI.hapusGambarOpsi(this)">Hapus gambar</button>
+      </div>
+    </div>`;
+  },
+
+  tandaiOpsiBenar(input) {
+    document.querySelectorAll('#soal-form-opsi .opsi-row').forEach(row => row.classList.remove('opsi-row-benar'));
+    document.querySelectorAll('#soal-form-opsi input[name="opsi-benar"]:checked').forEach(el => {
+      el.closest('.opsi-row').classList.add('opsi-row-benar');
+    });
+  },
+
+  tambahOpsiKosong() {
+    const cont = document.getElementById('soal-form-opsi');
+    const tipe = document.getElementById('soal-tipe').value;
+    const n = cont.querySelectorAll('.opsi-row').length;
+    if (n >= 8) { toast('Maksimal 8 opsi jawaban.', 'error'); return; }
+    const div = document.createElement('div');
+    div.innerHTML = UI.htmlBarisOpsi(n, { teks: '', gambar: '' }, tipe, false, true);
+    cont.insertBefore(div.firstElementChild, document.getElementById('btn-tambah-opsi'));
+    UI.perbaruiCounterOpsi();
+  },
+
+  // Menghapus 1 baris opsi lalu menyusun ulang huruf (A/B/C..) & atribut "value"
+  // radio/checkbox supaya tetap berurutan 0..n-1 (dipakai saat simpanSoal membaca
+  // index opsi yang dicentang sebagai kunci jawaban).
+  hapusOpsi(btn) {
+    const cont = document.getElementById('soal-form-opsi');
+    const baris = cont.querySelectorAll('.opsi-row');
+    if (baris.length <= 2) { toast('Minimal 2 opsi jawaban.', 'error'); return; }
+    btn.closest('.opsi-row').remove();
+    const tipe = document.getElementById('soal-tipe').value;
+    cont.querySelectorAll('.opsi-row').forEach((row, i) => {
+      row.querySelector('.opsi-huruf-label').textContent = String.fromCharCode(65 + i);
+      const radio = row.querySelector('input[name="opsi-benar"]');
+      radio.value = i;
+      row.querySelector('.opsi-teks-rich').setAttribute('data-placeholder', 'Opsi ' + String.fromCharCode(65 + i));
+    });
+    UI.perbaruiCounterOpsi();
+  },
+
+  perbaruiCounterOpsi() {
+    const counter = document.getElementById('opsi-counter');
+    if (!counter) return;
+    const n = document.querySelectorAll('#soal-form-opsi .opsi-row').length;
+    counter.textContent = `${n}/8 opsi`;
+    const btnTambah = document.getElementById('btn-tambah-opsi');
+    if (btnTambah) btnTambah.classList.toggle('hidden', n >= 8);
+  },
+
+  async uploadGambarOpsiDariEvent(ev, callback) {
+    const file = ev.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result.split(',')[1];
+      toast('Mengunggah gambar opsi...');
+      const res = await api('uploadGambar', { base64, filename: file.name, mimeType: file.type });
+      if (res.ok) callback(res.url);
+      else toast('Gagal mengunggah gambar: ' + res.error, 'error');
+    };
+    reader.readAsDataURL(file);
+  },
+
+  hapusGambarOpsi(btn) {
+    const row = btn.closest('.opsi-row');
+    row.querySelector('.opsi-gambar-url').value = '';
+    const prev = row.querySelector('.opsi-gambar-preview');
+    prev.src = ''; prev.classList.add('hidden');
+    btn.classList.add('hidden');
+  },
+
+  tambahBarisJodoh() {
+    const cont = document.getElementById('soal-form-opsi');
+    const kiriInputs = cont.querySelectorAll('.mj-kiri');
+    const n = kiriInputs.length;
+    const input = document.createElement('input');
+    input.type = 'text'; input.className = 'mj-kiri'; input.placeholder = 'Item kiri ' + (n + 1); input.style.marginBottom = '.4rem';
+    kiriInputs[kiriInputs.length - 1].after(input);
+  },
+
+  async bukaModalUjian(ujian) {
+    await Guru.muatBankSoal(); // pastikan dropdown kategori & data soal selalu terbaru sebelum modal dibuka
+    document.getElementById('modal-ujian-title').textContent = ujian ? 'Ubah Ujian' : 'Buat Ujian';
+    document.getElementById('ujian-id').value = ujian ? ujian.id : '';
+    document.getElementById('ujian-judul').value = ujian ? ujian.judul : '';
+    const kategoriSel = document.getElementById('ujian-kategori');
+    if (ujian && ujian.kategori && ![...kategoriSel.options].some(o => o.value === ujian.kategori)) {
+      // Ujian lama memakai kategori yang sekarang tidak lagi punya soal aktif
+      // (mis. semua soalnya sudah diarsipkan) — tetap tampilkan pilihannya
+      // supaya tidak salah menampilkan kategori lain begitu modal dibuka.
+      kategoriSel.insertAdjacentHTML('beforeend', `<option value="${escapeHtml_(ujian.kategori)}">${escapeHtml_(labelKategori(ujian.kategori))} (tidak ada soal aktif)</option>`);
+    }
+    kategoriSel.value = ujian ? ujian.kategori : (kategoriSel.options[0] ? kategoriSel.options[0].value : '');
+    document.getElementById('ujian-subkategori').value = ujian && ujian.subkategori ? ujian.subkategori : '';
+    document.getElementById('ujian-durasi').value = ujian ? ujian.durasi_menit : 60;
+    document.getElementById('ujian-toleransi').value = ujian ? ujian.toleransi_menit : 10;
+    document.getElementById('ujian-kkm').value = ujian ? ujian.nilai_lulus : 75;
+    document.getElementById('ujian-max-pelanggaran').value = ujian ? ujian.max_pelanggaran : 3;
+    document.getElementById('ujian-mulai').value = ujian && ujian.mulai ? ujian.mulai.slice(0, 16) : '';
+    document.getElementById('ujian-selesai').value = ujian && ujian.selesai ? ujian.selesai.slice(0, 16) : '';
+    document.getElementById('ujian-acak-soal').checked = ujian ? (String(ujian.acak_soal) === 'true') : true;
+    document.getElementById('ujian-acak-opsi').checked = ujian ? (String(ujian.acak_opsi) === 'true') : true;
+    document.getElementById('ujian-instruksi-remedial').value = ujian && ujian.instruksi_remedial ? ujian.instruksi_remedial : '';
+    document.getElementById('ujian-tampil-detail').checked = ujian ? (String(ujian.tampil_detail) !== 'false') : true;
+    document.getElementById('ujian-tampil-pembahasan').checked = ujian ? (String(ujian.tampil_pembahasan).toLowerCase() !== 'false') : true;
+    document.getElementById('ujian-bukti-orek').value = ujian && ujian.bukti_orek ? ujian.bukti_orek : '';
+    Guru.sinkronDetailPembahasan();
+    Guru.muatEditorPesanNilai(ujian && ujian.pesan_nilai);
+    // null (bukan array kosong) khusus menandai "ujian baru, belum ada
+    // pilihan tersimpan" -> semua soal yang cocok otomatis tercentang.
+    // Ujian yang sedang diubah selalu punya minimal 1 soal_ids tersimpan.
+    await Guru.muatPilihanSoalUntukUjian(ujian ? String(ujian.soal_ids || '').split(',').filter(Boolean) : null);
+    document.getElementById('modal-ujian').classList.remove('hidden');
+  },
+
+  bukaModalSiswa(siswa) {
+    document.getElementById('siswa-edit-id').value = siswa.id;
+    document.getElementById('siswa-edit-username').value = siswa.username;
+    document.getElementById('siswa-edit-password').value = siswa.password;
+    document.getElementById('siswa-edit-nama').value = siswa.nama;
+    document.getElementById('siswa-edit-kelas').value = siswa.kelas;
+    document.getElementById('siswa-edit-nisn').value = siswa.nisn || '';
+    document.getElementById('siswa-edit-jk').value = siswa.jenis_kelamin || '';
+    document.getElementById('siswa-edit-tempat').value = siswa.tempat_lahir || '';
+    document.getElementById('siswa-edit-tgl').value = Anbk.isoTgl(siswa.tanggal_lahir);
+    document.getElementById('modal-siswa').classList.remove('hidden');
+  },
+
+  tutupModal(id) { document.getElementById(id).classList.add('hidden'); },
+
+  kembaliKeBerandaSiswa() {
+    document.getElementById('konfirmasi-ujian').classList.add('hidden');
+    document.getElementById('input-token-ujian').value = '';
+    UI.tampilkan('siswa-portal');
+  }
+};
+
+// ============================================================================
+// GURU
+// ============================================================================
+const Guru = {
+  // ---------------- PESAN HASIL PER NILAI (0, 1, 2, ... 100) ----------------
+  // Draft = array 101 string; indeks = nilai. Pesan kosong = pakai pesan default.
+  // Data tersimpan tetap berformat [{min,max,pesan}] (kompatibel dgn ujian lama &
+  // pesanUntukNilai_); nilai-nilai berurutan yg pesannya identik digabung jadi 1 rentang
+  // agar ringkas (batas sel Google Sheets 50.000 karakter).
+  pesanNilaiDraft: [],
+
+  pesanDefaultPerNilai_() {
+    const arr = new Array(101).fill('');
+    DEFAULT_PESAN_NILAI.forEach(r => { for (let n = Number(r.min); n <= Number(r.max); n++) if (n >= 0 && n <= 100) arr[n] = r.pesan; });
+    return arr;
+  },
+
+  muatEditorPesanNilai(raw) {
+    const arr = Guru.pesanDefaultPerNilai_();
+    // Ujian lama tersimpan sbg rentang (mis. 1-5) -> dipecah ke tiap nilai.
+    parsePesanNilai_(raw).forEach(r => {
+      const teks = String(r.pesan || '').trim();
+      if (!teks) return;
+      for (let n = Math.max(0, Number(r.min)); n <= Math.min(100, Number(r.max)); n++) arr[n] = teks;
+    });
+    Guru.pesanNilaiDraft = arr;
+    Guru.renderEditorPesanNilai();
+  },
+
+  renderEditorPesanNilai() {
+    const cont = document.getElementById('pesan-nilai-editor');
+    if (!cont) return;
+    cont.innerHTML = Guru.pesanNilaiDraft.map((teks, n) => `
+      <div class="pesan-nilai-row">
+        <div class="pesan-nilai-angka" title="Pesan untuk nilai ${n}">${n}</div>
+        <textarea rows="2" oninput="Guru.ubahPesanNilai(${n},this.value)" aria-label="Pesan untuk nilai ${n}" placeholder="Kosongkan untuk memakai pesan default">${escapeHtml_(teks)}</textarea>
+      </div>`).join('');
+    Guru.perbaruiInfoPesanNilai_();
+  },
+
+  ubahPesanNilai(n, teks) {
+    if (n < 0 || n > 100) return;
+    Guru.pesanNilaiDraft[n] = teks;
+  },
+
+  perbaruiInfoPesanNilai_() {
+    const el = document.getElementById('pesan-nilai-info');
+    if (!el) return;
+    const terisi = Guru.pesanNilaiDraft.filter(t => String(t || '').trim()).length;
+    el.textContent = terisi + ' dari 101 nilai (0–100) memiliki pesan.';
+  },
+
+  // Isi cepat: satu pesan yang sama untuk beberapa nilai berurutan (mis. 76–80).
+  isiCepatPesanNilai() {
+    const dari = Number(document.getElementById('pesan-cepat-dari').value);
+    const sampai = Number(document.getElementById('pesan-cepat-sampai').value);
+    const teks = document.getElementById('pesan-cepat-teks').value.trim();
+    if (!Number.isInteger(dari) || !Number.isInteger(sampai) || dari < 0 || sampai > 100 || dari > sampai) {
+      toast('Rentang isi cepat tidak valid. Isi nilai awal ≤ nilai akhir, di antara 0–100.', 'error'); return;
+    }
+    if (!teks) { toast('Tulis dulu pesan yang ingin diterapkan.', 'error'); return; }
+    for (let n = dari; n <= sampai; n++) Guru.pesanNilaiDraft[n] = teks;
+    Guru.renderEditorPesanNilai();
+    toast(`Pesan diterapkan ke nilai ${dari}–${sampai}. Jangan lupa klik Simpan Ujian.`, 'success');
+  },
+
+  async resetPesanNilai() {
+    if (!(await Dialog.konfirmasi({
+      judul: 'Kembalikan Pesan ke Default?', tipe: 'warning', ikon: 'fa-rotate-left',
+      pesan: 'Semua pesan nilai (0–100) di editor akan dikembalikan ke pengaturan default.\n\nPerubahan baru tersimpan setelah Anda klik **Simpan Ujian**.',
+      teksYa: 'Ya, Kembalikan'
+    }))) return;
+    Guru.muatEditorPesanNilai('');
+  },
+
+  // Draft -> JSON. Hanya pesan yang BERBEDA dari default yang disimpan (nilai lain
+  // otomatis memakai default terbaru). Nilai berurutan dgn pesan sama digabung.
+  ambilPesanNilaiUntukSimpan() {
+    const def = Guru.pesanDefaultPerNilai_();
+    const rows = [];
+    for (let n = 0; n <= 100; n++) {
+      const teks = String(Guru.pesanNilaiDraft[n] || '').trim();
+      if (!teks || teks === def[n]) continue;
+      const akhir = rows[rows.length - 1];
+      if (akhir && akhir.max === n - 1 && akhir.pesan === teks) akhir.max = n;
+      else rows.push({ min: n, max: n, pesan: teks });
+    }
+    if (!rows.length) return { json: '' };
+    const json = JSON.stringify(rows);
+    if (json.length > 45000) return { error: 'Total pesan terlalu panjang (' + json.length + ' karakter, batas ±45.000). Persingkat beberapa pesan.' };
+    return { json };
+  },
+
+  // Template Word: tabel 2 kolom (Nilai | Pesan), 101 baris (0-100), sudah berisi pesan
+  // yang saat ini ada di editor sehingga guru cukup mengubah teksnya di Word.
+  unduhTemplatePesanNilaiDocx() {
+    const rows = Guru.pesanNilaiDraft.map((teks, n) => [String(n), String(teks || '')]);
+    const items = [
+      { text: 'TEMPLATE PESAN HASIL PER NILAI — CBT Online', heading: true },
+      { text: 'Isi/ubah kolom "Pesan" pada tabel di bawah. SATU BARIS = SATU NILAI (0 sampai 100). Jangan mengubah kolom "Nilai" dan baris judul tabel. Pesan yang dikosongkan akan memakai pesan default (atau pesan yang sudah ada di editor). Boleh juga menulis rentang di kolom Nilai, mis. "76-80", maka pesan itu berlaku untuk semua nilai 76 sampai 80 (hapus baris-baris nilai 77, 78, 79, 80 di bawahnya agar tidak menimpa). Setelah selesai, simpan file lalu klik "Import dari Word" pada halaman pengaturan ujian.' },
+      { table: { headers: ['Nilai', 'Pesan'], rows, widths: [1300, 13200] } }
+    ];
+    unduhDocx_('Template_Pesan_Nilai_CBT.docx', items);
+    toast('Template pesan nilai (.docx) berhasil diunduh.', 'success');
+  },
+
+  // Baca .docx -> isi editor (BELUM tersimpan sampai guru klik Simpan Ujian).
+  // Format utama: tabel dgn kolom Nilai & Pesan (urutan bebas, nama header dicocokkan).
+  // Cadangan: paragraf biasa "85: pesan" / "76-80 = pesan".
+  async importPesanNilaiDariDocx(ev) {
+    const file = ev.target.files[0];
+    if (!file) return;
+    try { await muatPustaka_('mammoth'); } catch (err) { toast('Pustaka pembaca .docx belum termuat. ' + err.message, 'error'); ev.target.value = ''; return; }
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const hasil = await mammoth.convertToHtml({ arrayBuffer: e.target.result }, { convertImage: mammoth.images.imgElement(() => Promise.resolve({ src: '' })) });
+        const dom = new DOMParser().parseFromString(hasil.value, 'text/html');
+        const teksSel = (td) => {
+          const klon = td.cloneNode(true);
+          klon.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+          const ps = Array.from(klon.querySelectorAll('p'));
+          const t = ps.length ? ps.map(p => p.textContent.trim()).filter(Boolean).join('\n') : klon.textContent.trim();
+          return t.trim();
+        };
+        const entri = []; // {min,max,pesan}
+        const bacaNilai = (str) => {
+          const m = /^\s*(\d{1,3})(?:\s*(?:-|–|—|s\/d|sd|sampai)\s*(\d{1,3}))?\s*$/i.exec(String(str || ''));
+          if (!m) return null;
+          const a = Number(m[1]), b = m[2] != null ? Number(m[2]) : a;
+          return { min: a, max: b };
+        };
+        const peringatan = [];
+        for (const tbl of Array.from(dom.querySelectorAll('table'))) {
+          const trList = Array.from(tbl.querySelectorAll('tr'));
+          if (!trList.length) continue;
+          const header = Array.from(trList[0].querySelectorAll('th,td')).map(td => kunciHeader_(td.textContent));
+          let iNilai = header.indexOf('nilai'), iPesan = header.indexOf('pesan');
+          if (iNilai < 0 || iPesan < 0) { iNilai = 0; iPesan = 1; }
+          trList.slice(1).forEach((tr, k) => {
+            const sel = Array.from(tr.querySelectorAll('th,td'));
+            if (sel.length <= Math.max(iNilai, iPesan)) return;
+            const rentang = bacaNilai(sel[iNilai].textContent);
+            const pesan = teksSel(sel[iPesan]);
+            if (!rentang) { if (pesan || sel[iNilai].textContent.trim()) peringatan.push('Baris ' + (k + 2) + ': nilai "' + sel[iNilai].textContent.trim() + '" tidak dikenali.'); return; }
+            if (rentang.min > rentang.max || rentang.max > 100) { peringatan.push('Baris ' + (k + 2) + ': rentang nilai tidak valid.'); return; }
+            entri.push({ min: rentang.min, max: rentang.max, pesan });
+          });
+        }
+        if (!entri.length) { // cadangan: paragraf biasa
+          dom.querySelectorAll('p').forEach((p, k) => {
+            const m = /^\s*(\d{1,3}(?:\s*(?:-|–|—|s\/d|sd|sampai)\s*\d{1,3})?)\s*[:=\t)]\s*([\s\S]+)$/i.exec(p.textContent);
+            if (!m) return;
+            const rentang = bacaNilai(m[1]);
+            if (!rentang || rentang.min > rentang.max || rentang.max > 100) { peringatan.push('Paragraf ' + (k + 1) + ': rentang nilai tidak valid.'); return; }
+            entri.push({ min: rentang.min, max: rentang.max, pesan: m[2].trim() });
+          });
+        }
+        if (!entri.length) { toast('Tidak ada pesan yang terbaca. Pakai template: tabel dengan kolom "Nilai" dan "Pesan".', 'error'); return; }
+        const dihitung = new Set(); let kosong = 0;
+        entri.forEach(r => {
+          if (!r.pesan) { kosong++; return; }
+          for (let n = r.min; n <= r.max; n++) { Guru.pesanNilaiDraft[n] = r.pesan; dihitung.add(n); }
+        });
+        Guru.renderEditorPesanNilai();
+        toast(`${dihitung.size} nilai terisi dari Word${kosong ? ` (${kosong} baris kosong dilewati)` : ''}. Klik "Simpan Ujian" untuk menyimpan.`, 'success');
+        if (peringatan.length) Dialog.info({
+          judul: 'Impor Selesai, Ada Baris Dilewati', tipe: 'warning', ikon: 'fa-file-circle-exclamation',
+          pesan: 'Data berhasil diimpor, **tetapi** beberapa baris dilewati:',
+          daftar: peringatan.slice(0, 15).concat(peringatan.length > 15 ? ['...dan ' + (peringatan.length - 15) + ' lainnya.'] : [])
+        });
+      } catch (err) {
+        toast('Gagal membaca file .docx: ' + err.message, 'error');
+      } finally {
+        ev.target.value = '';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  },
+
+  async init() {
+    await muatTemaGlobal();
+    Guru.muatDashboard();
+    UI.mulaiAutoRefreshGuru('tab-dashboard');
+  },
+
+  // ---------------- DASHBOARD ----------------
+  // Halaman pertama yang dilihat guru setelah masuk: kartu-kartu ringkasan
+  // (jumlah soal, ujian, siswa, dll), Aksi Cepat, dan daftar Ujian Terbaru.
+  // Menarik ulang Bank Soal/Ujian/Siswa supaya angkanya selalu terbaru --
+  // fungsi-fungsi itu juga tetap merender tab masing-masing di belakang
+  // layar (aman dipanggil walau tab-nya sedang tidak aktif).
+  async muatDashboard() {
+    const namaGuru = (state.user && state.user.nama) || 'Guru';
+    const elNama = document.getElementById('dash-nama'); if (elNama) elNama.textContent = namaGuru;
+    const elAv = document.getElementById('dash-avatar'); if (elAv) elAv.textContent = namaGuru.trim().charAt(0).toUpperCase();
+    await Promise.all([Guru.muatBankSoal(), Guru.muatDaftarUjian(), Guru.muatDaftarSiswa()]);
+    Guru.renderDashboard();
+  },
+
+  renderDashboard() {
+    const cont = document.getElementById('dashboard-cards');
+    if (!cont) return;
+    const soal = (state.guru.bankSoal || []).filter(s => (s.status || 'aktif') !== 'arsip');
+    const ujian = state.guru.ujianList || [];
+    const siswa = state.guru.daftarSiswa || [];
+    const now = new Date();
+    const statusU = u => {
+      if (u.status !== 'aktif') return 'nonaktif';
+      if (!u.mulai || !u.selesai || now < new Date(u.mulai)) return 'terjadwal';
+      return now > new Date(u.selesai) ? 'selesai' : 'berlangsung';
+    };
+    const hit = { berlangsung: 0, terjadwal: 0, selesai: 0, nonaktif: 0 };
+    ujian.forEach(u => hit[statusU(u)]++);
+    const mapel = {};
+    soal.forEach(s => { const k = s.kategori || 'Tanpa mapel'; mapel[k] = (mapel[k] || 0) + 1; });
+    const online = siswa.filter(s => s.online).length;
+    const set = (id, v, html) => { const el = document.getElementById(id); if (el) el[html ? 'innerHTML' : 'textContent'] = v; };
+
+    set('dash-date', now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }));
+    set('dash-mode-chip', modeServerAktif() ? 'Tersambung ke Google Sheets' : 'Mode lokal');
+    set('dash-ringkas', hit.berlangsung > 0
+      ? `${hit.berlangsung} ujian sedang berlangsung dan ${online} siswa sedang login. Pantau jalannya ujian dari menu Pemantauan.`
+      : `Belum ada ujian yang berlangsung saat ini. ${hit.terjadwal} ujian dijadwalkan dan ${siswa.length} siswa terdaftar.`);
+
+    const kartu = [
+      { ico: 'fa-layer-group', label: 'Total bank soal', nilai: soal.length, sub: `di ${Object.keys(mapel).length} mapel`, tab: 'tab-bank-soal', warna: '#6f9f94' },
+      { ico: 'fa-bolt', label: 'Ujian berlangsung', nilai: hit.berlangsung, sub: 'sedang aktif saat ini', tab: 'tab-pemantauan', warna: '#e58a72' },
+      { ico: 'fa-calendar-days', label: 'Total ujian', nilai: ujian.length, sub: `${hit.terjadwal} akan datang`, tab: 'tab-ujian', warna: '#e9b44c' },
+      { ico: 'fa-users', label: 'Siswa terdaftar', nilai: siswa.length, sub: `${online} sedang login`, tab: 'tab-siswa', warna: '#8fa4d8' }
+    ];
+    cont.innerHTML = kartu.map(k => `
+      <div class="dash-card" style="--dash-warna:${k.warna}" onclick="UI.gantiTabGuru('${k.tab}')">
+        <div class="dash-card-ico"><i class="fa-solid ${k.ico}"></i></div>
+        <div class="dash-card-label">${k.label}</div>
+        <div class="dash-card-nilai">${k.nilai}</div>
+        <div class="dash-card-sub">${k.sub}</div>
+      </div>`).join('');
+
+    // Grafik pil: 7 mapel dengan soal terbanyak
+    const top = Object.entries(mapel).sort((a, b) => b[1] - a[1]).slice(0, 7);
+    const warnaPil = ['#e58a72', '#e9b44c', '#8fb3a8', '#8fa4d8', '#c79bc8', '#7fbf9a', '#e8a0b4'];
+    const maks = top.length ? top[0][1] : 1;
+    set('dash-chart-mapel', top.length ? `<div class="pill-chart">` + top.map(([k, n], i) => `
+      <div class="pill-col" title="${escapeHtml_(k)}: ${n} soal">
+        <span class="pill-val">${n}</span>
+        <div class="pill" style="--pc:${warnaPil[i]};height:${Math.max(12, Math.round(n / maks * 78))}%"></div>
+        <span class="pill-lbl">${escapeHtml_(k)}</span>
+      </div>`).join('') + `</div>` : '<p class="kosong-info">Belum ada soal. Tambahkan soal di menu Bank Soal.</p>', true);
+
+    // Donut status ujian
+    const bagian = [['Berlangsung', hit.berlangsung, '#6f9f94'], ['Akan datang', hit.terjadwal, '#e9b44c'], ['Selesai', hit.selesai, '#8fa4d8'], ['Nonaktif', hit.nonaktif, '#e58a72']];
+    let acc = 0;
+    const stop = ujian.length ? bagian.map(([, n, c]) => { const dari = acc; acc += n / ujian.length * 100; return `${c} ${dari}% ${acc}%`; }).join(',') : 'var(--c-line) 0 100%';
+    set('dash-donut', `<div class="donut-wrap">
+      <div class="donut" style="--dg:conic-gradient(${stop})"><div class="donut-mid"><b>${ujian.length}</b><span>Ujian</span></div></div>
+      <div class="legend-list">${bagian.map(([l, n, c]) => `<div class="legend-row"><span class="dot" style="--lc:${c}"></span>${l}<span class="val">${ujian.length ? Math.round(n / ujian.length * 100) : 0}% (${n})</span></div>`).join('')}</div>
+    </div>`, true);
+
+    // Tabel ujian terbaru (5 teratas; pencarian menelusuri semua ujian)
+    const contUjian = document.getElementById('dashboard-ujian-terbaru');
+    if (!contUjian) return;
+    if (ujian.length === 0) {
+      contUjian.innerHTML = '<p class="kosong-info">Belum ada ujian. Klik "Buat Ujian Baru" untuk memulai.</p>';
+      return;
+    }
+    const label = { berlangsung: ['ok', 'Berlangsung'], terjadwal: ['warn', 'Akan datang'], selesai: ['mute', 'Selesai'], nonaktif: ['no', 'Nonaktif'] };
+    contUjian.innerHTML = `<table class="ledger"><thead><tr><th>Judul</th><th>Token</th><th>Jadwal</th><th>Status</th></tr></thead><tbody>` +
+      ujian.slice().reverse().map((u, i) => {
+        const [kls, txt] = label[statusU(u)];
+        return `<tr style="cursor:pointer;${i >= 5 ? 'display:none' : ''}" data-i="${i}" data-cari="${escapeHtml_((u.judul + ' ' + u.token).toLowerCase())}" onclick="UI.gantiTabGuru('tab-ujian')">
+          <td><strong>${escapeHtml_(u.judul)}</strong></td>
+          <td><code>${u.token}</code></td>
+          <td style="font-size:.8rem">${formatTanggal(u.mulai)}<br>s/d ${formatTanggal(u.selesai)}</td>
+          <td><span class="badge ${kls}">${txt}</span></td>
+        </tr>`;
+      }).join('') + `</tbody></table>`;
+  },
+
+  filterDashboardUjian(q) {
+    q = String(q || '').toLowerCase().trim();
+    document.querySelectorAll('#dashboard-ujian-terbaru tr[data-cari]').forEach(tr => {
+      tr.style.display = (q ? tr.dataset.cari.includes(q) : Number(tr.dataset.i) < 5) ? '' : 'none';
+    });
+  },
+
+  // ---------------- BANK SOAL ----------------
+  // Mengambil SEMUA soal milik guru ini dari server sekali (tidak difilter di sisi
+  // server), lalu memfilter & merender di klien lewat renderDaftarSoal() — supaya
+  // ganti-ganti dropdown kategori/sub-kategori terasa instan tanpa round-trip baru,
+  // dan dropdown sub-kategori selalu lengkap (pola sama seperti filter Kelas di tab
+  // Data Siswa).
+  async muatBankSoal() {
+    const [res, resUjian] = await Promise.all([
+      api('getBankSoal', { guruId: state.user.id }),
+      api('getDaftarUjian', { guruId: state.user.id })
+    ]);
+    const cont = document.getElementById('daftar-bank-soal');
+    if (!res.ok) return gagalMuat_(cont, 'Gagal memuat: ' + res.error);
+    state.guru.bankSoal = res.data;
+    if (resUjian.ok) state.guru.ujianList = resUjian.data; // dipakai untuk badge "pernah dipakai" (Riwayat)
+    Guru.renderUlangBankSoal_();
+  },
+
+  // Gambar ulang tampilan Bank Soal dari state lokal TANPA mengunduh ulang dari
+  // server (dipakai setelah hapus/arsip supaya layar langsung berubah).
+  renderUlangBankSoal_() {
+    Guru.perbaruiDaftarSubkategoriSoal();
+    Guru.perbaruiDaftarKategoriSoal();
+    Guru.renderMapelGrid();
+    Guru.renderDaftarSoal();
+    if (state.guru.viewBankSoal === 'arsip') Guru.renderGridArsipKategori();
+    if (state.guru.viewBankSoal === 'arsip-kategori') Guru.renderDaftarArsipKategori();
+  },
+
+  // Terapkan perubahan ke state lokal setelah server mengonfirmasi berhasil.
+  hapusDariStateLokal_(idList) {
+    const set = new Set(idList.map(String));
+    state.guru.bankSoal = (state.guru.bankSoal || []).filter(s => !set.has(String(s.id)));
+  },
+  ubahStatusDiStateLokal_(idList, status) {
+    const set = new Set(idList.map(String));
+    (state.guru.bankSoal || []).forEach(s => { if (set.has(String(s.id))) s.status = status; });
+  },
+
+  // ---------------- BANK SOAL: GRID MAPEL (tampilan kartu per kategori) ----------------
+  renderMapelGrid() {
+    const cont = document.getElementById('grid-mapel-list');
+    if (!cont) return;
+    const semua = state.guru.bankSoal || [];
+    const peta = {};
+    semua.forEach(s => {
+      const k = s.kategori || '(tanpa kategori)';
+      const arsip = (s.status || 'aktif') === 'arsip';
+      peta[k] = peta[k] || { total: 0, arsip: 0 };
+      peta[k].total++;
+      if (arsip) peta[k].arsip++;
+    });
+    // Mapel yang SELURUH soalnya sudah diarsipkan (0 soal aktif) tidak lagi
+    // ditampilkan di grid utama -- tetap bisa ditemukan & dikembalikan lewat
+    // tombol "🗄 Arsip" (lihat Guru.bukaArsipSoal). Begitu 1 soal saja
+    // dikembalikan, mapelnya otomatis muncul lagi di sini.
+    Object.values(bacaSemuaMetaMapel_()).forEach(m => {
+      if (m && m.buatan && !Object.keys(peta).some(k => samaTeks_(k, m.buatan))) peta[m.buatan] = { total: 0, arsip: 0, kosong: true };
+    });
+    const unik = Object.keys(peta)
+      .filter(k => peta[k].kosong || (peta[k].total - peta[k].arsip) > 0)
+      .sort((a, b) => labelKategori(a).localeCompare(labelKategori(b), 'id'));
+    const jumlahArsip = semua.filter(s => (s.status || 'aktif') === 'arsip').length;
+    const tombolArsip = document.getElementById('btn-lihat-arsip');
+    if (tombolArsip) tombolArsip.textContent = `🗄 Arsip${jumlahArsip ? ' (' + jumlahArsip + ')' : ''}`;
+    const kartu = unik.map(k => {
+      const meta = ambilMetaMapel_(k);
+      const jumlahAktif = peta[k].total - peta[k].arsip;
+      return `
+      <div class="mapel-card" style="--mapel-warna:${meta.warna}">
+        <button type="button" class="mapel-card-hapus" title="Arsipkan seluruh soal Mapel ini" onclick="event.stopPropagation();Guru.hapusKategoriSoal('${escapeHtml_(k).replace(/'/g, "\\'")}')">🗑</button>
+        <div class="mapel-card-ico">💡</div>
+        <div class="mapel-card-badges">
+          <span class="badge token">TOKEN: ${meta.token}</span>
+          <span class="badge umum">UMUM</span>
+        </div>
+        <div class="mapel-card-judul">${escapeHtml_(labelKategori(k))}</div>
+        <div class="mapel-card-jumlah">Total Soal: <strong>${jumlahAktif}</strong>${peta[k].arsip ? ` <span class="subtitle" style="display:inline">(+${peta[k].arsip} arsip)</span>` : ''}</div>
+        <div class="mapel-card-aksi">
+          <button type="button" class="accent small" style="flex:1" onclick="Guru.bukaKelolaSoal('${escapeHtml_(k).replace(/'/g, "\\'")}')">Kelola Soal</button>
+          <button type="button" class="secondary small icon" title="Pratinjau seluruh soal Mapel ini (tampilan sama persis dengan siswa)" onclick="event.stopPropagation();Guru.pratinjauKategoriSoal('${escapeHtml_(k).replace(/'/g, "\\'")}')">👁</button>
+        </div>
+      </div>`;
+    }).join('');
+    cont.innerHTML = kartu + `
+      <div class="mapel-card mapel-card-add" onclick="Guru.tambahMapelBaru()">
+        <div class="mapel-card-add-ico">+</div>
+        <div class="mapel-card-add-label">Tambah Mapel Baru</div>
+      </div>`;
+  },
+
+  async tambahMapelBaru() {
+    const nama = await Dialog.input({
+      judul: 'Tambah Mapel Baru', ikon: 'fa-folder-plus',
+      pesan: 'Buat mapel / kategori baru untuk mengelompokkan soal.',
+      label: 'Nama Mapel / Kategori', placeholder: 'Contoh: Matematika', maksimal: 60, wajib: true, pesanWajib: 'Nama mapel tidak boleh kosong.',
+      chips: ['Matematika', 'Simulasi', 'Tryout'], teksYa: 'Buat Mapel'
+    });
+    if (!nama || !nama.trim()) return;
+    const bersih = nama.trim();
+    // Pakai ejaan yang sudah ada kalau mapel ini sebenarnya sudah ada (beda huruf besar/kecil saja).
+    const ada = (state.guru.bankSoal || []).map(x => x.kategori).find(k => samaTeks_(k, bersih));
+    const namaFinal = ada || bersih;
+    ambilMetaMapel_(namaFinal, true); // siapkan token/warna & tandai sbg mapel buatan guru
+    Guru.bukaKelolaSoal(namaFinal);
+  },
+
+  // ---------------- BANK SOAL: KELOLA SOAL (1 mapel/kategori, dgn tab tipe soal) ----------------
+  bukaKelolaSoal(kategori) {
+    state.guru.viewBankSoal = 'kelola';
+    state.guru.kategoriKelola = kategori;
+    state.guru.tipeTabKelola = 'pilihan_ganda';
+    document.getElementById('grid-mapel-view').classList.add('hidden');
+    document.getElementById('arsip-soal-view').classList.add('hidden');
+    document.getElementById('arsip-kategori-view').classList.add('hidden');
+    document.getElementById('kelola-soal-view').classList.remove('hidden');
+    document.getElementById('kelola-soal-judul').textContent = labelKategori(kategori);
+    const meta = ambilMetaMapel_(kategori);
+    document.getElementById('kelola-soal-token').textContent = 'TOKEN: ' + meta.token;
+    const filterSel = document.getElementById('filter-kategori-soal');
+    if (filterSel) filterSel.value = kategori;
+    UI.renderTipeTabs();
+    Guru.renderDaftarSoal();
+  },
+
+  kembaliKeGridMapel() {
+    state.guru.viewBankSoal = 'grid';
+    document.getElementById('kelola-soal-view').classList.add('hidden');
+    document.getElementById('arsip-soal-view').classList.add('hidden');
+    document.getElementById('arsip-kategori-view').classList.add('hidden');
+    document.getElementById('grid-mapel-view').classList.remove('hidden');
+    Guru.renderMapelGrid();
+  },
+
+  // ---------------- BANK SOAL: ARSIP ----------------
+  // LEVEL A (arsip-soal-view): grid kartu per KATEGORI yang punya soal arsip -- persis
+  // seperti grid Mapel di Bank Soal, tapi khusus kategori yang (sebagian/seluruh) soalnya
+  // sudah diarsipkan (mis. lewat "Hapus Kategori" di Bank Soal, lihat hapusKategoriSoal).
+  // LEVEL B (arsip-kategori-view, lihat Guru.bukaArsipKategori): daftar SOAL di 1 kategori
+  // arsip tsb, dengan aksi per-soal (kembalikan/hapus permanen) MAUPUN aksi borongan utk
+  // seluruh kategori sekaligus (Guru.kembalikanKategoriArsip / hapusKategoriArsipPermanen).
+  bukaArsipSoal() {
+    state.guru.viewBankSoal = 'arsip';
+    document.getElementById('grid-mapel-view').classList.add('hidden');
+    document.getElementById('kelola-soal-view').classList.add('hidden');
+    document.getElementById('arsip-kategori-view').classList.add('hidden');
+    document.getElementById('arsip-soal-view').classList.remove('hidden');
+    Guru.renderGridArsipKategori();
+  },
+
+  renderGridArsipKategori() {
+    const cont = document.getElementById('grid-arsip-kategori-list');
+    if (!cont) return;
+    const arsip = (state.guru.bankSoal || []).filter(s => (s.status || 'aktif') === 'arsip');
+    const peta = {};
+    arsip.forEach(s => { const k = s.kategori || '(tanpa kategori)'; peta[k] = (peta[k] || 0) + 1; });
+    const unik = Object.keys(peta).sort((a, b) => labelKategori(a).localeCompare(labelKategori(b), 'id'));
+    const tombolArsip = document.getElementById('btn-lihat-arsip');
+    if (tombolArsip) tombolArsip.textContent = `🗄 Arsip${arsip.length ? ' (' + arsip.length + ')' : ''}`;
+    if (unik.length === 0) { cont.innerHTML = '<p class="subtitle">Arsip masih kosong. Kategori/soal yang dihapus dari Bank Soal akan muncul di sini sebagai kartu tersendiri.</p>'; return; }
+    cont.innerHTML = unik.map(k => {
+      const meta = ambilMetaMapel_(k);
+      const kAman = escapeHtml_(k).replace(/'/g, "\\'");
+      return `
+      <div class="mapel-card" style="--mapel-warna:${meta.warna};opacity:.85" onclick="Guru.bukaArsipKategori('${kAman}')">
+        <div class="mapel-card-ico">🗄</div>
+        <div class="mapel-card-badges">
+          <span class="badge no">Diarsipkan</span>
+        </div>
+        <div class="mapel-card-judul">${escapeHtml_(labelKategori(k))}</div>
+        <div class="mapel-card-jumlah">Soal di arsip: <strong>${peta[k]}</strong></div>
+        <div class="mapel-card-aksi">
+          <button type="button" class="accent small" style="flex:1" onclick="event.stopPropagation();Guru.bukaArsipKategori('${kAman}')">Lihat Soal</button>
+          <button type="button" class="secondary small icon" title="Kembalikan semua soal kategori ini ke Bank Soal" onclick="event.stopPropagation();Guru.kembalikanKategoriArsip('${kAman}')">↩</button>
+          <button type="button" class="secondary small icon" title="Hapus permanen semua soal kategori ini" onclick="event.stopPropagation();Guru.hapusKategoriArsipPermanen('${kAman}')">🗑</button>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  // LEVEL B: daftar soal di 1 kategori arsip. Dipanggil dgn parameter kategori saat masuk
+  // dari kartu Arsip, ATAU tanpa parameter oleh tombol borongan di header saat sudah di
+  // dalam halaman ini (memakai state.guru.kategoriArsipKelola yg tersimpan).
+  bukaArsipKategori(kategori) {
+    state.guru.viewBankSoal = 'arsip-kategori';
+    state.guru.kategoriArsipKelola = kategori;
+    document.getElementById('grid-mapel-view').classList.add('hidden');
+    document.getElementById('kelola-soal-view').classList.add('hidden');
+    document.getElementById('arsip-soal-view').classList.add('hidden');
+    document.getElementById('arsip-kategori-view').classList.remove('hidden');
+    document.getElementById('arsip-kategori-judul').textContent = labelKategori(kategori);
+    Guru.renderDaftarArsipKategori();
+  },
+
+  kembaliKeArsipGrid() {
+    document.getElementById('arsip-kategori-view').classList.add('hidden');
+    Guru.bukaArsipSoal();
+  },
+
+  renderDaftarArsipKategori() {
+    const cont = document.getElementById('daftar-arsip-kategori-soal');
+    if (!cont) return;
+    const kategori = state.guru.kategoriArsipKelola;
+    const data = (state.guru.bankSoal || []).filter(s => (s.status || 'aktif') === 'arsip' && samaTeks_(s.kategori, kategori));
+    // Soal terakhir di kategori ini baru saja dikembalikan/dihapus dari tombol per-soal
+    // di bawah -> kategorinya otomatis tidak ada lagi di Arsip, kembali ke grid Arsip.
+    if (data.length === 0) { Guru.kembaliKeArsipGrid(); return; }
+    ['btn-arsip-kategori-kembalikan', 'btn-arsip-kategori-hapus'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) btn.onclick = () => (id === 'btn-arsip-kategori-kembalikan' ? Guru.kembalikanKategoriArsip(kategori) : Guru.hapusKategoriArsipPermanen(kategori));
+    });
+    cont.innerHTML = data.map((s, i) => `
+      <div class="soal-item">
+        <div class="soal-item-nomor">${i + 1}</div>
+        <div class="soal-item-body">
+          <div class="meta">${labelKategori(s.kategori)}${s.subkategori ? ' • ' + escapeHtml_(s.subkategori) : ''}${s.topik ? ' • ' + escapeHtml_(s.topik) : ''} • ${labelTipe(s.tipe)} • Bobot ${s.bobot} • ${labelKesulitan(s.tingkat_kesulitan)} • <span class="badge no">Arsip</span></div>
+          <div>${kontenSoalHtml(s.pertanyaan)}</div>
+          ${s.gambar ? tagGambarAman_(s.gambar, '', 'Gambar soal') : ''}
+          <div class="aksi">
+            <button class="secondary small" onclick="Guru.kembalikanSoal('${s.id}')">↩ Kembalikan ke Bank Soal</button>
+            <button class="danger small" onclick="Guru.hapusSoalPermanen('${s.id}')">🗑 Hapus Permanen</button>
+          </div>
+        </div>
+      </div>`).join('');
+    renderMatika(cont);
+  },
+
+  // Aksi borongan 1 kategori penuh -- dipanggil baik dari kartu grid Arsip maupun dari
+  // tombol header saat sudah membuka Level B (lihat renderDaftarArsipKategori). Kalau
+  // dipanggil tanpa argumen, ambil dari state.guru.kategoriArsipKelola (lagi buka Level B).
+  async kembalikanKategoriArsip(kategori) {
+    kategori = kategori || state.guru.kategoriArsipKelola;
+    const cocok = (state.guru.bankSoal || []).filter(s => (s.status || 'aktif') === 'arsip' && samaTeks_(s.kategori, kategori));
+    if (cocok.length === 0) return;
+    if (!(await Dialog.konfirmasi({
+      judul: 'Kembalikan Semua Soal Arsip?', tipe: 'info', ikon: 'fa-box-open',
+      pesan: `**${cocok.length} soal** arsip di mapel **${labelKategori(kategori)}** akan dikembalikan ke Bank Soal dan bisa dipakai lagi di ujian.`,
+      teksYa: 'Ya, Kembalikan'
+    }))) return;
+    toast(`Mengembalikan ${cocok.length} soal...`);
+    const idList = cocok.map(s => s.id);
+    const res = await api('ubahStatusSoalBanyak', { ids: JSON.stringify(idList), status: 'aktif' });
+    const gagal = res.ok ? 0 : cocok.length;
+    if (res.ok) Guru.ubahStatusDiStateLokal_(idList, 'aktif');
+    toast(gagal ? `Gagal mengembalikan: ${res.error}` : `${cocok.length} soal di kategori "${labelKategori(kategori)}" dikembalikan ke Bank Soal.`, gagal ? 'error' : 'success');
+    Guru.renderUlangBankSoal_();
+    if (document.getElementById('arsip-kategori-view').classList.contains('hidden')) Guru.renderGridArsipKategori();
+    else Guru.renderDaftarArsipKategori();
+  },
+
+  async hapusKategoriArsipPermanen(kategori) {
+    kategori = kategori || state.guru.kategoriArsipKelola;
+    const cocok = (state.guru.bankSoal || []).filter(s => (s.status || 'aktif') === 'arsip' && samaTeks_(s.kategori, kategori));
+    if (cocok.length === 0) return;
+    if (!(await Dialog.konfirmasi({
+      judul: 'Hapus Permanen Semua Soal Arsip?', tipe: 'danger', ikon: 'fa-trash-can',
+      pesan: `**${cocok.length} soal** arsip di mapel **${labelKategori(kategori)}** akan dihapus selamanya.\n\nTindakan ini **tidak bisa dibatalkan**.`,
+      ketik: 'HAPUS', teksYa: 'Hapus Permanen'
+    }))) return;
+    toast(`Menghapus ${cocok.length} soal...`);
+    const idList = cocok.map(s => s.id);
+    const res = await api('hapusSoalBanyak', { ids: JSON.stringify(idList) });
+    const gagal = res.ok ? 0 : cocok.length;
+    if (res.ok) Guru.hapusDariStateLokal_(idList);
+    toast(gagal ? `Gagal menghapus: ${res.error}` : `Kategori "${labelKategori(kategori)}" dihapus permanen dari Arsip (${cocok.length} soal).`, gagal ? 'error' : 'success');
+    Guru.renderUlangBankSoal_();
+    if (document.getElementById('arsip-kategori-view').classList.contains('hidden')) Guru.renderGridArsipKategori();
+    else Guru.renderDaftarArsipKategori();
+  },
+
+  gantiTipeTabKelola(tipe) {
+    state.guru.tipeTabKelola = tipe;
+    UI.renderTipeTabs();
+    Guru.renderDaftarSoal();
+  },
+
+  perbaruiDaftarSubkategoriSoal() {
+    const unik = [...new Set((state.guru.bankSoal || []).map(s => s.subkategori).filter(Boolean))].sort();
+    const datalist = document.getElementById('daftar-subkategori-soal');
+    if (datalist) datalist.innerHTML = unik.map(k => `<option value="${escapeHtml_(k)}">`).join('');
+    const select = document.getElementById('filter-subkategori-soal');
+    if (select) {
+      const nilaiSaatIni = select.value;
+      select.innerHTML = '<option value="">Semua sub-kategori</option>' + unik.map(k => `<option value="${escapeHtml_(k)}">${escapeHtml_(k)}</option>`).join('');
+      select.value = unik.includes(nilaiSaatIni) ? nilaiSaatIni : '';
+    }
+  },
+
+  // Kategori/nama soal kini bebas diketik (bukan daftar tetap Kuis/Ulangan
+  // Harian/UTS/UAS saja) — daftar pilihan di filter Bank Soal, datalist form
+  // Tambah Soal, dan dropdown Buat Ujian semuanya DITURUNKAN otomatis dari
+  // kategori yang sedang dipakai soal AKTIF (belum diarsipkan). Kategori baru
+  // otomatis muncul di sini begitu ada 1 soal aktif memakainya; kategori yang
+  // semua soalnya diarsipkan otomatis hilang dari daftar (lihat hapusKategoriSoal).
+  perbaruiDaftarKategoriSoal() {
+    const aktif = (state.guru.bankSoal || []).filter(s => (s.status || 'aktif') !== 'arsip');
+    const unik = [...new Set(aktif.map(s => s.kategori).filter(Boolean))].sort((a, b) => labelKategori(a).localeCompare(labelKategori(b), 'id'));
+
+    const datalist = document.getElementById('daftar-kategori-soal');
+    if (datalist) datalist.innerHTML = unik.map(k => `<option value="${escapeHtml_(k)}">`).join('');
+
+    const filterSel = document.getElementById('filter-kategori-soal');
+    if (filterSel) {
+      const nilaiSaatIni = filterSel.value;
+      filterSel.innerHTML = '<option value="">Semua kategori</option>' + unik.map(k => `<option value="${escapeHtml_(k)}">${escapeHtml_(labelKategori(k))}</option>`).join('');
+      filterSel.value = unik.includes(nilaiSaatIni) ? nilaiSaatIni : '';
+    }
+
+    const ujianSel = document.getElementById('ujian-kategori');
+    if (ujianSel) {
+      const nilaiSaatIni = ujianSel.value;
+      ujianSel.innerHTML = unik.length
+        ? unik.map(k => `<option value="${escapeHtml_(k)}">${escapeHtml_(labelKategori(k))}</option>`).join('')
+        : '<option value="">(Belum ada soal aktif)</option>';
+      if (unik.includes(nilaiSaatIni)) ujianSel.value = nilaiSaatIni;
+    }
+  },
+
+  renderDaftarSoal() {
+    const cont = document.getElementById('daftar-bank-soal');
+    // Di halaman "Kelola Soal" (Level B), kategori difilter berdasarkan state.guru.kategoriKelola
+    // langsung (bukan lewat <select> tersembunyi) supaya tetap benar walau mapel baru belum
+    // punya opsi di dropdown (mis. Mapel baru yang masih 0 soal) -- lihat Guru.bukaKelolaSoal.
+    const filterKategori = state.guru.viewBankSoal === 'kelola'
+      ? state.guru.kategoriKelola
+      : (document.getElementById('filter-kategori-soal')?.value || '');
+    const filterSubkategori = document.getElementById('filter-subkategori-soal')?.value || '';
+    const filterStatus = document.getElementById('filter-status-soal')?.value || 'aktif';
+    const hanyaRiwayat = document.getElementById('filter-riwayat-soal')?.checked || false;
+    const hanyaBelumKunci = document.getElementById('filter-belum-kunci-soal')?.checked || false;
+    const semua = state.guru.bankSoal || [];
+
+    // id soal -> daftar judul ujian yang memakainya (dipakai untuk badge & filter Riwayat)
+    const dipakaiDi = {};
+    (state.guru.ujianList || []).forEach(u => {
+      String(u.soal_ids || '').split(',').filter(Boolean).forEach(id => {
+        (dipakaiDi[id] = dipakaiDi[id] || []).push(u.judul);
+      });
+    });
+
+    const tipeTab = state.guru.viewBankSoal === 'kelola' ? state.guru.tipeTabKelola : '';
+
+    let data = semua;
+    if (filterStatus !== 'semua') data = data.filter(s => (s.status || 'aktif') === filterStatus);
+    if (filterKategori) data = data.filter(s => samaTeks_(s.kategori, filterKategori));
+    if (filterSubkategori) data = data.filter(s => samaTeks_(s.subkategori, filterSubkategori));
+    if (hanyaRiwayat) data = data.filter(s => dipakaiDi[s.id]);
+    if (tipeTab) data = data.filter(s => (s.tipe || 'pilihan_ganda') === tipeTab);
+
+    // Ringkasan kunci dihitung SEBELUM filter "belum ada kunci" supaya angkanya tetap utuh.
+    const jumlahBelumKunci = data.filter(s => { const st = statusKunciSoal_(s); return !st.ada && !st.manual; }).length;
+    const jumlahTampilSemua = data.length;
+    if (hanyaBelumKunci) data = data.filter(s => { const st = statusKunciSoal_(s); return !st.ada && !st.manual; });
+
+    if (semua.length === 0) { cont.innerHTML = '<p class="subtitle">Belum ada soal.</p>'; return; }
+    if (hanyaBelumKunci && data.length === 0) { cont.innerHTML = '<div class="kunci-ringkasan ok">✔ Semua soal di tampilan ini sudah punya kunci jawaban.</div>'; return; }
+    if (data.length === 0) { cont.innerHTML = '<p class="subtitle">Tidak ada soal yang cocok dengan filter/tab ini. Klik "Tambah Soal Manual" untuk membuat soal baru di tab ini.</p>'; return; }
+    const ringkasanKunci = jumlahBelumKunci > 0
+      ? `<div class="kunci-ringkasan warn">⚠ <strong>${jumlahBelumKunci}</strong> dari ${jumlahTampilSemua} soal <strong>belum ada kunci jawaban</strong> (ditandai garis merah). Centang "Belum ada kunci saja" untuk menyaringnya, lalu klik <em>Ubah</em> untuk memilih kunci.</div>`
+      : (jumlahTampilSemua > 0 ? `<div class="kunci-ringkasan ok">✔ Semua ${jumlahTampilSemua} soal sudah punya kunci jawaban.</div>` : '');
+    cont.innerHTML = ringkasanKunci + data.map((s, i) => {
+      const arsip = (s.status || 'aktif') === 'arsip';
+      const dipakai = dipakaiDi[s.id];
+      const stKunci = statusKunciSoal_(s);
+      const badgeKunci = stKunci.ada
+        ? `<span class="badge ok" title="Kunci jawaban sudah ditetapkan">✔ Kunci: ${escapeHtml_(stKunci.label)}</span>`
+        : (stKunci.manual ? `<span class="badge warn" title="Essay tanpa kata kunci, dikoreksi manual">✎ Koreksi manual</span>` : `<span class="badge no" title="Kunci jawaban belum ditetapkan">⚠ Belum ada kunci</span>`);
+      return `
+      <div class="soal-item${(!stKunci.ada && !stKunci.manual) ? ' soal-tanpa-kunci' : ''}">
+        <div class="soal-item-nomor">${i + 1}</div>
+        <div class="soal-item-body">
+          <div class="meta">${labelKategori(s.kategori)}${s.subkategori ? ' • ' + escapeHtml_(s.subkategori) : ''}${s.topik ? ' • ' + escapeHtml_(s.topik) : ''} • ${labelTipe(s.tipe)} • Bobot ${s.bobot} • ${labelKesulitan(s.tingkat_kesulitan)} • ${badgeKunci}${arsip ? ' • <span class="badge no">Arsip</span>' : ''}${dipakai ? ` • <span class="badge warn" title="${escapeHtml_(dipakai.join(', '))}">🕘 Pernah dipakai (${dipakai.length}×)</span>` : ''}</div>
+          <div>${kontenSoalHtml(s.pertanyaan)}</div>
+          ${s.gambar ? tagGambarAman_(s.gambar, '', 'Gambar soal') : ''}
+          ${s.audio ? `<audio controls src="${escapeHtml_(s.audio)}" style="margin-top:.5rem;max-width:320px"></audio>` : ''}
+          ${s.video ? `<video controls src="${escapeHtml_(s.video)}" style="margin-top:.5rem;max-width:320px;display:block"></video>` : ''}
+          <div class="aksi">
+            <button class="secondary small" onclick='Guru.pratinjauSatuSoal("${s.id}")'>👁 Pratinjau</button>
+            <button class="secondary small" onclick='Guru.bukaEditSoal("${s.id}")'>✏ Ubah</button>
+            ${arsip
+            ? `<button class="secondary small" onclick="Guru.kembalikanSoal('${s.id}')">↩ Kembalikan ke Bank Soal</button>`
+            : `<button class="secondary small" onclick="Guru.arsipkanSoal('${s.id}')">🗄 Arsipkan</button>`}
+            <button class="danger small" onclick="Guru.hapusSoal('${s.id}')">🗑 Hapus</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    renderMatika(cont);
+  },
+
+  // ---------------- PRATINJAU SOAL (tampilan sama persis dengan siswa) ----------------
+  // Memakai renderKontenSoal() yang sama persis dipakai ExamEngine.renderSoal()
+  // di layar ujian siswa (lihat komentar di definisi fungsinya) -- bedanya di
+  // sini interaktif:false (opsi/kotak jawaban tidak bisa diklik/diisi, murni
+  // untuk dilihat guru sebelum dipakai di ujian sungguhan).
+  htmlPratinjauSatuSoal(soal, nomor, total) {
+    // Baris Bank Soal menyimpan opsi sebagai teks `opsi_json`, BUKAN `opsi` --
+    // tanpa soalDenganOpsi_ pilihan jawaban tidak ikut tampil di pratinjau.
+    const s = soalDenganOpsi_(soal);
+    const st = statusKunciSoal_(soal);
+    let infoKunci;
+    if (st.ada) infoKunci = `<div class="pratinjau-kunci ok">✔ Kunci jawaban sudah ditetapkan: <strong>${escapeHtml_(st.label)}</strong></div>`;
+    else if (st.manual) infoKunci = `<div class="pratinjau-kunci manual">✎ Soal Essay tanpa kata kunci — dikoreksi manual.</div>`;
+    else infoKunci = `<div class="pratinjau-kunci no">⚠ Kunci jawaban BELUM ditetapkan — klik Ubah pada soal ini untuk memilihnya.</div>`;
+    return `<div class="question-card" style="margin-bottom:0">${renderKontenSoal(s, { nomor, total, interaktif: false, tandaiKunci: st.indeks })}${infoKunci}</div>`;
+  },
+
+  bukaModalPratinjau(judul, subjudul, bodyHtml) {
+    document.getElementById('pratinjau-soal-title').textContent = judul;
+    document.getElementById('pratinjau-soal-subtitle').textContent = subjudul;
+    const body = document.getElementById('pratinjau-soal-body');
+    body.innerHTML = bodyHtml;
+    document.getElementById('modal-pratinjau-soal').classList.remove('hidden');
+    renderMatika(body);
+  },
+
+  pratinjauSatuSoal(id) {
+    const soal = (state.guru.bankSoal || []).find(s => s.id === id);
+    if (!soal) return;
+    Guru.bukaModalPratinjau(
+      'Pratinjau Soal',
+      'Tampilan di bawah ini sama persis dengan yang dilihat siswa saat mengerjakan ujian — hanya untuk dilihat, tidak bisa diisi/disimpan.',
+      Guru.htmlPratinjauSatuSoal(soal, 1, 1)
+    );
+  },
+
+  pratinjauKategoriSoal(kategori) {
+    const daftar = (state.guru.bankSoal || []).filter(s => samaTeks_(s.kategori, kategori) && (s.status || 'aktif') === 'aktif');
+    if (daftar.length === 0) { toast('Belum ada soal aktif di Mapel ini untuk dipratinjau.', 'error'); return; }
+    Guru.bukaModalPratinjau(
+      `Pratinjau Seluruh Soal — ${labelKategori(kategori)}`,
+      `${daftar.length} soal aktif, ditampilkan berurutan sama persis dengan yang dilihat siswa satu per satu saat ujian — hanya untuk dilihat, tidak bisa diisi/disimpan. Soal yang diarsipkan tidak disertakan.`,
+      daftar.map((s, i) => Guru.htmlPratinjauSatuSoal(s, i + 1, daftar.length))
+        .join('<hr style="border:none;border-top:1px solid var(--c-line);margin:1.4rem 0">')
+    );
+  },
+
+  // Dipakai tombol "👁 Pratinjau Semua Soal" di header halaman Kelola Soal --
+  // mempratinjau Mapel yang sedang dibuka (state.guru.kategoriKelola).
+  pratinjauKategoriAktif() {
+    Guru.pratinjauKategoriSoal(state.guru.kategoriKelola);
+  },
+
+  async arsipkanSoal(id) {
+    const res = await api('simpanSoal', { soal: JSON.stringify({ id, status: 'arsip' }) });
+    if (res.ok) { Guru.ubahStatusDiStateLokal_([id], 'arsip'); Guru.renderUlangBankSoal_(); toast('Soal dipindahkan ke Arsip.', 'success'); }
+    else toast('Gagal mengarsipkan soal: ' + res.error, 'error');
+  },
+
+  async kembalikanSoal(id) {
+    const res = await api('simpanSoal', { soal: JSON.stringify({ id, status: 'aktif' }) });
+    if (res.ok) { Guru.ubahStatusDiStateLokal_([id], 'aktif'); Guru.renderUlangBankSoal_(); toast('Soal dikembalikan ke Bank Soal.', 'success'); }
+    else toast('Gagal mengembalikan soal: ' + res.error, 'error');
+  },
+
+  bukaModalKelolaKategori() {
+    Guru.renderKelolaKategori();
+    document.getElementById('modal-kelola-kategori').classList.remove('hidden');
+  },
+
+  renderKelolaKategori() {
+    const cont = document.getElementById('daftar-kelola-kategori');
+    const aktif = (state.guru.bankSoal || []).filter(s => (s.status || 'aktif') !== 'arsip');
+    const peta = {};
+    aktif.forEach(s => { const k = s.kategori || '(tanpa kategori)'; peta[k] = (peta[k] || 0) + 1; });
+    const unik = Object.keys(peta).sort((a, b) => labelKategori(a).localeCompare(labelKategori(b), 'id'));
+    cont.innerHTML = unik.length
+      ? unik.map(k => `
+        <div class="row" style="align-items:center;justify-content:space-between;margin-bottom:.5rem">
+          <span><strong>${escapeHtml_(labelKategori(k))}</strong> <span class="subtitle" style="display:inline">(${peta[k]} soal aktif)</span></span>
+          <button class="danger small" data-kategori="${escapeHtml_(k).replace(/"/g, '&quot;')}" onclick="Guru.hapusKategoriSoal(this.dataset.kategori)">🗑 Hapus</button>
+        </div>`).join('')
+      : '<p class="subtitle">Belum ada kategori aktif. Tambahkan lewat form di bawah, atau langsung ketik nama baru saat menambah soal.</p>';
+  },
+
+  tambahKategoriBaruDanTambahSoal() {
+    const nama = document.getElementById('kelola-kategori-baru').value.trim();
+    if (!nama) { toast('Ketik dulu nama kategori/soal baru, mis. Tryout.', 'error'); return; }
+    document.getElementById('kelola-kategori-baru').value = '';
+    UI.tutupModal('modal-kelola-kategori');
+    UI.bukaModalSoal();
+    document.getElementById('soal-kategori').value = nama;
+  },
+
+  // "Menghapus" kategori TIDAK menghapus soal secara permanen — semua soal
+  // aktif di kategori itu dipindahkan ke Arsip (bisa dikembalikan kapan saja
+  // lewat filter status "Arsip"), lalu kategorinya otomatis hilang dari
+  // daftar aktif karena tidak ada lagi soal aktif yang memakainya.
+  async hapusKategoriSoal(kategori) {
+    if (!(state.guru.bankSoal || []).some(s => samaTeks_(s.kategori, kategori))) {
+      // Mapel kosong buatan sendiri: cukup dilepas dari daftar kartu.
+      hapusMapelBuatan_(kategori); Guru.renderMapelGrid(); Guru.renderKelolaKategori(); return;
+    }
+    const cocok = (state.guru.bankSoal || []).filter(s => (s.status || 'aktif') !== 'arsip' && samaTeks_(s.kategori, kategori));
+    if (cocok.length === 0) { toast('Kategori ini sudah tidak memiliki soal aktif.', 'error'); Guru.renderKelolaKategori(); return; }
+    if (!(await Dialog.konfirmasi({
+      judul: 'Hapus Kategori?', tipe: 'warning', ikon: 'fa-box-archive',
+      pesan: `Kategori **${labelKategori(kategori)}** akan dihapus. **${cocok.length} soal** di dalamnya dipindahkan ke **Arsip** (tidak dihapus permanen).\n\nSoal masih bisa diedit dan dikembalikan lewat filter status "Arsip" di Bank Soal.`,
+      teksYa: 'Ya, Hapus Kategori'
+    }))) return;
+    toast(`Memindahkan ${cocok.length} soal ke Arsip...`);
+    const idList = cocok.map(s => s.id);
+    const res = await api('ubahStatusSoalBanyak', { ids: JSON.stringify(idList), status: 'arsip' });
+    const gagal = res.ok ? 0 : cocok.length;
+    if (res.ok) Guru.ubahStatusDiStateLokal_(idList, 'arsip');
+    toast(gagal
+      ? `Kategori "${labelKategori(kategori)}": gagal diarsipkan (${res.error}).`
+      : `Kategori "${labelKategori(kategori)}" dihapus — ${cocok.length} soal dipindahkan ke Arsip.`, gagal ? 'error' : 'success');
+    Guru.renderUlangBankSoal_();
+    Guru.renderKelolaKategori();
+  },
+
+  bukaEditSoal(id) {
+    const soal = state.guru.bankSoal.find(s => s.id === id);
+    if (soal) UI.bukaModalSoal(soal);
+  },
+
+  // jenis: 'gambar' | 'audio' | 'video' — dipakai ketiga kotak upload di bagian
+  // "Media Pendukung Soal" pada form Tambah/Ubah Soal. Memakai action 'uploadGambar'
+  // yang sama (generik, cukup dilihat dari mimeType) supaya tidak perlu endpoint baru.
+  async uploadMediaSoal(ev, jenis) {
+    const file = ev.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result.split(',')[1];
+      toast('Mengunggah ' + jenis + '...');
+      const res = await api('uploadGambar', { base64, filename: file.name, mimeType: file.type });
+      if (res.ok) {
+        document.getElementById(`soal-${jenis}-url`).value = res.url;
+        const prev = document.getElementById(`soal-${jenis}-preview`);
+        if (jenis === 'gambar') pasangSrcGambarAman_(prev, res.url); else prev.src = res.url;
+        prev.classList.remove('hidden');
+        toast((jenis[0].toUpperCase() + jenis.slice(1)) + ' berhasil diunggah.', 'success');
+      } else {
+        toast('Gagal mengunggah ' + jenis + ': ' + res.error, 'error');
+      }
+    };
+    reader.readAsDataURL(file);
+  },
+  async uploadGambarSoal(ev) { return Guru.uploadMediaSoal(ev, 'gambar'); },
+
+  async uploadGambarOpsi(ev) {
+    const row = ev.target.closest('.opsi-row');
+    UI.uploadGambarOpsiDariEvent(ev, (url) => {
+      row.querySelector('.opsi-gambar-url').value = url;
+      const prev = row.querySelector('.opsi-gambar-preview');
+      pasangSrcGambarAman_(prev, url); prev.classList.remove('hidden');
+      row.querySelector('.opsi-hapus-gambar').classList.remove('hidden');
+      toast('Gambar opsi berhasil diunggah.', 'success');
+    });
+  },
+
+  async simpanSoal() {
+    return jalankanDenganTombolSibuk('btn-simpan-soal', 'Menyimpan...', async () => {
+      const tipe = document.getElementById('soal-tipe').value;
+      const soal = {
+        id: document.getElementById('soal-id').value || undefined,
+        guru_id: state.user.id,
+        kategori: document.getElementById('soal-kategori').value,
+        subkategori: document.getElementById('soal-subkategori').value.trim(),
+        topik: document.getElementById('soal-topik').value.trim(),
+        tipe,
+        pertanyaan: sanitasiHtmlKaya_(rtHtmlSerial_(document.getElementById('soal-pertanyaan'))),
+        gambar: document.getElementById('soal-gambar-url').value,
+        audio: document.getElementById('soal-audio-url').value,
+        video: document.getElementById('soal-video-url').value,
+        bobot: Number(document.getElementById('soal-bobot').value) || 10,
+        tingkat_kesulitan: document.getElementById('soal-tingkat-kesulitan').value,
+        pembahasan: (() => { const v = sanitasiHtmlKaya_(rtHtmlSerial_(document.getElementById('soal-pembahasan'))); return richTeksKosong_(v) ? '' : v; })()
+      };
+      if (richTeksKosong_(soal.pertanyaan)) { toast('Pertanyaan tidak boleh kosong.', 'error'); return; }
+
+      if (tipe === 'pilihan_ganda' || tipe === 'checkbox' || tipe === 'benar_salah') {
+        const baris = document.querySelectorAll('#soal-form-opsi .opsi-row');
+        const opsi = Array.from(baris).map(row => {
+          const teks = sanitasiHtmlKaya_(rtHtmlSerial_(row.querySelector('.opsi-teks-rich')));
+          const gambar = row.querySelector('.opsi-gambar-url').value.trim();
+          const o = { teks };
+          if (gambar) o.gambar = gambar;
+          return o;
+        });
+        const checkedEls = document.querySelectorAll('#soal-form-opsi input[name="opsi-benar"]:checked');
+        if (opsi.length < 2) { toast('Minimal 2 opsi jawaban.', 'error'); return; }
+        if (opsi.some(o => richTeksKosong_(o.teks) && !o.gambar)) { toast('Setiap opsi harus memiliki teks atau gambar.', 'error'); return; }
+        if (checkedEls.length === 0) { toast('Pilih minimal satu jawaban benar.', 'error'); return; }
+        soal.opsi_json = JSON.stringify(opsi);
+        soal.kunci_json = tipe === 'checkbox'
+          ? JSON.stringify(Array.from(checkedEls).map(c => Number(c.value)))
+          : JSON.stringify(Number(checkedEls[0].value));
+      } else if (tipe === 'menjodohkan') {
+        const kiri = Array.from(document.querySelectorAll('.mj-kiri')).map(el => el.value.trim());
+        const kanan = Array.from(document.querySelectorAll('.mj-kanan')).map(el => el.value.trim());
+        const kunciStr = document.getElementById('mj-kunci').value.trim();
+        if (kiri.some(k => !k) || kanan.some(k => !k)) { toast('Semua item kiri/kanan harus diisi.', 'error'); return; }
+        const kunciArr = kunciStr.split(',').map(s => s.trim());
+        if (kunciArr.length !== kiri.length) { toast('Jumlah kunci jawaban harus sama dengan jumlah item kiri.', 'error'); return; }
+        const kunci = {}; kunciArr.forEach((v, i) => kunci[i] = v);
+        soal.opsi_json = JSON.stringify({ kiri, kanan });
+        soal.kunci_json = JSON.stringify(kunci);
+      } else {
+        const kataKunci = document.getElementById('uraian-kata-kunci').value.split(',').map(s => s.trim()).filter(Boolean);
+        soal.opsi_json = '';
+        soal.kunci_json = JSON.stringify({ kataKunci });
+      }
+
+      const res = await api('simpanSoal', { soal: JSON.stringify(soal) });
+      if (res.ok) { toast('Soal tersimpan.', 'success'); UI.tutupModal('modal-soal'); Guru.muatBankSoal(); }
+      else toast('Gagal menyimpan soal: ' + res.error, 'error');
+    });
+  },
+
+  // Hapus PERMANEN — baris tetap dihapus langsung dari sheet/penyimpanan (BUKAN
+  // diarsipkan) walau dipanggil dari daftar soal aktif, karena itu konfirmasinya
+  // ditulis eksplisit "PERMANEN" & "tidak bisa dibatalkan". Kalau hanya ingin
+  // menyembunyikan sementara, pakai tombol "🗄 Arsipkan" (Guru.arsipkanSoal).
+  async hapusSoal(id) {
+    if (!(await Dialog.konfirmasi({
+      judul: 'Hapus Soal Permanen?', tipe: 'danger', ikon: 'fa-trash-can',
+      pesan: 'Soal ini akan dihapus **selamanya**. Berbeda dengan **Arsipkan**, soal yang dihapus tidak bisa dikembalikan.',
+      teksYa: 'Hapus Permanen'
+    }))) return;
+    const res = await api('hapusSoal', { id });
+    if (res.ok) { Guru.hapusDariStateLokal_([id]); Guru.renderUlangBankSoal_(); toast('Soal dihapus permanen.', 'success'); }
+    else toast('Gagal menghapus soal: ' + res.error, 'error');
+  },
+
+  // Sama seperti hapusSoal, dipakai khusus di halaman Arsip (Guru.bukaArsipSoal)
+  // dgn teks konfirmasi yang menegaskan soal sudah diarsipkan & akan hilang
+  // selamanya kalau tetap dihapus.
+  async hapusSoalPermanen(id) {
+    if (!(await Dialog.konfirmasi({
+      judul: 'Hapus Permanen dari Arsip?', tipe: 'danger', ikon: 'fa-trash-can',
+      pesan: 'Soal ini akan dihapus **selamanya** dari Arsip dan tidak bisa dikembalikan lagi.',
+      teksYa: 'Hapus Permanen'
+    }))) return;
+    const res = await api('hapusSoal', { id });
+    if (res.ok) { Guru.hapusDariStateLokal_([id]); Guru.renderUlangBankSoal_(); toast('Soal dihapus permanen.', 'success'); }
+    else toast('Gagal menghapus soal: ' + res.error, 'error');
+  },
+
+  // Kumpulan gambar pendukung dipilih sekaligus (multi-file) berbarengan dgn file
+  // template Excel/Word saat impor massal, dicocokkan ke tiap soal lewat NAMA
+  // FILE persis yang diketik di kolom "Gambar" pada tabel (lihat barisTabelJadiSoal_).
+  // Mengembalikan Map(nama-file-lowercase -> URL gambar yg sudah diunggah.
+  async unggahBatchGambarImpor_(fileList) {
+    const peta = new Map();
+    const files = Array.from(fileList || []);
+    if (!files.length) return peta;
+    toast(`Mengunggah ${files.length} gambar pendukung...`);
+    await jalankanParalel_(files, 4, async (file) => {
+      const base64Asli = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const kecil = await perkecilGambar_({ mimeType: file.type, base64: base64Asli, ekstensi: '' });
+      const res = await api('uploadGambar', { base64: kecil.base64, filename: file.name, mimeType: kecil.mimeType });
+      if (res.ok) peta.set(file.name.trim().toLowerCase(), res.url);
+    });
+    return peta;
+  },
+
+  // Impor massal dari tabel Excel (.xlsx). Baris pertama = header (nama kolom
+  // bebas urutan, lihat penjelasan lengkap di atas barisTabelJadiSoal_). Gambar
+  // pendukung (opsional) dipilih sekaligus lewat input #input-import-soal-gambar
+  // yg muncul begitu file .xlsx dipilih. Lihat Guru.unduhTemplateSoal.
+  importSoalDariFile(ev) {
+    const file = ev.target.files[0];
+    if (!file) return;
+    const inputGambar = document.getElementById('input-import-soal-gambar');
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try { await muatPustaka_('xlsx'); } catch (err) { toast(err.message, 'error'); ev.target.value = ''; return; }
+      const wb = XLSX.read(e.target.result, { type: 'binary' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }).filter(r => r.some(c => String(c || '').trim()));
+      const petaGambar = await Guru.unggahBatchGambarImpor_(inputGambar ? inputGambar.files : null);
+      const peringatan = [];
+      const soalList = barisTabelKeSoalList_(rows, state.user.id, state.guru.kategoriKelola, petaGambar, peringatan);
+      if (soalList.length === 0) { toast('Tidak ada baris soal valid ditemukan di file. Pastikan baris pertama adalah header & kolom "Pertanyaan" terisi.', 'error'); return; }
+      const res = await api('importSoal', { soalList: JSON.stringify(soalList) });
+      if (res.ok) {
+        toast(res.count + ' soal berhasil diimpor.', 'success');
+        Guru.muatBankSoal();
+        if (peringatan.length) Dialog.info({
+          judul: 'Impor Berhasil, Perlu Diperiksa', tipe: 'warning', ikon: 'fa-file-circle-exclamation',
+          pesan: 'Soal berhasil diimpor, **tetapi** ' + peringatan.length + ' soal memiliki kunci jawaban yang tidak dikenali. Mohon periksa dan perbaiki manual di Bank Soal:',
+          daftar: peringatan
+        });
+      }
+      else toast('Gagal impor: ' + res.error, 'error');
+      ev.target.value = '';
+      if (inputGambar) inputGambar.value = '';
+      UI.perbaruiLabelJumlahGambar('input-import-soal-gambar', 'label-jumlah-gambar-xlsx');
+    };
+    reader.readAsBinaryString(file);
+  },
+
+  // Impor massal dari tabel di dalam file Word (.docx) — 1 baris tabel = 1 soal,
+  // format kolom SAMA PERSIS dgn template Excel (lihat barisTabelJadiSoal_).
+  // Dibaca lewat mammoth.js (convertToHtml, BUKAN extractRawText) supaya struktur
+  // tabelnya (baris & kolom) ikut terbaca lengkap, lalu diuraikan lewat DOMParser.
+  //
+  // GAMBAR YANG DITEMPEL LANGSUNG DI WORD (paste/insert image di dalam sel tabel --
+  // kolom "Gambar" ATAUPUN disisipkan di tengah teks Pertanyaan/Opsi) otomatis
+  // terdeteksi & terunggah ke Drive TANPA guru perlu memilih file gambar terpisah:
+  // opsi convertImage:mammoth.images.dataUri membuat setiap gambar dalam dokumen ikut
+  // terbaca sbg <img src="data:..."> pada HTML hasil konversi; kode di bawah lalu
+  // mencari <img> di tiap sel data (bukan sel header), mengunggah tiap yg ditemukan
+  // lewat action 'uploadGambar', dan mengganti src-nya dgn URL hasil unggahan --
+  // untuk kolom "Gambar" dipakai sbg field soal.gambar (URL polos), untuk kolom lain
+  // (mis. Pertanyaan/Opsi) dipakai sbg <img> inline dlm teks kaya (lihat kontenSoalHtml).
+  // Input "Pilih Gambar Pendukung" (petaGambar/cocok nama file) TETAP didukung sbg
+  // cara alternatif -- keduanya bisa dipakai sekaligus dlm 1 file yg sama.
+  async importSoalDariDocx(ev) {
+    const file = ev.target.files[0];
+    if (!file) return;
+    try { await muatPustaka_('mammoth'); } catch (err) { toast('Pustaka pembaca .docx belum termuat. ' + err.message, 'error'); ev.target.value = ''; return; }
+    const inputGambar = document.getElementById('input-import-soal-docx-gambar');
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        // Rumus Word (Insert > Equation: pecahan, pangkat, akar, coretan, dst) diubah dulu jadi
+        // teks "$LaTeX$" -- kalau tidak, mammoth membuangnya (rumus "hilang" setelah import).
+        const siap = await siapkanDocxUntukMammoth_(e.target.result);
+        if (siap.gagal) toast('Rumus Word tidak dapat dikonversi (koneksi/pustaka JSZip). Soal tetap diimpor, tetapi rumus mungkin tidak muncul.', 'error');
+        else if (siap.jumlahRumus) toast(`${siap.jumlahRumus} rumus Word dikonversi...`);
+        // PERF: gambar TIDAK disisipkan sbg data URI raksasa di HTML (membuat
+        // DOMParser & innerHTML sangat berat). Cukup ditandai "cbt-img:N", isi
+        // base64-nya disimpan terpisah di `gambarDokumen`.
+        const gambarDokumen = [];
+        const hasil = await mammoth.convertToHtml({ arrayBuffer: siap.buffer }, {
+          convertImage: mammoth.images.imgElement(function (image) {
+            return image.read('base64').then(function (b64) {
+              const idx = gambarDokumen.push({ mimeType: image.contentType, base64: b64 }) - 1;
+              return { src: 'cbt-img:' + idx };
+            });
+          })
+        });
+        const dom = new DOMParser().parseFromString(hasil.value, 'text/html');
+
+        // Tahap 1: kumpulkan gambar unik yg benar-benar dipakai di SEL DATA (bukan header).
+        const dipakai = new Set();
+        for (const tbl of Array.from(dom.querySelectorAll('table'))) {
+          Array.from(tbl.querySelectorAll('tr')).slice(1).forEach(tr => {
+            tr.querySelectorAll('img').forEach(img => {
+              const m = /^cbt-img:(\d+)$/.exec(img.getAttribute('src') || '');
+              if (m) dipakai.add(Number(m[1]));
+            });
+          });
+        }
+        // Hapus duplikat (gambar identik yg dipakai berulang hanya diunggah SEKALI).
+        const unikMap = new Map(); // kunci isi base64 -> indeks unggahan
+        const daftarUnggah = [];
+        const petaIdxKeUnik = new Map();
+        dipakai.forEach(idx => {
+          const g = gambarDokumen[idx];
+          if (!g || !g.base64) return;
+          const kunci = g.mimeType + '|' + g.base64;
+          if (!unikMap.has(kunci)) { unikMap.set(kunci, daftarUnggah.length); daftarUnggah.push(g); }
+          petaIdxKeUnik.set(idx, unikMap.get(kunci));
+        });
+
+        // Tahap 2: perkecil + unggah PARALEL (4 sekaligus).
+        let selesai = 0, gagalTempel = 0;
+        if (daftarUnggah.length) toast(`Mengunggah ${daftarUnggah.length} gambar dari dokumen...`);
+        const urlUnik = await jalankanParalel_(daftarUnggah, 4, async (g, i) => {
+          const bagian = await perkecilGambar_({ mimeType: g.mimeType, base64: g.base64, ekstensi: (g.mimeType.split('/')[1] || 'png').split('+')[0] });
+          const res = await api('uploadGambar', { base64: bagian.base64, filename: `soal-tempel-${i + 1}.${bagian.ekstensi}`, mimeType: bagian.mimeType });
+          selesai++;
+          if (daftarUnggah.length >= 6 && selesai % 5 === 0) toast(`Gambar terunggah ${selesai}/${daftarUnggah.length}...`);
+          if (!res.ok) gagalTempel++;
+          return res.ok ? res.url : null;
+        });
+        const jumlahTempel = daftarUnggah.length;
+        gambarDokumen.length = 0; // bebaskan memori base64
+
+        const petaGambar = await Guru.unggahBatchGambarImpor_(inputGambar ? inputGambar.files : null);
+
+        // Tahap 3: pasang URL hasil unggahan lalu bentuk baris soal.
+        let soalList = [];
+        const peringatan = [];
+        for (const tbl of Array.from(dom.querySelectorAll('table'))) {
+          const trList = Array.from(tbl.querySelectorAll('tr'));
+          if (!trList.length) continue;
+          const headerKey = Array.from(trList[0].querySelectorAll('th,td')).map(td => kunciHeader_(td.textContent));
+          const rows = [];
+          for (let rIdx = 0; rIdx < trList.length; rIdx++) {
+            const selList = Array.from(trList[rIdx].querySelectorAll('th,td'));
+            const nilai = [];
+            for (let cIdx = 0; cIdx < selList.length; cIdx++) {
+              const td = selList[cIdx];
+              if (rIdx === 0) { nilai.push(td.textContent.trim()); continue; }
+              // Kolom teks kaya (Pertanyaan, Opsi A-H, Pembahasan) dibaca sbg HTML supaya baris baru,
+              // huruf tebal, pangkat/indeks, rumus "$...$" & gambar TIDAK hilang. Kolom lain (Tipe/Kunci/
+              // Bobot dst.) tetap teks biasa agar tidak terbaca sbg "<p>PGK</p>" dan salah dideteksi.
+              const kolomKaya = /^(pertanyaan|opsi[a-h]|pembahasan)$/.test(headerKey[cIdx] || '');
+              if (!td.querySelector('img')) { nilai.push(kolomKaya ? htmlSelKaya_(td) : td.textContent.trim()); continue; }
+              td.querySelectorAll('img').forEach(img => {
+                const m = /^cbt-img:(\d+)$/.exec(img.getAttribute('src') || '');
+                const url = m && petaIdxKeUnik.has(Number(m[1])) ? urlUnik[petaIdxKeUnik.get(Number(m[1]))] : null;
+                if (url) img.setAttribute('src', url); else img.remove();
+              });
+              if ((headerKey[cIdx] || '') === 'gambar') {
+                const imgPertama = td.querySelector('img');
+                nilai.push(imgPertama ? imgPertama.getAttribute('src') : td.textContent.trim());
+              } else if (kolomKaya) {
+                nilai.push(td.innerHTML.trim()); // teks kaya + <img> inline
+              } else {
+                nilai.push(td.textContent.trim());
+              }
+            }
+            rows.push(nilai);
+          }
+          soalList = soalList.concat(barisTabelKeSoalList_(rows, state.user.id, state.guru.kategoriKelola, petaGambar, peringatan));
+        }
+        if (soalList.length === 0) { toast('Tidak ada tabel soal yang terbaca. Pastikan mengisi di dalam tabel template, jangan mengubah baris header.', 'error'); return; }
+        toast(`Menyimpan ${soalList.length} soal...`);
+        const res = await api('importSoal', { soalList: JSON.stringify(soalList) });
+        if (res.ok) {
+          let ket = '';
+          if (jumlahTempel > 0) ket = ` (${jumlahTempel - gagalTempel} gambar tempelan di Word ikut otomatis terunggah${gagalTempel ? `, ${gagalTempel} gagal` : ''})`;
+          toast(res.count + ' soal berhasil diimpor dari Word' + ket + '.', 'success');
+          Guru.muatBankSoal();
+          if (peringatan.length) Dialog.info({
+            judul: 'Impor Berhasil, Perlu Diperiksa', tipe: 'warning', ikon: 'fa-file-circle-exclamation',
+            pesan: 'Soal berhasil diimpor, **tetapi** ' + peringatan.length + ' soal memiliki kunci jawaban yang tidak dikenali. Mohon periksa dan perbaiki manual di Bank Soal:',
+            daftar: peringatan
+          });
+        }
+        else toast('Gagal impor: ' + res.error, 'error');
+      } catch (err) {
+        toast('Gagal membaca file .docx: ' + err.message, 'error');
+      } finally {
+        ev.target.value = '';
+        if (inputGambar) inputGambar.value = '';
+        UI.perbaruiLabelJumlahGambar('input-import-soal-docx-gambar', 'label-jumlah-gambar-docx');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  },
+
+  // Menulis file .docx berisi 1 TABEL siap isi (kolom sama persis dgn template
+  // Excel) + 4 baris contoh (PG, PG Kompleks, Benar/Salah, Essay). Guru tinggal
+  // menambah baris baru di bawah contoh mengikuti pola yang sama, TANPA perlu
+  // paham format label/kode apa pun. Ditulis langsung tanpa pustaka pihak ketiga.
+  unduhTemplateSoalDocx() {
+    const headers = ['Kategori', 'Topik', 'Tipe', 'Pertanyaan', 'Gambar', 'Opsi A', 'Opsi B', 'Opsi C', 'Opsi D', 'Opsi E', 'Kunci', 'Bobot', 'Kesulitan', 'Pembahasan'];
+    const rows = [
+      ['', 'Sejarah Indonesia', 'PG', 'Siapakah Presiden Indonesia pada tahun 1999?', '', 'Soekarno', 'Soeharto', 'B. J. Habibie', 'Abdurrahman Wahid', '', 'C', '10', 'Sedang', 'Contoh pembahasan: tulis alasan jawaban yang benar dan penjelasan singkatnya di sini.'],
+      ['', 'Biologi', 'PGK', 'Manakah yang termasuk hewan mamalia? (kunci boleh lebih dari 1, pisah koma)', '', 'Paus', 'Ular', 'Kelelawar', 'Buaya', '', 'A,C', '10', 'Sedang', ''],
+      ['', 'Geografi', 'BS', 'Indonesia terletak di antara dua benua, yaitu Asia dan Australia.', '', 'Benar', 'Salah', '', '', '', 'Benar', '5', 'Mudah', ''],
+      ['', 'Biologi', 'Essay', 'Jelaskan proses terjadinya fotosintesis pada tumbuhan.', '', '', '', '', '', '', 'fotosintesis, klorofil, karbon dioksida', '15', 'Sedang', ''],
+      ['', 'Geografi', 'Jodohkan', 'Jodohkan negara dengan ibu kotanya.', '', 'Indonesia = Jakarta', 'Jepang = Tokyo', 'Prancis = Paris', '', '', '', '10', 'Sedang', ''],
+      ['', '', '', '(tambahkan baris baru di bawah sini, ikuti pola di atas — boleh sebanyak yang dibutuhkan)', '', '', '', '', '', '', '', '', '', '']
+    ];
+    const items = [
+      { text: 'TEMPLATE IMPORT SOAL — CBT Online', heading: true },
+      { text: 'Isi tabel di bawah, SATU BARIS = SATU SOAL (kolom Pembahasan opsional: penjelasan jawaban yang bisa dilihat siswa bila guru mengaktifkannya di pengaturan ujian). Kolom Tipe: PG (pilihan ganda), PGK (pilihan ganda kompleks/kunci boleh lebih dari 1), BS (benar/salah), Jodohkan, Essay. Kolom Kunci cukup diisi HURUF opsi yang benar (mis. "C"), untuk PGK pisah dgn koma (mis. "A,C"), untuk BS isi "Benar"/"Salah", untuk Essay isi kata kunci penilaian dipisah koma. Kolom Gambar: boleh dikosongkan, boleh diisi link gambar publik, ATAU cukup TEMPEL/SISIPKAN gambarnya langsung di dalam sel itu (Insert > Pictures di Word) -- saat diimpor gambar tersebut otomatis terdeteksi & terunggah sendiri, tanpa perlu file gambar terpisah. Gambar juga boleh ditempel langsung di tengah sel Pertanyaan/Opsi kalau perlu. Kolom yang tidak dipakai (mis. Opsi E utk soal 4 opsi) boleh dikosongkan. Tipe Jodohkan sebaiknya dibuat lewat "Tambah Soal Manual" karena pasangannya lebih mudah diatur lewat formulir. RUMUS: tulis lewat Insert > Equation di Word (pecahan, pangkat, akar, tanda coret, dst) -- otomatis ikut terbaca & tampil sama di aplikasi. Kolom Pembahasan juga mempertahankan baris baru, huruf tebal, pangkat/indeks, dan gambar.' },
+      { table: { headers, rows } }
+    ];
+    unduhDocx_('Template_Import_Soal_CBT.docx', items);
+    toast('Template .docx berhasil diunduh.', 'success');
+  },
+
+  // ---------------- UJIAN ----------------
+  async muatDaftarUjian() {
+    const res = await api('getDaftarUjian', { guruId: state.user.id });
+    const cont = document.getElementById('daftar-ujian');
+    if (!res.ok) return gagalMuat_(cont, 'Gagal memuat.');
+    state.guru.ujianList = res.data;
+    if (res.data.length === 0) { cont.innerHTML = '<p class="subtitle">Belum ada ujian.</p>'; return; }
+    cont.innerHTML = `<table class="ledger"><thead><tr>
+        <th>Judul</th><th>Token</th><th>Durasi</th><th>Jadwal</th><th>Maks. Pelanggaran</th><th>Status</th><th></th>
+
+      </tr></thead><tbody>` + res.data.map(u => `
+        <tr>
+          <td><strong>${escapeHtml_(u.judul)}</strong><br><span style="color:var(--c-muted);font-size:.78rem">${labelKategori(u.kategori)}${u.subkategori ? ' • ' + escapeHtml_(u.subkategori) : ''}</span></td>
+          <td><code style="font-size:1rem;font-weight:700">${u.token}</code></td>
+          <td>${u.durasi_menit} menit</td>
+          <td style="font-size:.8rem">${formatTanggal(u.mulai)}<br>s/d ${formatTanggal(u.selesai)}</td>
+          <td>${u.max_pelanggaran}</td>
+          <td><span class="badge ${u.status === 'aktif' ? 'ok' : 'no'}">${u.status}</span></td>
+          <td>
+            <button class="secondary small" onclick='Guru.bukaEditUjian("${u.id}")'>Ubah</button>
+            <button class="danger small" onclick="Guru.hapusUjian('${u.id}')">Hapus</button>
+          </td>
+        </tr>`).join('') + `</tbody></table>`;
+  },
+
+  bukaEditUjian(id) {
+    const u = state.guru.ujianList.find(x => x.id === id);
+    if (u) UI.bukaModalUjian(u);
+  },
+
+  async hapusUjian(id) {
+    const ujianHapus = (state.guru.ujianList || []).find(x => x.id === id);
+    if (!(await Dialog.konfirmasi({
+      judul: 'Hapus Ujian?', tipe: 'danger', ikon: 'fa-trash-can',
+      pesan: `Ujian **${ujianHapus ? ujianHapus.judul : 'ini'}** akan dihapus.\n\nRekap nilai yang sudah ada **tidak** ikut terhapus.`,
+      teksYa: 'Ya, Hapus Ujian'
+    }))) return;
+    const res = await api('hapusUjian', { id });
+    if (res.ok) { toast('Ujian dihapus.', 'success'); Guru.muatDaftarUjian(); }
+  },
+
+  async muatPilihanSoalUntukUjian(idsTerpilih) {
+    const kategori = document.getElementById('ujian-kategori').value;
+    const subkategori = document.getElementById('ujian-subkategori').value.trim();
+    const res = await api('getBankSoal', { guruId: state.user.id, kategori, subkategori });
+    const cont = document.getElementById('pilihan-soal-ujian');
+    if (!res.ok || res.data.length === 0) { cont.innerHTML = '<p class="subtitle">Tidak ada soal di kategori/sub-kategori ini.</p>'; return; }
+    // Soal yang sudah diarsipkan tidak ikut ditawarkan (harus dikembalikan dulu
+    // lewat Bank Soal) — KECUALI soal itu memang sudah tercentang di ujian yang
+    // sedang diubah, supaya tidak "hilang" tiba-tiba dari ujian lama.
+    const terpilih = idsTerpilih || [];
+    const daftar = res.data.filter(s => (s.status || 'aktif') !== 'arsip' || terpilih.includes(s.id));
+    if (daftar.length === 0) { cont.innerHTML = '<p class="subtitle">Tidak ada soal aktif di kategori/sub-kategori ini.</p>'; return; }
+    // idsTerpilih kosong/tidak diisi (ujian baru, atau kategori baru saja
+    // diganti) -> semua soal yang cocok otomatis tercentang, TIDAK perlu
+    // dicentang satu per satu. Ujian yang sedang diubah tetap menghormati
+    // centang yang sudah tersimpan sebelumnya.
+    const autoCentangSemua = !idsTerpilih;
+    cont.innerHTML = daftar.map(s => `
+      <label style="display:flex;gap:.5rem;align-items:flex-start;margin-bottom:.5rem;font-weight:400">
+        <input type="checkbox" class="chk-soal-ujian" value="${s.id}" ${(autoCentangSemua || terpilih.includes(s.id)) ? 'checked' : ''} style="width:auto;margin-top:.2rem">
+        <span>${escapeHtml_(s.pertanyaan).slice(0, 90)} <em style="color:var(--c-muted)">(bobot ${s.bobot})</em></span>
+      </label>`).join('');
+  },
+
+  pilihSemuaSoalUjian(centang) {
+    document.querySelectorAll('.chk-soal-ujian').forEach(c => { c.checked = centang; });
+  },
+
+  async simpanUjian() {
+    return jalankanDenganTombolSibuk('btn-simpan-ujian', 'Menyimpan...', async () => {
+      const soalIds = Array.from(document.querySelectorAll('.chk-soal-ujian:checked')).map(c => c.value);
+      if (soalIds.length === 0) { toast('Pilih minimal satu soal.', 'error'); return; }
+      const ujian = {
+        id: document.getElementById('ujian-id').value || undefined,
+        guru_id: state.user.id,
+        judul: document.getElementById('ujian-judul').value.trim(),
+        kategori: document.getElementById('ujian-kategori').value,
+        subkategori: document.getElementById('ujian-subkategori').value.trim(),
+        soal_ids: soalIds.join(','),
+        durasi_menit: Number(document.getElementById('ujian-durasi').value),
+        toleransi_menit: Number(document.getElementById('ujian-toleransi').value),
+        nilai_lulus: Number(document.getElementById('ujian-kkm').value),
+        max_pelanggaran: Number(document.getElementById('ujian-max-pelanggaran').value),
+        mulai: document.getElementById('ujian-mulai').value ? new Date(document.getElementById('ujian-mulai').value).toISOString() : '',
+        selesai: document.getElementById('ujian-selesai').value ? new Date(document.getElementById('ujian-selesai').value).toISOString() : '',
+        acak_soal: document.getElementById('ujian-acak-soal').checked,
+        acak_opsi: document.getElementById('ujian-acak-opsi').checked,
+        instruksi_remedial: document.getElementById('ujian-instruksi-remedial').value.trim(),
+        status: 'aktif'
+      };
+      ujian.tampil_detail = document.getElementById('ujian-tampil-detail').checked;
+      ujian.tampil_pembahasan = document.getElementById('ujian-tampil-pembahasan').checked;
+      ujian.bukti_orek = document.getElementById('ujian-bukti-orek').value; // '' | 'wajib' | 'opsional'
+      const hasilPesan = Guru.ambilPesanNilaiUntukSimpan();
+      if (hasilPesan.error) { toast(hasilPesan.error, 'error'); return; }
+      ujian.pesan_nilai = hasilPesan.json;
+      if (!ujian.judul) { toast('Judul ujian tidak boleh kosong.', 'error'); return; }
+      const res = await api('simpanUjian', { ujian: JSON.stringify(ujian) });
+      if (res.ok) {
+        toast('Ujian tersimpan. Token: ' + (res.token || '(tetap)'), 'success');
+        UI.tutupModal('modal-ujian'); Guru.muatDaftarUjian();
+      } else toast('Gagal menyimpan ujian: ' + res.error, 'error');
+    });
+  },
+
+  // ---------------- REKAP & LOG ----------------
+  async muatPilihanUjianUntukSelect(selectId) {
+    const res = await api('getDaftarUjian', { guruId: state.user.id });
+    const sel = document.getElementById(selectId);
+    if (!res.ok) return;
+    sel.innerHTML = '<option value="">Pilih ujian...</option>' + res.data.map(u => `<option value="${u.id}">${escapeHtml_(u.judul)}</option>`).join('');
+  },
+
+  async muatRekap() {
+    const ujianId = document.getElementById('pilih-ujian-rekap').value;
+    const cont = document.getElementById('tabel-rekap');
+    if (!ujianId) { cont.innerHTML = 'Pilih ujian terlebih dahulu.'; return false; }
+    const res = await api('getRekapNilai', { ujianId });
+    if (!res.ok) return gagalMuat_(cont, 'Gagal memuat.');
+    state.guru._rekapAktif = res.data;
+    state.guru._rekapBuktiMode = res.buktiMode || '';
+    isiOpsiKelas_('kelas-rekap', kelasUnikDari_(res.data));
+    Guru.renderTabelRekap_();
+    return true;
+  },
+
+  // Data rekap setelah Filter Kelas + kotak cari.
+  rekapTersaring_() {
+    const saringBlokir = !!document.getElementById('blokir-rekap')?.checked;
+    const hasil = document.getElementById('status-rekap')?.value || ''; // '' | 'lulus' | 'remedial'
+    return (state.guru._rekapAktif || []).filter(r => cocokFilterSiswa_(r, 'kelas-rekap', 'cari-rekap') && (!saringBlokir || r.status === 'diblokir')
+      && (!hasil || (hasil.indexOf('kat:') === 0 ? kategoriNilai_(r.nilai).kode === hasil.slice(4) : (hasil === 'lulus') === (String(r.lulus) === 'true'))));
+  },
+
+  // Sel "Bukti Orak-Orik" di sebelah nilai: miniatur + jumlah foto (klik = galeri) atau status belum unggah.
+  selBuktiRekap_(r) {
+    const b = Array.isArray(r.bukti) ? r.bukti : [];
+    if (b.length) {
+      const thumbs = b.slice(0, 3).map(f => `<img src="${escapeHtml_(f.url)}" alt="" loading="lazy">`).join('');
+      return `<button type="button" class="bukti-chip" title="Lihat foto bukti orak-orik" onclick="BuktiGaleri.buka('${escapeHtml_(r.sesiId)}')"><span class="bukti-thumbs">${thumbs}</span><span><i class="fa-solid fa-camera"></i> ${b.length} foto</span></button>`;
+    }
+    if (state.guru._rekapBuktiMode === 'wajib') return '<span class="badge warn" title="Siswa belum mengunggah foto bukti orak-orik">Belum unggah</span>';
+    return '<span style="color:var(--c-muted)">—</span>';
+  },
+
+  renderTabelRekap_() {
+    const cont = document.getElementById('tabel-rekap');
+    // Ingat centang yang sudah dipilih guru supaya tidak hilang saat data disegarkan.
+    const tercentang = new Set([...cont.querySelectorAll('.rekap-cek:checked')].map(c => c.value));
+    const semua = state.guru._rekapAktif || [];
+    if (semua.length === 0) { tampilkanInfoFilter_('kelas-rekap-info', 0, 0); cont.innerHTML = '<p class="subtitle">Belum ada siswa yang <strong>menyelesaikan</strong> ujian ini (siswa yang masih mengerjakan tidak dihitung di sini — lihat tab "Pemantauan Ujian" untuk yang sedang berlangsung).</p>'; return; }
+    hanyaBlokir_('blokir-rekap', semua.filter(r => r.status === 'diblokir').length);
+    const data = Guru.rekapTersaring_();
+    const angka = data.map(r => Number(r.nilai)).filter(n => !isNaN(n) && n !== null);
+    const rata = angka.length ? (angka.reduce((a, b) => a + b, 0) / angka.length) : null;
+    const jmlLulus = data.filter(r => String(r.lulus) === 'true').length;
+    const hitungKat = { istimewa: 0, baik: 0, memadai: 0, kurang: 0 };
+    data.forEach(r => { hitungKat[kategoriNilai_(r.nilai).kode]++; });
+    tampilkanInfoFilter_('kelas-rekap-info', data.length, semua.length, (rata === null ? '' : 'rata-rata nilai ' + (Math.round(rata * 10) / 10) + ' • ') + jmlLulus + ' lulus, ' + (data.length - jmlLulus) + ' remedial • Istimewa ' + hitungKat.istimewa + ', Baik ' + hitungKat.baik + ', Memadai ' + hitungKat.memadai + ', Kurang ' + hitungKat.kurang);
+    if (data.length === 0) { cont.innerHTML = '<p class="subtitle">Tidak ada siswa yang cocok dengan kelas/pencarian ini.</p>'; return; }
+    const adaKolomBukti = !!state.guru._rekapBuktiMode || semua.some(r => Array.isArray(r.bukti) && r.bukti.length);
+    cont.innerHTML = `<table class="ledger"><thead><tr><th style="width:2rem"><input type="checkbox" id="rekap-pilih-semua" title="Pilih semua yang tampil" onchange="Guru.pilihSemuaRekap(this.checked)"></th><th>Nama</th><th>Kelas</th><th>Nilai</th><th>Kategori</th>${adaKolomBukti ? '<th>Bukti Orak-Orik</th>' : ''}<th>Status</th><th>Pelanggaran</th><th>Selesai</th><th>Durasi</th><th></th></tr></thead><tbody>` +
+      data.map(r => `<tr>
+        <td><input type="checkbox" class="rekap-cek" value="${escapeHtml_(r.sesiId || '')}" ${r.sesiId ? '' : 'disabled'} ${r.sesiId && tercentang.has(String(r.sesiId)) ? 'checked' : ''}></td>
+        <td>${escapeHtml_(r.nama)}</td><td>${escapeHtml_(r.kelas)}</td><td><strong>${r.nilai}</strong></td><td>${badgeKategori_(r.nilai)}</td>
+        ${adaKolomBukti ? `<td>${Guru.selBuktiRekap_(r)}</td>` : ''}
+        <td><span class="badge ${String(r.lulus) === 'true' ? 'ok' : 'no'}">${String(r.lulus) === 'true' ? 'Lulus' : 'Remedial'}</span></td>
+        <td>${r.pelanggaran || 0} ${r.status === 'diblokir' ? '<span class="badge warn">Diblokir</span>' : ''}</td>
+        <td style="font-size:.8rem">${formatTanggal(r.selesai)}</td>
+        <td style="font-size:.8rem;white-space:nowrap">${formatDurasi_(hitungDurasiDetik_(r.mulai, r.selesai))}</td>
+        <td class="aksi">${r.sesiId ? `<button class="secondary small" title="Lihat soal yang salah, jawaban siswa, dan kunci (untuk evaluasi)" onclick="Guru.bukaDetailSiswa('${escapeHtml_(r.sesiId)}')">🔍 Detail Jawaban</button><button class="danger small" title="Hapus nilai siswa ini (siswa bisa mengikuti ujian ini lagi)" onclick="Guru.hapusNilaiSatu('${escapeHtml_(r.sesiId)}')">🗑 Hapus</button>` : ''}</td>
+      </tr>`).join('') + `</tbody></table>`;
+  },
+
+  // ---------------- DETAIL JAWABAN PER SISWA (Rekap Nilai) ----------------
+  // Guru membuka detail jawaban satu siswa: soal mana yang salah, jawaban yang
+  // dipilih siswa, kunci jawaban, skor & pembahasan -- untuk bahan evaluasi/remedial
+  // per siswa. Memakai renderer yang sama dengan layar detail siswa (htmlItemDetail_).
+  _detailSiswa: { sesiId: null, items: [], filter: 'salah', token: 0, rekap: null },
+
+  _daftarSesiDetail_() { return Guru.rekapTersaring_().filter(r => r.sesiId); },
+
+  async bukaDetailSiswa(sesiId) {
+    const rekap = (state.guru._rekapAktif || []).find(x => String(x.sesiId) === String(sesiId));
+    if (!rekap) return;
+    const D = Guru._detailSiswa;
+    const token = ++D.token;
+    D.sesiId = sesiId; D.items = []; D.rekap = rekap;
+    if (!Guru._dswKey) {
+      Guru._dswKey = true;
+      document.addEventListener('keydown', ev => {
+        const m = document.getElementById('modal-detail-siswa');
+        if (ev.key === 'Escape' && m && !m.classList.contains('hidden') && !ImageLightbox.aktif) Guru.tutupDetailSiswa();
+      });
+    }
+    const lulus = String(rekap.lulus) === 'true';
+    const sel = document.getElementById('pilih-ujian-rekap');
+    const judul = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text : '';
+    document.getElementById('dsw-nama').textContent = rekap.nama || '-';
+    document.getElementById('dsw-meta').textContent = [rekap.kelas ? 'Kelas ' + rekap.kelas : '', judul, rekap.selesai ? 'Selesai ' + formatTanggal(rekap.selesai) : ''].filter(Boolean).join(' • ');
+    document.getElementById('dsw-nilai').textContent = rekap.nilai;
+    const st = document.getElementById('dsw-status');
+    st.className = 'badge ' + (lulus ? 'ok' : 'no');
+    st.textContent = lulus ? 'Lulus' : 'Remedial';
+    const stKat = document.getElementById('dsw-kategori');
+    if (stKat) { stKat.innerHTML = badgeKategori_(rekap.nilai); }
+    document.getElementById('dsw-chips').innerHTML = '';
+    document.getElementById('dsw-evaluasi').textContent = '';
+    document.getElementById('dsw-list').innerHTML = '<p class="subtitle">Memuat detail jawaban...</p>';
+    Guru._navDetailSiswa_();
+    document.getElementById('modal-detail-siswa').classList.remove('hidden');
+    let res = null;
+    try { res = await api('getDetailJawaban', { sesiId, guruId: state.user ? state.user.id : '' }); } catch (e) { res = null; }
+    if (D.token !== token) return; // guru sudah pindah ke siswa lain
+    if (!res || !res.ok) {
+      document.getElementById('dsw-list').innerHTML = `<p class="subtitle" style="color:var(--c-danger)">${escapeHtml_((res && res.error) || 'Gagal memuat detail jawaban.')}</p>`;
+      return;
+    }
+    D.items = res.items || [];
+    D.filter = D.items.some(it => it.status !== 'benar') ? 'salah' : 'semua';
+    Guru.renderDetailSiswa_();
+    const box = document.querySelector('#modal-detail-siswa .modal'); if (box) box.scrollTop = 0;
+  },
+
+  tutupDetailSiswa() {
+    Guru._detailSiswa.token++;
+    document.getElementById('modal-detail-siswa').classList.add('hidden');
+  },
+
+  _navDetailSiswa_() {
+    const daftar = Guru._daftarSesiDetail_();
+    const i = daftar.findIndex(r => String(r.sesiId) === String(Guru._detailSiswa.sesiId));
+    document.getElementById('dsw-posisi').textContent = i >= 0 ? `Siswa ${i + 1} dari ${daftar.length}` : '';
+    document.getElementById('dsw-prev').disabled = i <= 0;
+    document.getElementById('dsw-next').disabled = i < 0 || i >= daftar.length - 1;
+  },
+
+  pindahDetailSiswa(arah) {
+    const daftar = Guru._daftarSesiDetail_();
+    const i = daftar.findIndex(r => String(r.sesiId) === String(Guru._detailSiswa.sesiId));
+    const target = daftar[i + arah];
+    if (target) return Guru.bukaDetailSiswa(target.sesiId);
+  },
+
+  gantiFilterDetailSiswa(f) {
+    Guru._detailSiswa.filter = f;
+    Guru.renderDetailSiswa_();
+  },
+
+  renderDetailSiswa_() {
+    const D = Guru._detailSiswa;
+    const items = D.items;
+    const hitung = s => items.filter(it => it.status === s).length;
+    const nBenar = hitung('benar'), nSebagian = hitung('sebagian'), nSalah = hitung('salah'), nKosong = hitung('kosong'), nManual = hitung('manual');
+    const nBelumBenar = items.length - nBenar;
+    const chip = (kelas, jml, teks) => jml ? `<span class="dsw-chip dsw-chip-${kelas}"><strong>${jml}</strong> ${teks}</span>` : '';
+    document.getElementById('dsw-chips').innerHTML =
+      `<span class="dsw-chip"><strong>${items.length}</strong> soal</span>` +
+      chip('benar', nBenar, 'benar') + chip('sebagian', nSebagian, 'sebagian benar') + chip('salah', nSalah, 'salah') +
+      chip('kosong', nKosong, 'tidak dijawab') + chip('manual', nManual, 'perlu dikoreksi');
+    const nomorBelum = [];
+    items.forEach((it, i) => { if (it.status !== 'benar') nomorBelum.push(i + 1); });
+    document.getElementById('dsw-evaluasi').innerHTML = nomorBelum.length
+      ? `<strong>Perlu dievaluasi (nomor pada lembar siswa ini):</strong> ${nomorBelum.join(', ')}. <span style="color:var(--c-muted)">Soal diacak per siswa, jadi nomor bisa berbeda dengan siswa lain.</span>`
+      : '<strong>Semua jawaban benar.</strong> Tidak ada soal yang perlu dievaluasi.';
+    const f = D.filter;
+    document.getElementById('dsw-tab-salah').classList.toggle('active', f === 'salah');
+    document.getElementById('dsw-tab-semua').classList.toggle('active', f === 'semua');
+    document.getElementById('dsw-tab-salah').textContent = 'Yang Salah / Belum Benar (' + nBelumBenar + ')';
+    document.getElementById('dsw-tab-semua').textContent = 'Semua Soal (' + items.length + ')';
+    const tampil = [];
+    items.forEach((it, i) => { if (f === 'semua' || it.status !== 'benar') tampil.push({ it, no: i + 1 }); });
+    const cont = document.getElementById('dsw-list');
+    cont.innerHTML = tampil.length
+      ? tampil.map(x => ExamEngine.htmlItemDetail_(x.it, x.no, { guru: true })).join('')
+      : '<div class="dj-kosong"><i class="fa-solid fa-circle-check"></i><p>Semua jawaban siswa ini benar. Tidak ada soal yang perlu dievaluasi.</p></div>';
+    renderMatika(cont);
+    Guru._navDetailSiswa_();
+  },
+
+  // ---------------- CETAK / PDF (lembar A4 khusus, #cetak-area) ----------------
+  // Membuat lembar cetak khusus -- bukan mencetak modal layar. Warna dipaksa terang (tema gelap tidak ikut)
+  // supaya hasil cetak/PDF tidak blank dan jumlah halaman tetap hemat.
+  _identitasSekolah_() {
+    const elNama = document.querySelector('#sidebar-guru .app-brand-nama');
+    const namaSekolah = (elNama && elNama.textContent.trim()) || NAMA_APLIKASI_BAWAAN;
+    const logoImg = document.querySelector('#sidebar-guru .app-logo-slot img');
+    const logo = logoImg && logoImg.src ? `<img class="cp-logo" src="${escapeHtml_(logoImg.src)}" alt="">` : '';
+    return { namaSekolah, kop: `<header class="cp-kop">${logo}<div class="cp-kop-teks"><h1>${escapeHtml_(namaSekolah)}</h1><p>Sistem Ujian Online (CBT)</p></div></header>` };
+  },
+
+  // HTML satu siswa. opsi.kop = true -> lembar tunggal (dengan kop & judul); false -> bagian dalam cetak per kelas.
+  _htmlLembarSiswa_(rekap, items, filter, judulUjian, opsi) {
+    const esc = escapeHtml_;
+    const lulus = String(rekap.lulus) === 'true';
+    const hitung = st => items.filter(it => it.status === st).length;
+    const chip = (jml, teks) => jml ? `<span class="cp-chip"><strong>${jml}</strong> ${teks}</span>` : '';
+    const nomorBelum = [];
+    items.forEach((it, i) => { if (it.status !== 'benar') nomorBelum.push(i + 1); });
+    const tampil = [];
+    items.forEach((it, i) => { if (filter === 'semua' || it.status !== 'benar') tampil.push({ it, no: i + 1 }); });
+    // Siswa yang SEMUA jawabannya benar: jangan cetak soal satu pun (tidak perlu membocorkan/menghabiskan halaman) -- cukup keterangan.
+    const semuaBenar = items.length > 0 && nomorBelum.length === 0;
+    const kartu = (tampil.length && !semuaBenar)
+      ? tampil.map(x => ExamEngine.htmlItemDetail_(x.it, x.no, { guru: true })).join('')
+      : '<p class="cp-kosong">Semua jawaban siswa ini benar. Tidak ada soal yang perlu dievaluasi.</p>';
+    const status = `<span class="cp-status ${lulus ? 'cp-lulus' : 'cp-remedial'}">${lulus ? 'Lulus' : 'Remedial'}</span> <span class="cp-status cp-kat-${kategoriNilai_(r.nilai).kode}">${labelKategori_(r.nilai)}</span>`;
+    const ringkas = `<div class="cp-ringkas"><span class="cp-chip"><strong>${items.length}</strong> soal</span>${chip(hitung('benar'), 'benar')}${chip(hitung('sebagian'), 'sebagian benar')}${chip(hitung('salah'), 'salah')}${chip(hitung('kosong'), 'tidak dijawab')}${chip(hitung('manual'), 'perlu dikoreksi')}</div>
+      <p class="cp-evaluasi">${nomorBelum.length ? `<strong>Perlu dievaluasi (nomor pada lembar siswa ini):</strong> ${nomorBelum.join(', ')}.` : '<strong>Semua jawaban benar.</strong>'}</p>
+      ${semuaBenar ? '' : `<h3 class="cp-sub">${filter === 'semua' ? 'Seluruh Soal' : 'Soal yang Perlu Dievaluasi'} (${tampil.length})</h3>`}
+      <section class="cp-soal">${kartu}</section>`;
+    if (opsi && opsi.kop) {
+      return `${Guru._identitasSekolah_().kop}
+      <h2 class="cp-judul">Laporan Evaluasi Jawaban Siswa</h2>
+      <table class="cp-info"><tbody>
+        <tr><th>Nama</th><td>: ${esc(rekap.nama || '-')}</td><th>Nilai</th><td>: <strong class="cp-nilai">${esc(String(rekap.nilai))}</strong> ${status}</td></tr>
+        <tr><th>Kelas</th><td>: ${esc(rekap.kelas || '-')}</td><th>Selesai</th><td>: ${rekap.selesai ? esc(formatTanggal(rekap.selesai)) : '-'}</td></tr>
+        <tr><th>Ujian</th><td colspan="3">: ${esc(judulUjian || '-')}</td></tr>
+      </tbody></table>${ringkas}`;
+    }
+    const kartuBernama = ringkas.split('<span class="dj-skor">').join(`<span class="cp-pemilik">${esc(rekap.nama || '')}</span><span class="dj-skor">`);
+    return `<article class="cp-siswa">
+      <div class="cp-banner"><div><div class="cp-banner-nama">${esc(rekap.nama || '-')}</div><div class="cp-banner-sub">Kelas ${esc(rekap.kelas || '-')} • ${esc(judulUjian || '')}</div></div>
+      <div class="cp-banner-nilai"><strong class="cp-nilai">${esc(String(rekap.nilai))}</strong> ${status}</div></div>${kartuBernama}</article>`;
+  },
+
+  // Pasang #cetak-area, render rumus, tunggu gambar/font, lalu window.print().
+  _cetakArea_(htmlIsi, judulDokumen) {
+    const lama = document.getElementById('cetak-area'); if (lama) lama.remove();
+    const area = document.createElement('div');
+    area.id = 'cetak-area';
+    area.innerHTML = htmlIsi;
+    // opsi yang pendek-pendek ditata 2 kolom supaya hemat halaman
+    area.querySelectorAll('.opsi-list').forEach(ol => {
+      const ks = Array.from(ol.querySelectorAll('.opsi-konten'));
+      if (ks.length >= 4 && ks.every(k => !k.querySelector('img') && k.textContent.trim().length <= 26)) ol.classList.add('cp-2col');
+    });
+    // label (Kunci / Dipilih) dipindah sebelum teks opsi supaya bisa rata kanan dengan float (flex/grid memicu bug pecah halaman di Chrome)
+    area.querySelectorAll('.opsi-item').forEach(it => {
+      const tag = it.querySelector('.dj-tag'), isi = it.querySelector('.opsi-konten');
+      if (tag && isi) it.insertBefore(tag, isi);
+    });
+    document.body.appendChild(area);
+    renderMatika(area);
+    // Kartu yang lebih tinggi dari satu halaman A4 (pembahasan sangat panjang) boleh terpotong antar halaman;
+    // bila dipaksa "tidak boleh terpotong", Chrome meregangkan isinya sehingga tampil kosong & berantakan.
+    area.style.cssText = 'display:block;position:absolute;left:-99999px;top:0;width:182mm;visibility:hidden';
+    area.querySelectorAll('.dj-card').forEach(k => { if (k.offsetHeight > 880) k.classList.add('cp-panjang'); });
+    area.removeAttribute('style');
+    const judulAsli = document.title;
+    document.title = judulDokumen;
+    const bersihkan = () => {
+      document.body.classList.remove('cetak-detail-siswa');
+      document.title = judulAsli;
+      const a = document.getElementById('cetak-area'); if (a) a.remove();
+      window.removeEventListener('afterprint', bersihkan);
+    };
+    window.addEventListener('afterprint', bersihkan);
+    const gambar = Array.from(area.querySelectorAll('img')).filter(im => !im.complete)
+      .map(im => new Promise(r => { im.addEventListener('load', r); im.addEventListener('error', r); }));
+    const font = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+    return Promise.race([Promise.all(gambar.concat([font])), new Promise(r => setTimeout(r, 6000))]).then(() => {
+      // gambar Drive yang gagal di percobaan pertama diganti URL cadangan oleh penangan global -> beri waktu sebentar
+      const masihGagal = Array.from(area.querySelectorAll('img')).some(im => !im.complete || im.naturalWidth === 0);
+      return masihGagal ? new Promise(r => setTimeout(r, 2500)) : null;
+    }).then(() => {
+      document.body.classList.add('cetak-detail-siswa');
+      window.print();
+    });
+  },
+
+  // Cetak / simpan PDF detail SATU siswa yang sedang dibuka (mengikuti tab yang tampil).
+  cetakDetailSiswa() {
+    const D = Guru._detailSiswa;
+    const items = D.items || [];
+    if (!items.length) { toast('Detail jawaban belum selesai dimuat.', 'error'); return; }
+    const rekap = D.rekap || {};
+    const sel = document.getElementById('pilih-ujian-rekap');
+    const judulUjian = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text : '';
+    const { namaSekolah } = Guru._identitasSekolah_();
+    const waktu = new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' });
+    const html = Guru._htmlLembarSiswa_(rekap, items, D.filter, judulUjian, { kop: true }) +
+      `<footer class="cp-foot"><span>Dicetak dari ${escapeHtml_(namaSekolah)}</span><span>${escapeHtml_(waktu)}</span></footer>`;
+    Guru._cetakArea_(html, ['Detail Jawaban', rekap.nama, rekap.kelas].filter(Boolean).join(' - '));
+  },
+
+  // Cetak / simpan PDF SELURUH siswa yang sedang tampil di Rekap Nilai (ikut Filter Kelas, cari, Lulus/Remedial).
+  // Halaman 1 = daftar nama & nilai; setiap siswa mulai di halaman baru berisi soal-soal yang salah.
+  async cetakDetailKelas() {
+    const sel = document.getElementById('pilih-ujian-rekap');
+    if (!sel || !sel.value) { toast('Pilih ujian terlebih dahulu.', 'error'); return; }
+    const data = Guru._daftarSesiDetail_().slice()
+      .sort((a, b) => String(a.kelas || '').localeCompare(String(b.kelas || ''), 'id', { numeric: true }) || String(a.nama || '').localeCompare(String(b.nama || ''), 'id', { sensitivity: 'base' }));
+    if (!data.length) { toast('Tidak ada siswa pada filter ini.', 'error'); return; }
+    if (Guru._sedangCetakKelas) return;
+    Guru._sedangCetakKelas = true;
+    try {
+      const judulUjian = sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text : '';
+      toast(`Mengambil detail jawaban ${data.length} siswa...`);
+      const hasil = new Array(data.length).fill(null);
+      let giliran = 0, selesai = 0;
+      const pekerja = async () => {
+        while (giliran < data.length) {
+          const i = giliran++;
+          try {
+            const res = await api('getDetailJawaban', { sesiId: data[i].sesiId, guruId: state.user ? state.user.id : '' });
+            if (res && res.ok && (res.items || []).length) hasil[i] = res.items;
+          } catch (e) { /* ditandai gagal di bawah */ }
+          selesai++;
+          if (selesai % 10 === 0 && selesai < data.length) toast(`Mengambil detail jawaban... ${selesai}/${data.length}`);
+        }
+      };
+      await Promise.all([pekerja(), pekerja(), pekerja(), pekerja()]);
+      const berhasil = data.map((r, i) => ({ r, items: hasil[i] })).filter(x => x.items);
+      const gagal = data.filter((r, i) => !hasil[i]);
+      if (!berhasil.length) { toast('Gagal mengambil detail jawaban. Coba lagi.', 'error'); return; }
+
+      const esc = escapeHtml_;
+      const { namaSekolah, kop } = Guru._identitasSekolah_();
+      const kelasSet = Array.from(new Set(berhasil.map(x => x.r.kelas).filter(Boolean)));
+      const labelKelas = kelasSet.length === 1 ? 'Kelas ' + kelasSet[0] : (kelasSet.length ? 'Kelas ' + kelasSet.join(', ') : 'Semua Kelas');
+      const waktu = new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' });
+      const baris = berhasil.map((x, n) => {
+        const lulus = String(x.r.lulus) === 'true';
+        const belum = x.items.filter(it => it.status !== 'benar').length;
+        return `<tr><td class="cp-c">${n + 1}</td><td>${esc(x.r.nama || '-')}</td><td class="cp-c">${esc(x.r.kelas || '-')}</td><td class="cp-c"><strong>${esc(String(x.r.nilai))}</strong></td><td class="cp-c">${lulus ? 'Lulus' : 'Remedial'}</td><td class="cp-c">${labelKategori_(x.r.nilai)}</td><td class="cp-c">${belum} / ${x.items.length}</td></tr>`;
+      }).join('');
+      const cover = `<section class="cp-cover">${kop}
+        <h2 class="cp-judul">Detail Jawaban Siswa — ${esc(labelKelas)}</h2>
+        <p class="cp-cover-ujian">${esc(judulUjian)}</p>
+        <p class="cp-cover-petunjuk">Cari nama Anda pada daftar di bawah, lalu buka halaman berisi nama tersebut: di sana tertera soal yang dijawab salah, jawaban yang dipilih, kunci jawaban, dan pembahasan. Daftar berurutan sama dengan urutan halaman.</p>
+        <table class="cp-daftar"><thead><tr><th class="cp-c">No</th><th>Nama</th><th class="cp-c">Kelas</th><th class="cp-c">Nilai</th><th class="cp-c">Status</th><th class="cp-c">Kategori</th><th class="cp-c">Soal belum benar</th></tr></thead><tbody>${baris}</tbody></table>
+        ${gagal.length ? `<p class="cp-evaluasi"><strong>Detail tidak dapat dimuat:</strong> ${gagal.map(r => esc(r.nama || '-')).join(', ')}. Coba cetak ulang.</p>` : ''}
+        <div class="cp-foot"><span>Dicetak dari ${esc(namaSekolah)}</span><span>${esc(waktu)}</span></div></section>`;
+      const bagian = berhasil.map(x => {
+        return Guru._htmlLembarSiswa_(x.r, x.items, 'salah', judulUjian, { kop: false }); // hanya soal yang belum benar; siswa nilai sempurna cukup diberi keterangan
+      }).join('');
+      await Guru._cetakArea_(cover + bagian, ['Detail Jawaban', labelKelas, judulUjian].filter(Boolean).join(' - '));
+    } finally {
+      Guru._sedangCetakKelas = false;
+    }
+  },
+
+  // Unduh Excel evaluasi: semua siswa yang sedang tampil (ikut Filter Kelas/cari/hasil).
+  // Sheet "Ringkasan" = 1 baris per siswa; sheet "Jawaban Salah" = 1 baris per soal yang belum benar.
+  async unduhEvaluasiSalah() {
+    const sel = document.getElementById('pilih-ujian-rekap');
+    if (!sel || !sel.value) { toast('Pilih ujian terlebih dahulu.', 'error'); return; }
+    const data = Guru._daftarSesiDetail_();
+    if (!data.length) { toast('Tidak ada siswa untuk dievaluasi pada filter ini.', 'error'); return; }
+    try { await muatPustaka_('xlsx'); } catch (e) { toast(e.message, 'error'); return; }
+    const judulUjian = sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text : 'Ujian';
+    toast(`Mengambil detail jawaban ${data.length} siswa...`);
+    const hasil = new Array(data.length).fill(null);
+    let giliran = 0, gagal = 0;
+    const pekerja = async () => {
+      while (giliran < data.length) {
+        const i = giliran++;
+        try {
+          const res = await api('getDetailJawaban', { sesiId: data[i].sesiId, guruId: state.user ? state.user.id : '' });
+          if (res && res.ok) hasil[i] = res.items || []; else gagal++;
+        } catch (e) { gagal++; }
+      }
+    };
+    await Promise.all([pekerja(), pekerja(), pekerja(), pekerja()]);
+
+    const teksPolos = (html) => {
+      const tpl = document.createElement('template');
+      tpl.innerHTML = kontenSoalHtml(html);
+      tpl.content.querySelectorAll('img').forEach(im => im.replaceWith('[gambar]'));
+      tpl.content.querySelectorAll('br').forEach(b => b.replaceWith('\n'));
+      return tpl.content.textContent.replace(/\n{2,}/g, '\n').trim();
+    };
+    const potong = t => { t = String(t == null ? '' : t); return t.length > 32000 ? t.slice(0, 32000) + '…' : t; };
+    const opsiTeks = (o) => { const x = (o && typeof o === 'object') ? o : { teks: o || '', gambar: '' }; return teksPolos(x.teks) + (x.gambar ? ' [gambar]' : ''); };
+    const hurufOpsi = (it, daftar) => daftar.map(i => String.fromCharCode(65 + i) + '. ' + opsiTeks((it.opsi || [])[i])).join('; ');
+    const jawabanTeks = (it) => {
+      if (it.jawaban === null || it.jawaban === undefined) return '(tidak dijawab)';
+      if (it.tipe === 'menjodohkan') {
+        const kiri = (it.opsi && it.opsi.kiri) || [], kanan = (it.opsi && it.opsi.kanan) || [];
+        const j = (it.jawaban && typeof it.jawaban === 'object') ? it.jawaban : {};
+        return kiri.map((k, i) => teksPolos(k) + ' → ' + ((j[i] !== undefined && j[i] !== null && j[i] !== '') ? teksPolos(kanan[j[i]]) : '(kosong)')).join('; ');
+      }
+      if (it.tipe === 'uraian') return String(it.jawaban);
+      const dipilih = Array.isArray(it.jawaban) ? it.jawaban.map(Number) : [Number(it.jawaban)];
+      return hurufOpsi(it, dipilih);
+    };
+    const kunciTeks = (it) => {
+      if (it.tipe === 'menjodohkan') {
+        const kiri = (it.opsi && it.opsi.kiri) || [], kanan = (it.opsi && it.opsi.kanan) || [], k = it.kunciTampil || {};
+        const baris = kiri.map((tk, i) => teksPolos(tk) + ' → ' + (k[i] !== undefined ? teksPolos(kanan[k[i]]) : '(belum diatur)'));
+        return baris.length ? baris.join('; ') : '(belum diatur)';
+      }
+      if (it.tipe === 'uraian') {
+        const kata = ((it.kunciTampil && it.kunciTampil.kataKunci) || []).filter(x => String(x).trim());
+        return kata.length ? 'Kata kunci: ' + kata.join(', ') : '(dikoreksi manual)';
+      }
+      const k = it.kunciTampil || [];
+      return k.length ? hurufOpsi(it, k) : '(belum diatur)';
+    };
+    const label = { benar: 'Benar', salah: 'Salah', sebagian: 'Sebagian benar', kosong: 'Tidak dijawab', manual: 'Perlu dikoreksi' };
+
+    const ringkasan = [], salah = [];
+    let no = 0, tanpaData = 0;
+    data.forEach((r, i) => {
+      const items = hasil[i];
+      if (!items) { tanpaData++; return; }
+      no++;
+      const hitung = s => items.filter(it => it.status === s).length;
+      const nomorBelum = [];
+      items.forEach((it, k) => {
+        if (it.status === 'benar') return;
+        nomorBelum.push(k + 1);
+        salah.push([no, r.nama || '', r.kelas || '', k + 1, potong(teksPolos(it.pertanyaan)), potong(jawabanTeks(it)), potong(kunciTeks(it)),
+          label[it.status] || it.status, it.skor, it.bobot, potong(teksPolos(it.pembahasan || ''))]);
+      });
+      const lulus = String(r.lulus) === 'true';
+      ringkasan.push([no, r.nama || '', r.kelas || '', Number(r.nilai), lulus ? 'Lulus' : 'Remedial', labelKategori_(r.nilai), items.length,
+        hitung('benar'), hitung('sebagian'), hitung('salah'), hitung('kosong'), hitung('manual'), nomorBelum.join(', ')]);
+    });
+    if (!ringkasan.length) { toast('Gagal mengambil detail jawaban. Coba lagi.', 'error'); return; }
+
+    const wb = XLSX.utils.book_new();
+    const wsR = XLSX.utils.aoa_to_sheet([['No', 'Nama', 'Kelas', 'Nilai', 'Keterangan', 'Kategori', 'Jumlah Soal', 'Benar', 'Sebagian Benar', 'Salah', 'Tidak Dijawab', 'Perlu Dikoreksi', 'Nomor Soal yang Perlu Dievaluasi (urutan di lembar siswa)'], ...ringkasan]);
+    wsR['!cols'] = [5, 30, 10, 8, 12, 12, 12, 8, 14, 8, 14, 15, 40].map(w => ({ wch: w }));
+    wsR['!freeze'] = { xSplit: 0, ySplit: 1 };
+    XLSX.utils.book_append_sheet(wb, wsR, 'Ringkasan');
+    const wsS = XLSX.utils.aoa_to_sheet([['No', 'Nama', 'Kelas', 'No. Soal (urutan siswa)', 'Pertanyaan', 'Jawaban Siswa', 'Kunci Jawaban', 'Status', 'Skor', 'Bobot', 'Pembahasan'], ...salah]);
+    wsS['!cols'] = [5, 30, 10, 12, 60, 40, 40, 15, 8, 8, 50].map(w => ({ wch: w }));
+    wsS['!freeze'] = { xSplit: 0, ySplit: 1 };
+    wsS['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(salah.length, 1), c: 10 } }) };
+    XLSX.utils.book_append_sheet(wb, wsS, 'Jawaban Salah');
+    const bersih = t => String(t).replace(/[\\/:*?"<>|]+/g, '-').trim().slice(0, 60);
+    const kelasFilter = document.getElementById('kelas-rekap')?.value || '';
+    XLSX.writeFile(wb, 'evaluasi-jawaban-' + bersih(judulUjian) + (kelasFilter ? '-' + bersih(kelasFilter) : '') + '.xlsx');
+    toast(`Evaluasi ${ringkasan.length} siswa (${salah.length} jawaban perlu dievaluasi) diunduh.` + (tanpaData ? ` ${tanpaData} siswa gagal dimuat.` : ''), tanpaData ? 'error' : 'success');
+  },
+
+  pilihSemuaRekap(aktif) {
+    document.querySelectorAll('#tabel-rekap .rekap-cek:not(:disabled)').forEach(cb => { cb.checked = aktif; });
+  },
+
+  // Inti penghapusan nilai: kirim 1 permintaan utk banyak sesi, lalu perbarui
+  // tampilan dari data lokal (tanpa unduh ulang).
+  async hapusNilaiIds_(idList, opsiDialog) {
+    if (!idList.length) { toast('Pilih dulu nilai siswa yang ingin dihapus (centang kotak di kiri nama).', 'error'); return; }
+    if (!(await Dialog.konfirmasi(opsiDialog))) return;
+    toast(`Menghapus ${idList.length} nilai...`);
+    const res = await api('hapusNilaiSiswa', { sesiIds: JSON.stringify(idList) });
+    if (!res.ok) { toast('Gagal menghapus nilai: ' + res.error, 'error'); return; }
+    const set = new Set(idList.map(String));
+    state.guru._rekapAktif = (state.guru._rekapAktif || []).filter(r => !set.has(String(r.sesiId)));
+    Guru.renderTabelRekap_();
+    toast(`${idList.length} nilai dihapus. Siswa yang bersangkutan dapat mengikuti ujian ini lagi.`, 'success');
+  },
+
+  hapusNilaiSatu(sesiId) {
+    const r = (state.guru._rekapAktif || []).find(x => String(x.sesiId) === String(sesiId));
+    const nama = r ? r.nama : 'siswa ini';
+    return Guru.hapusNilaiIds_([sesiId], {
+      judul: 'Hapus Nilai Siswa?', tipe: 'danger', ikon: 'fa-trash-can',
+      pesan: `Nilai **${nama}** pada ujian ini akan dihapus **permanen**. Siswa bisa mengerjakan ujian ini lagi dari awal.\n\nTindakan ini tidak bisa dibatalkan.`,
+      teksYa: 'Hapus Nilai'
+    });
+  },
+
+  hapusNilaiTerpilih() {
+    const ids = Array.from(document.querySelectorAll('#tabel-rekap .rekap-cek:checked')).map(cb => cb.value).filter(Boolean);
+    return Guru.hapusNilaiIds_(ids, {
+      judul: 'Hapus Nilai Terpilih?', tipe: 'danger', ikon: 'fa-trash-can',
+      pesan: `**${ids.length} nilai** siswa yang dicentang akan dihapus **permanen**. Siswa-siswa tersebut bisa mengerjakan ujian ini lagi.\n\nTindakan ini tidak bisa dibatalkan.`,
+      teksYa: `Hapus ${ids.length} Nilai`
+    });
+  },
+
+  hapusSemuaNilaiUjian() {
+    const disaring = filterAktif_('kelas-rekap', 'cari-rekap') || !!document.getElementById('blokir-rekap')?.checked || !!document.getElementById('status-rekap')?.value;
+    const ids = Guru.rekapTersaring_().map(r => r.sesiId).filter(Boolean);
+    if (!ids.length) { toast('Belum ada nilai untuk dihapus.', 'error'); return; }
+    const kelasDipilih = document.getElementById('kelas-rekap')?.value || '';
+    const ruang = disaring ? `yang sedang tampil${kelasDipilih ? ' (kelas ' + kelasDipilih + ')' : ''}` : 'pada ujian ini';
+    return Guru.hapusNilaiIds_(ids, {
+      judul: disaring ? 'Hapus Nilai yang Tampil?' : 'Hapus Semua Nilai Ujian?', tipe: 'danger', ikon: 'fa-trash-can',
+      pesan: `**${ids.length} nilai** ${ruang} akan dihapus **permanen**. Siswa-siswa tersebut bisa mengerjakan ujian ini lagi.\n\nTindakan ini tidak bisa dibatalkan.`,
+      ketik: disaring ? undefined : 'HAPUS', teksYa: `Hapus ${ids.length} Nilai`
+    });
+  },
+
+  // Unduh rekap nilai sebagai file Excel (.xlsx) sungguhan: kolom langsung rapi
+  // (tidak menumpuk di satu kolom seperti CSV di Excel berpengaturan regional
+  // Indonesia yang memakai titik koma), status tertulis "Lulus"/"Remedial"
+  // (bukan TRUE/FALSE), dan ada kolom durasi pengerjaan.
+  // Unduh nilai sebagai file Excel (.xlsx). Tiga mode:
+  //  - (default)  : sesuai Filter Kelas + kotak cari yang sedang tampil
+  //                 (pilih 1 kelas = nilai kelas itu saja).
+  //  - 'semua'    : seluruh siswa pada ujian terpilih -> 1 sheet gabungan + 1 sheet per kelas.
+  //  - 'semuaUjian': seluruh ujian sekaligus (mengikuti Filter Kelas) -> 1 sheet
+  //                 gabungan + 1 sheet per kelas, ada kolom "Ujian".
+  async unduhRekapCSV(mode) {
+    try { await muatPustaka_('xlsx'); } catch (e) { toast(e.message, 'error'); return; }
+    const sel = document.getElementById('pilih-ujian-rekap');
+    const judulUjian = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text : 'Ujian';
+    const kelasFilter = document.getElementById('kelas-rekap')?.value || '';
+    const bersih = t => String(t).replace(/[\\/:*?"<>|]+/g, '-').trim().slice(0, 60);
+    const urut = (arr, denganUjian) => [...arr].sort((a, b) =>
+      (denganUjian ? String(a._ujian || '').localeCompare(String(b._ujian || ''), 'id', { numeric: true }) : 0) ||
+      String(a.kelas || '').localeCompare(String(b.kelas || ''), 'id', { numeric: true }) ||
+      String(a.nama || '').localeCompare(String(b.nama || ''), 'id'));
+    const fmtWaktu = iso => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (isNaN(d)) return String(iso);
+      const p = n => String(n).padStart(2, '0');
+      return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    };
+    const buatSheet = (arr, denganUjian) => {
+      const headers = ['No'].concat(denganUjian ? ['Ujian'] : [], ['Nama', 'Kelas', 'Nilai', 'Keterangan', 'Kategori', 'Pelanggaran', 'Mulai', 'Selesai', 'Durasi Pengerjaan', 'Durasi (menit)', 'Foto Bukti Orak-Orik']);
+      const rows = urut(arr, denganUjian).map((r, i) => {
+        const lulus = r.lulus === true || String(r.lulus).toLowerCase() === 'true';
+        const lulusSalah = r.lulus === false || String(r.lulus).toLowerCase() === 'false';
+        const detik = hitungDurasiDetik_(r.mulai, r.selesai);
+        const nilai = r.nilai === '' || r.nilai === null || r.nilai === undefined ? '' : Number(r.nilai);
+        return [i + 1].concat(denganUjian ? [r._ujian || ''] : [], [
+          r.nama || '', r.kelas || '',
+          isNaN(nilai) ? r.nilai : nilai,
+          lulus ? 'Lulus' : (lulusSalah ? 'Remedial' : '-'),
+          isNaN(nilai) ? '-' : labelKategori_(nilai),
+          Number(r.pelanggaran) || 0,
+          fmtWaktu(r.mulai), fmtWaktu(r.selesai),
+          detik === null ? '-' : formatDurasi_(detik),
+          detik === null ? '' : Math.round(detik / 6) / 10,
+          Array.isArray(r.bukti) ? r.bukti.length : 0
+        ]);
+      });
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      ws['!cols'] = (denganUjian ? [5, 28] : [5]).concat([30, 10, 8, 12, 12, 12, 18, 18, 20, 14, 14]).map(w => ({ wch: w }));
+      ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+      ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(rows.length, 1), c: headers.length - 1 } }) };
+      return ws;
+    };
+    // Satu sheet gabungan + satu sheet per kelas.
+    const bukuPerKelas = (arr, denganUjian, namaGabungan) => {
+      const wb = XLSX.utils.book_new();
+      const terpakai = new Set();
+      XLSX.utils.book_append_sheet(wb, buatSheet(arr, denganUjian), namaSheetUnik_(namaGabungan, terpakai));
+      const perKelas = {};
+      arr.forEach(r => { const k = String(r.kelas || 'Tanpa Kelas'); (perKelas[k] = perKelas[k] || []).push(r); });
+      Object.keys(perKelas).sort((a, b) => a.localeCompare(b, 'id', { numeric: true })).forEach(k => {
+        XLSX.utils.book_append_sheet(wb, buatSheet(perKelas[k], denganUjian), namaSheetUnik_('Kelas ' + k, terpakai));
+      });
+      return { wb, jumlahKelas: Object.keys(perKelas).length };
+    };
+
+    if (mode === 'semuaUjian') {
+      toast('Mengumpulkan nilai dari semua ujian...');
+      const daftar = await api('getDaftarUjian', { guruId: state.user.id });
+      if (!daftar.ok) { toast('Gagal memuat daftar ujian: ' + daftar.error, 'error'); return; }
+      let gabungan = [];
+      for (const u of daftar.data) {
+        const r = await api('getRekapNilai', { ujianId: u.id });
+        if (r.ok) gabungan = gabungan.concat(r.data.map(x => Object.assign({}, x, { _ujian: u.judul })));
+      }
+      if (kelasFilter) gabungan = gabungan.filter(r => String(r.kelas || '').trim() === kelasFilter);
+      if (gabungan.length === 0) { toast('Tidak ada nilai untuk diunduh.', 'error'); return; }
+      const { wb, jumlahKelas } = bukuPerKelas(gabungan, true, 'Semua Ujian');
+      XLSX.writeFile(wb, 'rekap-nilai-semua-ujian-' + (kelasFilter ? bersih(kelasFilter) : 'semua-kelas') + '.xlsx');
+      toast(`Nilai ${gabungan.length} data (${daftar.data.length} ujian, ${jumlahKelas} kelas) berhasil diunduh.`, 'success');
+      return;
+    }
+
+    const semuaData = state.guru._rekapAktif;
+    if (!semuaData || semuaData.length === 0) { toast('Tidak ada data untuk diunduh.', 'error'); return; }
+
+    if (mode === 'semua') {
+      const { wb, jumlahKelas } = bukuPerKelas(semuaData, false, 'Semua Kelas');
+      XLSX.writeFile(wb, 'rekap-nilai-' + bersih(judulUjian) + '-semua-kelas.xlsx');
+      toast(`Rekap ${semuaData.length} siswa (${jumlahKelas} kelas) berhasil diunduh.`, 'success');
+      return;
+    }
+
+    const data = Guru.rekapTersaring_();
+    if (data.length === 0) { toast('Tidak ada data yang cocok dengan filter untuk diunduh.', 'error'); return; }
+    const cari = (document.getElementById('cari-rekap')?.value || '').trim();
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, buatSheet(data, false), namaSheetUnik_(kelasFilter ? 'Kelas ' + kelasFilter : 'Rekap Nilai', new Set()));
+    XLSX.writeFile(wb, 'rekap-nilai-' + bersih(judulUjian) + (kelasFilter ? '-' + bersih(kelasFilter) : '') + (cari ? '-hasil-cari' : '') + '.xlsx');
+    toast(`Rekap ${data.length} siswa berhasil diunduh.`, 'success');
+  },
+
+  // Menghitung ulang nilai SEMUA siswa yang sudah selesai di ujian yang
+  // sedang dipilih, memakai jawaban yang SUDAH TERSIMPAN (tidak mengulang
+  // ujian, tidak mengubah jawaban) tapi lewat logika penilaian TERBARU --
+  // berguna kalau ada perbaikan pada cara penilaian (mis. bug soal dengan
+  // opsi teracak yang sempat salah dinilai). Aman dipanggil berkali-kali:
+  // hanya sesi yang nilainya benar-benar berubah yang ditulis ulang.
+  async hitungUlangNilai() {
+    const ujianId = document.getElementById('pilih-ujian-rekap').value;
+    if (!ujianId) { toast('Pilih ujian terlebih dahulu.', 'error'); return; }
+    if (!(await Dialog.konfirmasi({
+      judul: 'Hitung Ulang Nilai?', tipe: 'info', ikon: 'fa-calculator',
+      pesan: 'Nilai dan status lulus **semua siswa** yang sudah selesai di ujian ini akan dihitung ulang.\n\nJawaban siswa **tidak diubah atau dihapus**; hanya nilai dan status lulus yang mungkin diperbarui bila sebelumnya salah dihitung.',
+      teksYa: 'Ya, Hitung Ulang'
+    }))) return;
+    toast('Menghitung ulang nilai...');
+    const res = await api('hitungUlangNilaiUjian', { ujianId });
+    if (res.ok) {
+      toast(`Selesai. ${res.totalDiperiksa} sesi diperiksa, ${res.totalBerubah} nilai diperbarui.`, 'success');
+      Guru.muatRekap();
+    } else {
+      toast('Gagal menghitung ulang: ' + res.error, 'error');
+    }
+  },
+
+  async muatLogPelanggaran() {
+    const ujianId = document.getElementById('pilih-ujian-log').value;
+    const cont = document.getElementById('tabel-log');
+    if (!ujianId) { cont.innerHTML = 'Pilih ujian terlebih dahulu.'; return false; }
+    const res = await api('getLogPelanggaran', { ujianId });
+    if (!res.ok) return gagalMuat_(cont, 'Gagal memuat.');
+    // Butuh data siswa agar log bisa menampilkan nama & kelas (bukan ID mentah).
+    if (!(state.guru.daftarSiswa || []).length) {
+      const rs = await api('getDaftarSiswa', {});
+      if (rs.ok) state.guru.daftarSiswa = rs.data;
+    }
+    state.guru._logAktif = res.data;
+    Guru.renderLogPelanggaran_(true);
+    return true;
+  },
+
+  renderLogPelanggaran_(isiKelas) {
+    const cont = document.getElementById('tabel-log');
+    const peta = {};
+    (state.guru.daftarSiswa || []).forEach(s => { peta[s.id] = s; });
+    const semua = (state.guru._logAktif || []).map(l => {
+      const s = peta[l.siswa_id];
+      return Object.assign({}, l, { nama: s ? s.nama : String(l.siswa_id || ''), kelas: s ? (s.kelas || '-') : '-', username: s ? s.username : '' });
+    });
+    if (isiKelas === true) isiOpsiKelas_('kelas-log', kelasUnikDari_(semua));
+    if (semua.length === 0) { tampilkanInfoFilter_('kelas-log-info', 0, 0); cont.innerHTML = '<p class="subtitle">Tidak ada pelanggaran tercatat.</p>'; return; }
+    const data = semua.filter(l => cocokFilterSiswa_(l, 'kelas-log', 'cari-log'));
+    tampilkanInfoFilter_('kelas-log-info', new Set(data.map(l => l.siswa_id)).size, new Set(semua.map(l => l.siswa_id)).size, data.length + ' catatan');
+    if (data.length === 0) { cont.innerHTML = '<p class="subtitle">Tidak ada pelanggaran yang cocok dengan kelas/pencarian ini.</p>'; return; }
+    cont.innerHTML = `<table class="ledger"><thead><tr><th>Siswa</th><th>Kelas</th><th>Jenis Pelanggaran</th><th>Waktu</th></tr></thead><tbody>` +
+      data.map(l => `<tr><td>${escapeHtml_(l.nama)}</td><td>${escapeHtml_(l.kelas)}</td><td>${labelPelanggaran(l.jenis)}</td><td>${formatTanggal(l.waktu)}</td></tr>`).join('') +
+      `</tbody></table>`;
+  },
+
+  // ---------------- ANALISIS SOAL & JAWABAN SISWA ----------------
+  async muatAnalisisSoal() {
+    const ujianId = document.getElementById('pilih-ujian-analisis').value;
+    const contSoal = document.getElementById('tabel-analisis-soal');
+    const contJawaban = document.getElementById('tabel-analisis-jawaban');
+    if (!ujianId) { contSoal.innerHTML = 'Pilih ujian terlebih dahulu.'; contJawaban.innerHTML = ''; return false; }
+    const res = await api('getAnalisisSoal', { ujianId });
+    if (!res.ok) return gagalMuat_(contSoal, 'Gagal memuat: ' + res.error);
+    state.guru._analisisSoal = res.soal;
+    state.guru._analisisSiswa = res.siswa;
+    state.guru._analisisTotalPeserta = res.totalPeserta;
+    isiOpsiKelas_('kelas-analisis', kelasUnikDari_(res.siswa));
+    Guru.renderAnalisisSoal();
+    Guru.renderAnalisisJawaban();
+    return true;
+  },
+
+  renderAnalisisSoal() {
+    const cont = document.getElementById('tabel-analisis-soal');
+    const data = state.guru._analisisSoal || [];
+    const totalPeserta = state.guru._analisisTotalPeserta || 0;
+    if (totalPeserta === 0) { cont.innerHTML = '<p class="subtitle">Belum ada siswa yang menyelesaikan ujian ini, jadi analisis butir soal belum bisa dihitung.</p>'; return; }
+    const badgeKesulitan = { mudah: 'ok', sedang: 'warn', sulit: 'no' };
+    const labelKesulitanOtomatis = { mudah: 'Mudah', sedang: 'Sedang', sulit: 'Sulit', '-': '-' };
+    cont.innerHTML = `<p class="subtitle">Berdasarkan <strong>${totalPeserta}</strong> siswa yang sudah menyelesaikan ujian ini.
+        Label "Tingkat Kesulitan (Otomatis)" dihitung dari persentase siswa yang menjawab benar: &ge;70% = Mudah,
+        40-70% = Sedang, &lt;40% = Sulit -- dibandingkan dengan label "Tingkat Kesulitan (Guru)" yang diisi manual
+        saat membuat soal di Bank Soal, supaya guru bisa melihat soal mana yang ternyata lebih sulit/mudah dari
+        perkiraan awal.</p>
+      <table class="ledger"><thead><tr>
+        <th>No</th><th>Pertanyaan</th><th>Tipe</th><th>Sulit (Guru)</th><th>Benar</th><th>Sebagian</th><th>Salah</th><th>Kosong</th><th>% Benar</th><th>Sulit (Otomatis)</th>
+      </tr></thead><tbody>` +
+      data.map(s => `<tr>
+        <td>${s.nomor}</td>
+        <td style="max-width:260px" title="${escapeHtml_(bersihkanHtml_(s.pertanyaan))}">${escapeHtml_(potongTeks_(bersihkanHtml_(s.pertanyaan), 70))}</td>
+        <td>${labelTipe(s.tipe)}</td>
+        <td>${labelKesulitan(s.tingkatKesulitanGuru)}</td>
+        <td>${s.jumlahBenar}</td>
+        <td>${s.jumlahSebagianBenar}</td>
+        <td>${s.jumlahSalah}</td>
+        <td>${s.jumlahKosong}</td>
+        <td><strong>${s.persenBenar}%</strong></td>
+        <td><span class="badge ${badgeKesulitan[s.kesulitanOtomatis] || ''}">${labelKesulitanOtomatis[s.kesulitanOtomatis] || s.kesulitanOtomatis}</span></td>
+      </tr>`).join('') + `</tbody></table>`;
+  },
+
+  async unduhAnalisisSoalCSV() {
+    const data = state.guru._analisisSoal;
+    if (!data || data.length === 0) { toast('Tidak ada data untuk diunduh.', 'error'); return; }
+    const labelOto = { mudah: 'Mudah', sedang: 'Sedang', sulit: 'Sulit', '-': '-' };
+    const headers = ['No', 'Pertanyaan', 'Tipe', 'Tingkat Kesulitan (Guru)', 'Jumlah Benar', 'Jumlah Sebagian Benar', 'Jumlah Salah', 'Jumlah Kosong', 'Persen Benar (%)', 'Tingkat Kesulitan (Otomatis)'];
+    const rows = data.map(s => {
+      const persen = parseFloat(String(s.persenBenar).replace('%', ''));
+      return [
+        s.nomor, String(bersihkanHtml_(s.pertanyaan)), labelTipe(s.tipe), labelKesulitan(s.tingkatKesulitanGuru),
+        Number(s.jumlahBenar) || 0, Number(s.jumlahSebagianBenar) || 0, Number(s.jumlahSalah) || 0, Number(s.jumlahKosong) || 0,
+        isNaN(persen) ? '' : persen, labelOto[s.kesulitanOtomatis] || s.kesulitanOtomatis
+      ];
+    });
+    const ok = await unduhXlsxRapi_('analisis-soal-' + namaUjianUntukFile_('pilih-ujian-analisis') + '.xlsx', 'Analisis Soal', headers, rows,
+      [5, 60, 16, 22, 12, 20, 12, 13, 15, 26]);
+    if (ok) toast(`Analisis ${rows.length} soal berhasil diunduh.`, 'success');
+  },
+
+  renderAnalisisJawaban() {
+    const cont = document.getElementById('tabel-analisis-jawaban');
+    const soalList = state.guru._analisisSoal || [];
+    const semuaSiswa = state.guru._analisisSiswa || [];
+    if (semuaSiswa.length === 0) { tampilkanInfoFilter_('kelas-analisis-info', 0, 0); cont.innerHTML = '<p class="subtitle">Belum ada siswa yang menyelesaikan ujian ini.</p>'; return; }
+    const siswaList = semuaSiswa.filter(sw => cocokFilterSiswa_(sw, 'kelas-analisis', 'cari-analisis'));
+    tampilkanInfoFilter_('kelas-analisis-info', siswaList.length, semuaSiswa.length);
+    if (siswaList.length === 0) { cont.innerHTML = '<p class="subtitle">Tidak ada siswa yang cocok dengan kelas/pencarian ini.</p>'; return; }
+    const simbol = { benar: '<span class="jwb-cell jwb-benar">✔</span>', sebagian: '<span class="jwb-cell jwb-sebagian">◐</span>', salah: '<span class="jwb-cell jwb-salah">✘</span>', kosong: '<span class="jwb-cell jwb-kosong">–</span>', na: '<span class="jwb-cell jwb-kosong">–</span>' };
+    cont.innerHTML = `<p class="subtitle">✔ = benar &nbsp; ◐ = sebagian benar (checkbox/mencocokkan/uraian) &nbsp; ✘ = salah &nbsp; – = tidak dijawab.</p>
+      <div class="table-scroll-x"><table class="ledger"><thead><tr>
+        <th>Nama</th><th>Kelas</th><th>Nilai</th>` + soalList.map(s => `<th title="${escapeHtml_(bersihkanHtml_(s.pertanyaan))}">No ${s.nomor}</th>`).join('') + `
+      </tr></thead><tbody>` +
+      siswaList.map(sw => `<tr>
+        <td>${escapeHtml_(sw.nama)}</td><td>${escapeHtml_(sw.kelas)}</td><td><strong>${sw.nilai}</strong></td>` +
+        soalList.map(s => `<td>${simbol[sw.jawabanDetail[s.soalId]] || simbol.kosong}</td>`).join('') + `
+      </tr>`).join('') + `</tbody></table></div>`;
+  },
+
+  async unduhAnalisisJawabanCSV() {
+    const soalList = state.guru._analisisSoal;
+    const siswaList = (state.guru._analisisSiswa || []).filter(sw => cocokFilterSiswa_(sw, 'kelas-analisis', 'cari-analisis'));
+    if (siswaList.length === 0) { toast('Tidak ada data untuk diunduh.', 'error'); return; }
+    const labelSimbol = { benar: 'Benar', sebagian: 'Sebagian', salah: 'Salah', kosong: 'Kosong', na: 'Kosong' };
+    const headers = ['No', 'Nama', 'Kelas', 'Nilai', ...soalList.map(s => 'No ' + s.nomor)];
+    const urut = [...siswaList].sort((a, b) =>
+      String(a.kelas || '').localeCompare(String(b.kelas || ''), 'id', { numeric: true }) ||
+      String(a.nama || '').localeCompare(String(b.nama || ''), 'id'));
+    const rows = urut.map((sw, i) => {
+      const nilai = Number(sw.nilai);
+      return [i + 1, sw.nama || '', sw.kelas || '', isNaN(nilai) ? sw.nilai : nilai,
+        ...soalList.map(s => labelSimbol[sw.jawabanDetail[s.soalId]] || 'Kosong')];
+    });
+    const ok = await unduhXlsxRapi_('analisis-jawaban-' + namaUjianUntukFile_('pilih-ujian-analisis') + '.xlsx', 'Analisis Jawaban', headers, rows,
+      [5, 30, 10, 8, ...soalList.map(() => 9)]);
+    if (ok) toast(`Analisis jawaban ${rows.length} siswa berhasil diunduh.`, 'success');
+  },
+
+  // ---------------- PEMANTAUAN UJIAN (live monitoring) ----------------
+  async muatPemantauan() {
+    const ujianId = document.getElementById('pilih-ujian-pemantauan').value;
+    const cont = document.getElementById('tabel-pemantauan');
+    if (!ujianId) { cont.innerHTML = 'Pilih ujian terlebih dahulu.'; return false; }
+    const res = await api('getPemantauanUjian', { ujianId });
+    if (!res.ok) return gagalMuat_(cont, 'Gagal memuat: ' + res.error);
+    state.guru._pemantauanAktif = res.data;
+    state.guru._pemantauanMax = res.maxPelanggaran;
+    isiOpsiKelas_('kelas-pemantauan', kelasUnikDari_(res.data));
+    Guru.renderTabelPemantauan();
+    return true;
+  },
+
+  renderTabelPemantauan() {
+    const cont = document.getElementById('tabel-pemantauan');
+    const semuaPemantauan = state.guru._pemantauanAktif || [];
+    const maxPelanggaran = state.guru._pemantauanMax || 999;
+    if (semuaPemantauan.length === 0) { tampilkanInfoFilter_('kelas-pemantauan-info', 0, 0); cont.innerHTML = '<p class="subtitle">Belum ada siswa yang membuka ujian ini.</p>'; return; }
+    const saringBlokirP = hanyaBlokir_('blokir-pemantauan', semuaPemantauan.filter(s => s.status === 'diblokir').length);
+    const data = semuaPemantauan.filter(s => cocokFilterSiswa_(s, 'kelas-pemantauan', 'cari-pemantauan') && (!saringBlokirP || s.status === 'diblokir'));
+    tampilkanInfoFilter_('kelas-pemantauan-info', data.length, semuaPemantauan.length, data.filter(s => s.status === 'berlangsung').length + ' sedang mengerjakan');
+    if (saringBlokirP && data.length === 0) { cont.innerHTML = '<p class="subtitle">Tidak ada siswa yang diblokir pada ujian ini.</p>'; return; }
+    if (data.length === 0) { cont.innerHTML = '<p class="subtitle">Tidak ada siswa yang cocok dengan kelas/pencarian ini.</p>'; return; }
+
+    const labelStatus = { berlangsung: 'Sedang Mengerjakan', selesai: 'Selesai', diblokir: 'Diblokir (Pelanggaran)' };
+    const kelasBadge = { berlangsung: 'ok', selesai: 'ok', diblokir: 'no' };
+
+    cont.innerHTML = `<table class="ledger"><thead><tr>
+        <th>Nama</th><th>Kelas</th><th>Status</th><th>Sisa Waktu</th><th>Soal Terjawab</th><th>Pelanggaran</th><th>Nilai</th><th></th>
+      </tr></thead><tbody>` +
+      data.map(s => {
+        const sisaWaktu = s.status === 'berlangsung' ? formatSisaWaktu(s.sisaDetik) + (s.tambahanDetik ? ` <span class="subtitle" style="font-size:.75rem">(+${Math.round(s.tambahanDetik/60)} mnt)</span>` : '') : '-';
+        const warnPelanggaran = s.pelanggaran > 0 && s.pelanggaran >= maxPelanggaran - 1 ? 'no' : (s.pelanggaran > 0 ? 'warn' : 'ok');
+        return `<tr>
+          <td>${escapeHtml_(s.nama)}</td>
+          <td>${escapeHtml_(s.kelas)}</td>
+          <td><span class="badge ${kelasBadge[s.status] || ''}">${labelStatus[s.status] || s.status}</span></td>
+          <td>${sisaWaktu}</td>
+          <td>${s.terjawab} / ${s.totalSoal}</td>
+          <td><span class="badge ${warnPelanggaran}">${s.pelanggaran} / ${maxPelanggaran}</span></td>
+          <td>${s.status === 'berlangsung' ? '-' : (s.nilai === '' || s.nilai === undefined ? '-' : s.nilai)}</td>
+          <td class="aksi">
+            <button class="secondary small" title="Lihat kronologi pelanggaran siswa ini" onclick="Guru.bukaLogPelanggaran('${s.sesiId}', '${escapeHtml_(s.nama)}')">🛡 Detail Pelanggaran</button>
+            <button class="secondary small" title="Tambah waktu untuk siswa ini" onclick="Guru.pemantauanTambahWaktu('${s.sesiId}', '${escapeHtml_(s.nama)}')">⏱ Tambah Waktu</button>
+            ${s.pelanggaran > 0 ? `<button class="secondary small" title="Pelanggaran jadi 0, siswa lanjut dari soal terakhir tanpa mengulang dari awal" onclick="Guru.pemantauanHapusPelanggaran('${s.sesiId}', '${escapeHtml_(s.nama)}')">🧹 Hapus Pelanggaran</button>` : ''}
+            ${s.status !== 'selesai' ? `<button class="secondary small" title="Selesaikan ujian siswa ini sekarang juga memakai jawaban terakhir yang tersimpan" onclick="Guru.pemantauanForceFinish('${s.sesiId}', '${escapeHtml_(s.nama)}')">✅ Selesaikan Paksa</button>` : ''}
+            <button class="danger small" title="Hapus sesi ini sepenuhnya -- siswa akan mengerjakan ulang dari awal (soal, jawaban, & waktu direset)" onclick="Guru.pemantauanReset('${s.sesiId}', '${escapeHtml_(s.nama)}')">↺ Reset</button>
+          </td>
+        </tr>`;
+      }).join('') + `</tbody></table>`;
+  },
+
+  // ---------------- DETAIL PELANGGARAN (kronologi per siswa) ----------------
+  JENIS_LOG: {
+    keluar_fullscreen: { ikon: '🖥', label: 'Keluar dari layar penuh', hitung: true },
+    pindah_tab: { ikon: '🔀', label: 'Pindah tab / aplikasi lain / layar dimatikan', hitung: true },
+    keluar_aplikasi: { ikon: '🚪', label: 'Keluar dari aplikasi ujian', hitung: true },
+    kembali: { ikon: '↩', label: 'Kembali ke halaman ujian', hitung: false },
+    salin_teks: { ikon: '📋', label: 'Mencoba menyalin teks (diblokir)', hitung: false },
+    tempel_teks: { ikon: '📥', label: 'Mencoba menempel teks (diblokir)', hitung: false },
+    potong_teks: { ikon: '✂', label: 'Mencoba memotong teks (diblokir)', hitung: false },
+    klik_kanan: { ikon: '🖱', label: 'Mencoba klik kanan (diblokir)', hitung: false }
+  },
+
+  async bukaLogPelanggaran(sesiId, nama) {
+    document.getElementById('log-pelanggaran-judul').textContent = 'Detail Pelanggaran — ' + nama;
+    const isi = document.getElementById('log-pelanggaran-isi');
+    isi.innerHTML = '<p class="subtitle">Memuat...</p>';
+    document.getElementById('modal-log-pelanggaran').classList.remove('hidden');
+    const res = await api('getLogPelanggaran', { sesiId });
+    if (!res.ok) { isi.innerHTML = '<p class="subtitle">Gagal memuat: ' + escapeHtml_(res.error || '') + '</p>'; return; }
+    const data = res.data || [];
+    if (!data.length) { isi.innerHTML = '<div class="log-kosong">✅ Tidak ada pelanggaran atau aktivitas mencurigakan tercatat untuk siswa ini.</div>'; return; }
+    const info = (jenis) => Guru.JENIS_LOG[jenis] || { ikon: '⚠', label: jenis, hitung: true };
+    const total = {};
+    data.forEach(l => { if (info(l.jenis).hitung) total[l.jenis] = (total[l.jenis] || 0) + 1; });
+    const ringkas = Object.keys(total).map(k => `<span class="log-chip">${info(k).ikon} ${escapeHtml_(info(k).label)}: <b>${total[k]}×</b></span>`).join('');
+    const fmt = (iso) => { const d = new Date(iso); return isNaN(d) ? '-' : d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); };
+    isi.innerHTML = (ringkas ? `<div class="log-ringkas">${ringkas}</div>` : '') +
+      '<ol class="log-timeline">' + data.map(l => {
+        const i = info(l.jenis);
+        return `<li class="${i.hitung ? 'log-hitung' : 'log-info'}"><span class="log-waktu">${fmt(l.waktu)}</span><span class="log-ikon">${i.ikon}</span><div><strong>${escapeHtml_(i.label)}</strong>${l.detail ? `<div class="log-detail">${escapeHtml_(l.detail)}</div>` : ''}<span class="log-tag">${i.hitung ? 'Dihitung sebagai pelanggaran' : 'Tidak dihitung'}</span></div></li>`;
+      }).join('') + '</ol>';
+  },
+
+  async pemantauanTambahWaktu(sesiId, nama) {
+    const menitStr = await Dialog.input({
+      judul: 'Atur Waktu Pengerjaan', tipe: 'info', ikon: 'fa-clock',
+      pesan: `Tambah atau kurangi sisa waktu untuk **${nama}**. Isi angka negatif untuk mengurangi.`,
+      label: 'Jumlah menit', nilai: '10', jenisInput: 'number', placeholder: 'mis. 10 atau -5', wajib: true,
+      chips: [{ label: '+5 menit', nilai: '5' }, { label: '+10 menit', nilai: '10' }, { label: '+15 menit', nilai: '15' }, { label: '+30 menit', nilai: '30' }, { label: '−5 menit', nilai: '-5' }],
+      validasi: v => (!Number(v) || isNaN(Number(v))) ? 'Masukkan jumlah menit yang valid, mis. 10 atau -5.' : '',
+      teksYa: 'Terapkan'
+    });
+    if (menitStr === null) return;
+    const menit = Number(menitStr);
+    if (!menit || isNaN(menit)) { toast('Masukkan jumlah menit yang valid.', 'error'); return; }
+    const res = await api('pemantauanTambahWaktu', { sesiId, menit });
+    if (res.ok) { toast(`Waktu untuk "${nama}" berhasil diubah.`, 'success'); Guru.muatPemantauan(); }
+    else toast('Gagal: ' + res.error, 'error');
+  },
+
+  async pemantauanForceFinish(sesiId, nama) {
+    if (!(await Dialog.konfirmasi({
+      judul: 'Selesaikan Ujian Sekarang?', tipe: 'warning', ikon: 'fa-flag-checkered',
+      pesan: `Ujian **${nama}** akan diselesaikan sekarang memakai jawaban terakhir yang tersimpan.\n\nSiswa tidak bisa melanjutkan lagi setelah ini.`,
+      teksYa: 'Ya, Selesaikan'
+    }))) return;
+    const res = await api('pemantauanForceFinish', { sesiId });
+    if (res.ok) { toast(`Ujian "${nama}" diselesaikan paksa. Nilai: ${res.nilai}.`, 'success'); Guru.muatPemantauan(); }
+    else toast('Gagal: ' + res.error, 'error');
+  },
+
+  async pemantauanHapusPelanggaran(sesiId, nama) {
+    if (!(await Dialog.konfirmasi({
+      judul: 'Hapus Catatan Pelanggaran?', tipe: 'warning', ikon: 'fa-shield-halved',
+      pesan: `Pelanggaran **${nama}** akan diatur kembali menjadi **0**.\n\nBila sesinya sedang diblokir, siswa bisa langsung melanjutkan dari soal terakhir tanpa mengulang dari awal.`,
+      teksYa: 'Ya, Hapus Pelanggaran'
+    }))) return;
+    const res = await api('pemantauanHapusPelanggaran', { sesiId });
+    if (res.ok) { toast(`Pelanggaran "${nama}" direset ke 0.`, 'success'); Guru.muatPemantauan(); }
+    else toast('Gagal: ' + res.error, 'error');
+  },
+
+  async pemantauanReset(sesiId, nama) {
+    if (!(await Dialog.konfirmasi({
+      judul: 'Reset Total Sesi Ujian?', tipe: 'danger', ikon: 'fa-arrow-rotate-left',
+      pesan: `Sesi ujian **${nama}** akan direset total: soal diacak ulang, jawaban dan waktu dihapus, siswa mengerjakan dari awal lagi.\n\nTindakan ini tidak bisa dibatalkan.`,
+      ketik: 'RESET', teksYa: 'Reset Sesi'
+    }))) return;
+    const res = await api('pemantauanReset', { sesiId });
+    if (res.ok) { toast(`Sesi "${nama}" berhasil direset.`, 'success'); Guru.muatPemantauan(); }
+    else toast('Gagal: ' + res.error, 'error');
+  },
+
+  // ---------------- SISWA ----------------
+  async muatDaftarSiswa() {
+    const res = await api('getDaftarSiswa', {});
+    const cont = document.getElementById('daftar-siswa');
+    if (!res.ok) return gagalMuat_(cont, 'Gagal memuat.');
+    state.guru.daftarSiswa = res.data;
+    Guru.perbaruiDaftarKelas();
+    Guru.renderTabelSiswa();
+  },
+
+  perbaruiDaftarKelas() {
+    const kelasUnik = [...new Set((state.guru.daftarSiswa || []).map(s => s.kelas).filter(Boolean))].sort();
+    const datalist = document.getElementById('daftar-kelas-siswa');
+    if (datalist) datalist.innerHTML = kelasUnik.map(k => `<option value="${escapeHtml_(k)}">`).join('');
+    ['filter-kelas-siswa', 'filter-kelas-login'].forEach(id => {
+      const select = document.getElementById(id);
+      if (!select) return;
+      const nilaiSaatIni = select.value;
+      select.innerHTML = '<option value="">Semua Kelas</option>' + kelasUnik.map(k => `<option value="${escapeHtml_(k)}">${escapeHtml_(k)}</option>`).join('');
+      select.value = kelasUnik.includes(nilaiSaatIni) ? nilaiSaatIni : '';
+    });
+  },
+
+  renderTabelSiswa() {
+    const cont = document.getElementById('daftar-siswa');
+    const filterKelas = document.getElementById('filter-kelas-siswa')?.value || '';
+    const semua = state.guru.daftarSiswa || [];
+    const jmlBlokir = semua.filter(s => s.blokir).length;
+    const saringBlokir = hanyaBlokir_('blokir-siswa', jmlBlokir);
+    const data = semua.filter(s => cocokFilterSiswa_(s, 'filter-kelas-siswa', 'cari-siswa') && (!saringBlokir || s.blokir));
+    tampilkanInfoFilter_('cari-siswa-info', data.length, semua.length, saringBlokir ? 'hanya akun diblokir' : '');
+    if (semua.length === 0) { cont.innerHTML = '<p class="subtitle">Belum ada data siswa.</p>'; return; }
+    if (saringBlokir && data.length === 0) { cont.innerHTML = '<p class="subtitle">Tidak ada akun siswa yang diblokir' + (filterKelas ? ` di kelas "${escapeHtml_(filterKelas)}"` : '') + '.</p>'; return; }
+    if (data.length === 0) { cont.innerHTML = `<p class="subtitle">Tidak ada siswa yang cocok${filterKelas ? ` di kelas "${escapeHtml_(filterKelas)}"` : ''} dengan pencarian ini.</p>`; return; }
+    cont.innerHTML = (jmlBlokir ? `<p class="subtitle" style="margin-bottom:.6rem">🚫 <strong>${jmlBlokir}</strong> akun siswa sedang diblokir (tidak bisa mengikuti kuis).</p>` : '') +
+      `<table class="ledger"><thead><tr><th>Username</th><th>Password</th><th>Nama</th><th>NISN</th><th>Kelas</th><th>Status</th><th></th></tr></thead><tbody>` +
+      data.map(s => `<tr>
+        <td>${escapeHtml_(s.username)}</td><td>${escapeHtml_(s.password)}</td><td>${escapeHtml_(s.nama)}</td><td>${escapeHtml_(s.nisn || '')}</td><td>${escapeHtml_(s.kelas)}</td>
+        <td><span class="badge ${s.online ? 'ok' : 'no'}">${s.online ? 'Ada sesi aktif' : 'Tidak ada sesi'}</span>
+          ${s.blokir ? `<br><span class="badge no" title="${escapeHtml_(s.blokirAlasan || 'Tanpa alasan')}">🚫 Diblokir</span>${s.blokirAlasan ? `<div style="font-size:.78rem;color:var(--c-muted);margin-top:.2rem">${escapeHtml_(s.blokirAlasan)}</div>` : ''}` : ''}</td>
+        <td class="aksi">
+          ${s.blokir
+            ? `<button class="accent small" onclick="Guru.bukaBlokirSiswa('${s.id}')">✅ Buka Blokir</button>`
+            : `<button class="secondary small" onclick="Guru.blokirSiswa('${s.id}')">🚫 Blokir</button>`}
+          ${s.online ? `<button class="secondary small" onclick="Guru.resetDevice('${s.id}')">Lepas Kunci</button>` : ''}
+          <button class="secondary small" onclick="Guru.bukaEditSiswa('${s.id}')">Ubah</button>
+          <button class="danger small" onclick="Guru.hapusSiswa('${s.id}')">Hapus</button>
+        </td>
+      </tr>`).join('') + `</tbody></table>`;
+  },
+
+  bukaEditSiswa(id) {
+    const siswa = state.guru.daftarSiswa.find(s => s.id === id);
+    if (siswa) UI.bukaModalSiswa(siswa);
+  },
+
+  // ---------------- AKUN SAYA ----------------
+  muatFormAkun() {
+    document.getElementById('akun-nama').value = state.user.nama || '';
+    document.getElementById('akun-username').value = state.user.username || '';
+    document.getElementById('akun-password-lama').value = '';
+    document.getElementById('akun-password-baru').value = '';
+    document.getElementById('akun-password-baru2').value = '';
+  },
+
+  async simpanAkun() {
+    const nama = document.getElementById('akun-nama').value.trim();
+    const username = document.getElementById('akun-username').value.trim();
+    const passwordLama = document.getElementById('akun-password-lama').value;
+    const passwordBaru = document.getElementById('akun-password-baru').value;
+    const passwordBaru2 = document.getElementById('akun-password-baru2').value;
+
+    if (!nama || !username) { toast('Nama dan username tidak boleh kosong.', 'error'); return; }
+    if (!passwordLama) { toast('Masukkan password saat ini untuk konfirmasi.', 'error'); return; }
+    if (passwordBaru && passwordBaru !== passwordBaru2) { toast('Konfirmasi password baru tidak cocok.', 'error'); return; }
+
+    const res = await api('updateAkunGuru', {
+      guruId: state.user.id, passwordLama, username, password: passwordBaru, nama
+    });
+    if (res.ok) {
+      state.user.nama = res.user.nama;
+      state.user.username = res.user.username;
+      document.getElementById('guru-nama-label').textContent = res.user.nama; const gbn = document.getElementById('guru-band-nama'); if (gbn) gbn.textContent = res.user.nama;
+      toast('Akun berhasil diperbarui.' + (passwordBaru ? ' Silakan gunakan password baru saat login berikutnya.' : ''), 'success');
+      Guru.muatFormAkun();
+    } else {
+      toast('Gagal menyimpan: ' + res.error, 'error');
+    }
+  },
+
+  async simpanSiswaEdit() {
+    const siswa = {
+      id: document.getElementById('siswa-edit-id').value,
+      username: document.getElementById('siswa-edit-username').value.trim(),
+      password: document.getElementById('siswa-edit-password').value.trim(),
+      nama: document.getElementById('siswa-edit-nama').value.trim(),
+      kelas: document.getElementById('siswa-edit-kelas').value.trim(),
+      nisn: document.getElementById('siswa-edit-nisn').value.trim(),
+      jenis_kelamin: document.getElementById('siswa-edit-jk').value,
+      tempat_lahir: document.getElementById('siswa-edit-tempat').value.trim(),
+      tanggal_lahir: Anbk.isoTgl(document.getElementById('siswa-edit-tgl').value)
+    };
+    if (!siswa.username || !siswa.password || !siswa.nama) { toast('Username, password, dan nama wajib diisi.', 'error'); return; }
+    const res = await api('updateSiswa', { siswa: JSON.stringify(siswa) });
+    if (res.ok) { toast('Data siswa diperbarui.', 'success'); UI.tutupModal('modal-siswa'); Guru.muatDaftarSiswa(); }
+    else toast('Gagal menyimpan: ' + res.error, 'error');
+  },
+
+  async hapusSiswa(id) {
+    const siswaHapus = (state.guru.daftarSiswa || []).find(x => x.id === id);
+    if (!(await Dialog.konfirmasi({
+      judul: 'Hapus Siswa?', tipe: 'danger', ikon: 'fa-user-xmark',
+      pesan: siswaHapus ? `Akun **${siswaHapus.nama}** akan dihapus dan tidak bisa login lagi.` : 'Akun siswa ini akan dihapus dan tidak bisa login lagi.',
+      rincian: siswaHapus ? [['Username', siswaHapus.username], ['Kelas', siswaHapus.kelas]] : [],
+      teksYa: 'Ya, Hapus Siswa'
+    }))) return;
+    const res = await api('hapusSiswa', { id });
+    if (res.ok) { toast('Siswa dihapus.', 'success'); Guru.muatDaftarSiswa(); }
+    else toast('Gagal menghapus: ' + res.error, 'error');
+  },
+
+  // ---------------- BLOKIR AKUN SISWA ----------------
+  // Hukuman bagi siswa yang tidak serius/asal mengerjakan kuis: selama diblokir, siswa itu tidak
+  // bisa mengikuti ujian apa pun (teman sekelasnya tetap bisa). Buka blokir = bisa mengerjakan lagi.
+  async blokirSiswa(siswaId) {
+    const s = (state.guru.daftarSiswa || []).find(x => x.id === siswaId);
+    if (!s) return;
+    const alasan = await Dialog.input({
+      judul: 'Blokir Akun Siswa', tipe: 'danger', ikon: 'fa-user-lock',
+      pesan: `Akun **${s.nama}** tidak akan bisa mengikuti kuis selama diblokir. Teman sekelasnya tetap bisa mengerjakan.`,
+      rincian: [['Siswa', s.nama], ['Kelas', s.kelas]],
+      label: 'Alasan (opsional, terlihat oleh siswa)', nilai: 'Tidak serius mengerjakan soal kuis', multiline: true, maksimal: 200,
+      chips: ['Tidak serius mengerjakan soal kuis', 'Menjawab asal-asalan', 'Melanggar tata tertib ujian'],
+      teksYa: 'Blokir Akun'
+    });
+    if (alasan === null) return; // dibatalkan
+    const res = await api('blokirSiswa', { siswaId, aktif: true, alasan: alasan.trim() });
+    if (res.ok) { toast(`Akun ${s.nama} diblokir.`, 'success'); Guru.muatDaftarSiswa(); }
+    else toast('Gagal memblokir: ' + res.error, 'error');
+  },
+
+  async bukaBlokirSiswa(siswaId) {
+    const s = (state.guru.daftarSiswa || []).find(x => x.id === siswaId);
+    if (!s) return;
+    if (!(await Dialog.konfirmasi({
+      judul: 'Buka Blokir Akun?', tipe: 'success', ikon: 'fa-lock-open',
+      pesan: `Blokir akun **${s.nama}** akan dibuka. Siswa ini bisa mengikuti kuis lagi.`,
+      rincian: [['Siswa', s.nama], ['Kelas', s.kelas], ['Alasan blokir', s.blokirAlasan || ''], ['Diblokir', s.blokirSejak ? formatSudahBerapaLama(s.blokirSejak) : '']],
+      teksYa: 'Ya, Buka Blokir'
+    }))) return;
+    const res = await api('blokirSiswa', { siswaId, aktif: false });
+    if (res.ok) { toast(`Blokir akun ${s.nama} dibuka.`, 'success'); Guru.muatDaftarSiswa(); }
+    else toast('Gagal membuka blokir: ' + res.error, 'error');
+  },
+
+  async resetDevice(siswaId) {
+    const res = await api('resetDevice', { siswaId });
+    if (res.ok) { toast('Kunci perangkat dilepas.', 'success'); Guru.muatDaftarSiswa(); Guru.renderTabelStatusLogin(); }
+  },
+
+  // Lepas perangkat SEMUA siswa di satu kelas sekali klik (kelas diambil dari
+  // dropdown Filter Kelas pada tab yang sedang dibuka; kosong = semua kelas).
+  async resetDeviceKelas(sumberFilterId) {
+    const kelas = document.getElementById(sumberFilterId)?.value || '';
+    const semua = state.guru.daftarSiswa || [];
+    const target = kelas ? semua.filter(s => s.kelas === kelas) : semua;
+    const terkunci = target.filter(s => s.online).length;
+    if (target.length === 0) { toast('Tidak ada siswa untuk dilepas.', 'error'); return; }
+    if (terkunci === 0) { toast(kelas ? `Tidak ada perangkat yang terkunci di kelas ${kelas}.` : 'Tidak ada perangkat yang terkunci.', 'info'); return; }
+    const label = kelas ? `kelas "${kelas}"` : 'SEMUA KELAS';
+    if (!(await Dialog.konfirmasi({
+      judul: 'Lepas Kunci Perangkat?', tipe: 'warning', ikon: 'fa-unlock-keyhole',
+      pesan: `Perangkat **${terkunci} siswa** yang sedang terkunci di ${kelas ? 'kelas **' + kelas + '**' : '**semua kelas**'} akan dilepas.\n\nSiswa bisa login lagi dari perangkat mana pun.`,
+      teksYa: 'Ya, Lepas Kunci'
+    }))) return;
+    const res = await api('resetDeviceKelas', { kelas });
+    if (res.ok) {
+      toast(`Perangkat ${res.count} siswa di ${label} berhasil dilepas.`, 'success');
+      Guru.muatDaftarSiswa(); Guru.muatStatusLogin();
+    } else toast('Gagal melepas perangkat: ' + res.error, 'error');
+  },
+
+  // ---------------- PENGATURAN KUNCI PERANGKAT (tombol Aktif / Tidak Aktif) ----------------
+  // Aktif (default): perilaku lama, satu akun siswa terkunci ke satu perangkat.
+  // Tidak Aktif: siswa boleh login/lanjut dari perangkat mana pun tanpa ditolak
+  // atau diputus sesi (lihat pengecekan lockAktif di 'login'/'ping' & Code.gs).
+  async muatPengaturanLockDevice() {
+    const res = await api('getPengaturanLock', {});
+    Guru.renderPengaturanLockDevice(res.ok ? res.aktif !== false : true);
+  },
+
+  renderPengaturanLockDevice(aktif) {
+    const btnAktif = document.getElementById('btn-lock-aktif');
+    const btnNonaktif = document.getElementById('btn-lock-nonaktif');
+    const teks = document.getElementById('lock-device-status-text');
+    if (btnAktif) btnAktif.classList.toggle('active', !!aktif);
+    if (btnNonaktif) btnNonaktif.classList.toggle('active', !aktif);
+    if (teks) teks.innerHTML = aktif
+      ? '<span class="badge ok">🔒 Aktif</span> — tiap akun siswa terkunci ke satu perangkat saat login/ujian.'
+      : '<span class="badge no">🔓 Tidak Aktif</span> — siswa boleh login dari perangkat mana pun, tidak ada yang terkunci.';
+  },
+
+  async setPengaturanLockDevice(aktif) {
+    Guru.renderPengaturanLockDevice(aktif); // tampilkan langsung, tak perlu tunggu server
+    const res = await api('simpanPengaturanLock', { aktif });
+    if (res.ok) {
+      toast(aktif ? 'Kunci perangkat diaktifkan.' : 'Kunci perangkat dinonaktifkan.', 'success');
+    } else {
+      toast('Gagal menyimpan pengaturan: ' + res.error, 'error');
+      Guru.muatPengaturanLockDevice(); // gagal -> tarik ulang status asli dari server
+    }
+  },
+
+  // ---------------- STATUS LOGIN (device lock per akun siswa) ----------------
+  // Satu akun siswa hanya boleh login di SATU perangkat pada satu waktu (lihat
+  // 'login'/'ping' di Code.gs & LocalBackend: device_id dicatat saat login, dan
+  // login dari perangkat lain ditolak selama masih ada heartbeat < 15 menit
+  // terakhir). Tab ini menampilkan status itu secara eksplisit per akun (device
+  // ID yang sedang memegang kunci + kapan terakhir aktif), supaya guru tidak
+  // perlu menebak dari tab Data Siswa -- dan bisa "Buka Kunci Akun" di sini kalau
+  // siswa perlu pindah HP/komputer.
+  async muatStatusLogin() {
+    const res = await api('getDaftarSiswa', {});
+    const cont = document.getElementById('tabel-status-login');
+    if (!res.ok) return gagalMuat_(cont, 'Gagal memuat.');
+    state.guru.daftarSiswa = res.data;
+    Guru.perbaruiDaftarKelas();
+    Guru.renderTabelStatusLogin();
+    return true;
+  },
+
+  renderTabelStatusLogin() {
+    const cont = document.getElementById('tabel-status-login');
+    if (!cont) return;
+    const filterKelas = document.getElementById('filter-kelas-login')?.value || '';
+    const semua = state.guru.daftarSiswa || [];
+    const data = semua.filter(s => cocokFilterSiswa_(s, 'filter-kelas-login', 'cari-login'));
+    tampilkanInfoFilter_('cari-login-info', data.length, semua.length);
+    if (semua.length === 0) { cont.innerHTML = '<p class="subtitle">Belum ada data siswa.</p>'; return; }
+    if (data.length === 0) { cont.innerHTML = `<p class="subtitle">Tidak ada siswa yang cocok${filterKelas ? ` di kelas "${escapeHtml_(filterKelas)}"` : ''} dengan pencarian ini.</p>`; return; }
+    cont.innerHTML = `<table class="ledger"><thead><tr><th>Nama</th><th>Kelas</th><th>Username</th><th>Status</th><th>Device ID Terkunci</th><th>Terakhir Aktif</th><th></th></tr></thead><tbody>` +
+      data.map(s => `<tr>
+        <td>${escapeHtml_(s.nama)}</td><td>${escapeHtml_(s.kelas)}</td><td>${escapeHtml_(s.username)}</td>
+        <td><span class="badge ${s.online ? 'ok' : 'no'}">${s.online ? '🔒 Terkunci' : '🔓 Bebas'}</span></td>
+        <td style="font-family:monospace;font-size:.8rem">${s.deviceId ? escapeHtml_(s.deviceId) : '-'}</td>
+        <td style="font-size:.85rem">${s.lastPing ? formatSudahBerapaLama(s.lastPing) : '-'}</td>
+        <td class="aksi">${s.online ? `<button class="secondary small" onclick="Guru.resetDevice('${s.id}')">🔓 Buka Kunci Akun</button>` : ''}</td>
+      </tr>`).join('') + `</tbody></table>
+      <p class="subtitle" style="margin-top:.8rem">
+        Satu akun siswa hanya bisa dipakai di satu perangkat (HP/komputer) dalam satu waktu, ditandai lewat
+        <strong>Device ID</strong> di atas. Kalau siswa perlu pindah ke perangkat lain (HP rusak, ganti komputer,
+        dsb.) sementara statusnya masih "🔒 Terkunci", klik <strong>"Buka Kunci Akun"</strong> di baris siswa
+        tersebut agar ia bisa login dari perangkat yang baru.
+      </p>`;
+  },
+
+  async tambahSiswaManual() {
+    return jalankanDenganTombolSibuk('btn-tambah-siswa-manual', 'Menyimpan...', async () => {
+      const nama = document.getElementById('siswa-manual-nama').value.trim();
+      if (!nama) { toast('Nama wajib diisi.', 'error'); return; }
+      const usernameManual = document.getElementById('siswa-manual-username').value.trim();
+      const username = usernameManual || buatUsernameDariNama(nama, (state.guru.daftarSiswa || []).map(s => s.username));
+      const password = document.getElementById('siswa-manual-password').value.trim() || buatPasswordAcak();
+      const kelas = document.getElementById('siswa-manual-kelas').value.trim();
+      const res = await api('importSiswa', { siswaList: JSON.stringify([{ username, password, nama, kelas, nisn: document.getElementById('siswa-manual-nisn').value.trim(), jenis_kelamin: document.getElementById('siswa-manual-jk').value, tempat_lahir: document.getElementById('siswa-manual-tempat').value.trim(), tanggal_lahir: Anbk.isoTgl(document.getElementById('siswa-manual-tgl').value) }]) });
+      if (res.ok) {
+        toast('Siswa "' + nama + '" berhasil ditambahkan (username: ' + username + ', password: ' + password + ').', 'success');
+        ['siswa-manual-username', 'siswa-manual-password', 'siswa-manual-nama', 'siswa-manual-nisn', 'siswa-manual-tempat', 'siswa-manual-tgl'].forEach(id => document.getElementById(id).value = '');
+        Guru.muatDaftarSiswa();
+      } else toast('Gagal menambahkan siswa: ' + res.error, 'error');
+    });
+  },
+
+  generateUsernameManual() {
+    document.getElementById('siswa-manual-username').value = buatUsernameDariNama('', (state.guru.daftarSiswa || []).map(s => s.username));
+  },
+
+  generateUsernameEdit() {
+    const nama = document.getElementById('siswa-edit-nama').value.trim();
+    const idSaatIni = document.getElementById('siswa-edit-id').value;
+    const terpakai = (state.guru.daftarSiswa || []).filter(s => s.id !== idSaatIni).map(s => s.username);
+    document.getElementById('siswa-edit-username').value = buatUsernameDariNama(nama, terpakai);
+  },
+
+  generatePasswordManual() {
+    document.getElementById('siswa-manual-password').value = buatPasswordAcak();
+  },
+
+  generatePasswordEdit() {
+    document.getElementById('siswa-edit-password').value = buatPasswordAcak();
+  },
+
+  // Unduh username & password siswa (.xlsx), SATU SHEET PER KELAS (siap dicetak/dibagikan
+  // ke wali kelas). Memakai Filter Kelas yang sedang dipilih: pilih satu kelas -> hanya
+  // kelas itu; "Semua Kelas" -> semua kelas, masing-masing di sheet sendiri.
+  async unduhAkunSiswa() {
+    const semua = state.guru.daftarSiswa || [];
+    if (semua.length === 0) { toast('Belum ada data siswa untuk diunduh.', 'error'); return; }
+    try { await muatPustaka_('xlsx'); } catch (e) { toast(e.message, 'error'); return; }
+    const filterKelas = document.getElementById('filter-kelas-siswa')?.value || '';
+    const data = filterKelas ? semua.filter(s => s.kelas === filterKelas) : semua;
+    if (data.length === 0) { toast('Tidak ada siswa di kelas ini.', 'error'); return; }
+    const perKelas = {};
+    data.forEach(s => { const k = String(s.kelas || 'Tanpa Kelas'); (perKelas[k] = perKelas[k] || []).push(s); });
+    const wb = XLSX.utils.book_new();
+    const namaTerpakai = new Set();
+    Object.keys(perKelas).sort((a, b) => a.localeCompare(b, 'id', { numeric: true })).forEach(kelas => {
+      const baris = perKelas[kelas].slice().sort((a, b) => String(a.nama || '').localeCompare(String(b.nama || ''), 'id'));
+      const aoa = [['No', 'Nama', 'Kelas', 'Username', 'Password']]
+        .concat(baris.map((s, i) => [i + 1, String(s.nama || ''), String(s.kelas || ''), String(s.username || ''), String(s.password || '')]));
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws['!cols'] = [{ wch: 5 }, { wch: 32 }, { wch: 10 }, { wch: 20 }, { wch: 18 }];
+      // Nama sheet: maks 31 karakter, tanpa []:*?/\ dan harus unik.
+      let nama = kelas.replace(/[\[\]:*?\/\\]/g, '-').trim().slice(0, 31) || 'Kelas';
+      let n = 2, calon = nama;
+      while (namaTerpakai.has(calon.toLowerCase())) { calon = nama.slice(0, 28) + '-' + (n++); }
+      namaTerpakai.add(calon.toLowerCase());
+      XLSX.utils.book_append_sheet(wb, ws, calon);
+    });
+    const labelKelas = filterKelas ? filterKelas.replace(/[^\w\-]+/g, '_') : 'semua-kelas';
+    XLSX.writeFile(wb, `akun-siswa-${labelKelas}.xlsx`);
+    toast(`Akun ${data.length} siswa (${Object.keys(perKelas).length} kelas) berhasil diunduh.`, 'success');
+  },
+
+  unduhTemplateSiswa() {
+    unduhXlsx('template-data-siswa.xlsx', ['nama', 'kelas', 'username', 'password'], [
+      ['Ahmad Fauzi', '9A', 'ahmad01', 'rahasia123'],
+      ['Siti Amara', '9A', 'siti01', ''],
+      ['Budi Santoso', '9A', '', '']
+    ]);
+  },
+
+  // Kolom username & password boleh kosong per baris — keduanya dibuatkan otomatis
+  // (username dari nama, dihindarkan tabrakan dgn yang sudah dipakai di dalam file
+  // ini maupun yang sudah ada di server; password acak seperti sebelumnya).
+  importSiswaDariFile(ev) {
+    const file = ev.target.files[0];
+    if (!file) return;
+    const kelasOverride = document.getElementById('siswa-import-kelas').value.trim();
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try { await muatPustaka_('xlsx'); } catch (err) { toast(err.message, 'error'); ev.target.value = ''; return; }
+      const wb = XLSX.read(e.target.result, { type: 'binary' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }).slice(1);
+      let jumlahPasswordDibuat = 0, jumlahUsernameDibuat = 0;
+      const terpakai = (state.guru.daftarSiswa || []).map(s => s.username);
+      const siswaList = rows.filter(r => r.length && r[0]).map(r => {
+        const password = String(r[3] || '').trim() || (() => { jumlahPasswordDibuat++; return buatPasswordAcak(); })();
+        const nama = String(r[0] || '').trim();
+        let username = String(r[2] || '').trim();
+        if (!username) {
+          username = buatUsernameDariNama(nama, terpakai);
+          terpakai.push(username); // supaya baris berikutnya di file yang sama tidak tabrakan
+          jumlahUsernameDibuat++;
+        }
+        return {
+          nama,
+          kelas: kelasOverride || String(r[1] || '').trim(),
+          username,
+          password
+        };
+      });
+      if (siswaList.length === 0) { toast('Tidak ada baris valid.', 'error'); return; }
+      const res = await api('importSiswa', { siswaList: JSON.stringify(siswaList) });
+      if (res.ok) {
+        let pesan = res.count + ' siswa berhasil diimpor' + (kelasOverride ? ' ke kelas ' + kelasOverride : '') + '.';
+        if (jumlahUsernameDibuat > 0) pesan += ' ' + jumlahUsernameDibuat + ' username dibuatkan otomatis (format TP + 13 angka).';
+        if (jumlahPasswordDibuat > 0) pesan += ' ' + jumlahPasswordDibuat + ' password dibuatkan otomatis (6 angka + *, lihat tabel di bawah).';
+        toast(pesan, 'success');
+        document.getElementById('siswa-import-kelas').value = '';
+        Guru.muatDaftarSiswa();
+      } else toast('Gagal impor: ' + res.error, 'error');
+      ev.target.value = '';
+    };
+    reader.readAsBinaryString(file);
+  },
+
+  async hapusKelas() {
+    const select = document.getElementById('filter-kelas-siswa');
+    const kelas = select.value;
+    if (!kelas) { toast('Pilih dulu kelas yang mau dihapus lewat dropdown Filter Kelas.', 'error'); return; }
+    const jumlah = (state.guru.daftarSiswa || []).filter(s => s.kelas === kelas).length;
+    if (!(await Dialog.konfirmasi({
+      judul: 'Hapus Seluruh Kelas?', tipe: 'danger', ikon: 'fa-users-slash',
+      pesan: `**${jumlah} siswa** di kelas **${kelas}** akan dihapus dan tidak bisa login lagi.\n\nTindakan ini tidak bisa dibatalkan.`,
+      ketik: 'HAPUS', teksYa: 'Hapus Kelas'
+    }))) return;
+    const res = await api('hapusKelas', { kelas });
+    if (res.ok) { toast(`Kelas "${kelas}" dihapus (${res.count} siswa).`, 'success'); Guru.muatDaftarSiswa(); }
+    else toast('Gagal menghapus kelas: ' + res.error, 'error');
+  },
+
+  // Pembahasan hanya bermakna bila detail jawaban aktif -> nonaktifkan kotaknya saat detail dimatikan.
+  sinkronDetailPembahasan() {
+    const d = document.getElementById('ujian-tampil-detail'), p = document.getElementById('ujian-tampil-pembahasan');
+    if (!d || !p) return;
+    p.disabled = !d.checked;
+    p.parentNode.style.opacity = d.checked ? '' : '.5';
+  },
+
+  // ---------------- BANK SOAL: TEMPLATE ----------------
+  // Kolom sama persis dgn template Word (lihat Guru.unduhTemplateSoalDocx &
+  // barisTabelJadiSoal_) supaya guru cukup belajar 1 format saja utk kedua jenis
+  // file. Baris pertama sheet = header (dibaca berdasarkan nama, bebas urutan).
+  unduhTemplateSoal() {
+    unduhXlsx('Template_Import_Soal_CBT.xlsx',
+      ['Kategori', 'Topik', 'Tipe', 'Pertanyaan', 'Gambar', 'Opsi A', 'Opsi B', 'Opsi C', 'Opsi D', 'Opsi E', 'Kunci', 'Bobot', 'Kesulitan', 'Pembahasan'],
+      [
+        ['', 'Sejarah Indonesia', 'PG', 'Siapakah Presiden Indonesia pada tahun 1999?', '', 'Soekarno', 'Soeharto', 'B. J. Habibi', 'Abdurrahman Wahid', '', 'C', '10', 'Sedang', 'Contoh pembahasan: tulis alasan jawaban yang benar dan penjelasan singkatnya di sini.'],
+        ['', 'Biologi', 'PGK', 'Manakah yang termasuk hewan mamalia? (kunci boleh lebih dari 1, pisah koma)', '', 'Paus', 'Ular', 'Kelelawar', 'Buaya', '', 'A,C', '10', 'Sedang', ''],
+        ['', 'Geografi', 'BS', 'Indonesia terletak di antara dua benua, yaitu Asia dan Australia.', '', 'Benar', 'Salah', '', '', '', 'Benar', '5', 'Mudah', ''],
+        ['', 'Biologi', 'Essay', 'Jelaskan proses terjadinya fotosintesis pada tumbuhan.', '', '', '', '', '', '', 'fotosintesis, klorofil, karbon dioksida', '15', 'Sedang', ''],
+        ['', 'Geografi', 'Jodohkan', 'Jodohkan negara dengan ibu kotanya.', '', 'Indonesia = Jakarta', 'Jepang = Tokyo', 'Prancis = Paris', '', '', '', '10', 'Sedang', ''],
+        ['', '', '', '(tambahkan baris baru di bawah sini, ikuti pola di atas)', '', '', '', '', '', '', '', '', '', '']
+      ]);
+  },
+
+  // ---------------- TEMA & TAMPILAN ----------------
+  _ui: null, _mode: 'light', _gid: null, _tmGaleriTimer: null,
+
+  _val(id) { return document.getElementById(id).value; },
+
+  bacaFormTema() {
+    return {
+      primary: Guru._val('tema-primary'), secondary: Guru._val('tema-secondary'), accent: Guru._val('tema-accent'),
+      bg: Guru._val('tema-bg'), text: Guru._val('tema-text'),
+      mode: Guru._mode, rot: Guru._val('tema-rot'), ui: Guru._ui
+    };
+  },
+
+  isiFormTema(p) {
+    const t = Tampilan.normalisasiTema(p);
+    ['primary', 'secondary', 'accent', 'bg', 'text'].forEach(k => { document.getElementById('tema-' + k).value = t[k]; });
+    document.getElementById('tema-rot').value = t.rot;
+    Guru._mode = t.mode; Guru._ui = Object.assign({}, t.ui);
+    Guru._sinkronStudio();
+  },
+
+  // Terapkan langsung ke seluruh aplikasi (pratinjau hidup), belum disimpan.
+  pratinjauTema(segarkanGaleri) {
+    Tampilan.terapkan(Guru.bacaFormTema(), { tanpaRotasi: true });
+    if (segarkanGaleri !== false) Guru.renderGaleriGaya(true);
+  },
+
+  renderPaletPreset() {
+    const cont = document.getElementById('palet-preset-list');
+    if (!cont) return;
+    cont.innerHTML = PALET_PRESET.map((p, i) => `
+      <button type="button" class="palet-chip" onclick="Guru.pakaiPalet(${i})" title="${p.nama}">
+        <span class="dot" style="background:${p.primary}"></span>
+        <span class="dot" style="background:${p.secondary}"></span>
+        <span class="dot" style="background:${p.accent}"></span>
+        <span class="lbl">${p.nama}</span>
+      </button>`).join('');
+    const h = document.getElementById('tema-harmoni');
+    if (h && !h.options.length) h.innerHTML = Object.keys(HARMONI).map(k => `<option value="${k}">${HARMONI[k].nama}</option>`).join('');
+  },
+
+  // Ubah SATU warna utama -> seluruh warna aplikasi ikut berubah.
+  ubahWarnaUtama() {
+    const prim = Guru._val('tema-primary');
+    if (document.getElementById('tema-selaras').checked) {
+      const p = turunkanPalet(prim, Guru._val('tema-harmoni'));
+      ['secondary', 'accent', 'bg', 'text'].forEach(k => { document.getElementById('tema-' + k).value = p[k]; });
+    }
+    Guru.pratinjauTema();
+  },
+
+  pakaiPalet(i) {
+    const p = PALET_PRESET[i];
+    ['primary', 'secondary', 'accent', 'bg', 'text'].forEach(k => { document.getElementById('tema-' + k).value = p[k]; });
+    Guru.pratinjauTema();
+  },
+
+  acakPalet() {
+    const p = buatPaletAcak();
+    ['primary', 'secondary', 'accent', 'bg', 'text'].forEach(k => { document.getElementById('tema-' + k).value = p[k]; });
+    Guru.pratinjauTema();
+    toast('Palet acak diterapkan. Klik "Simpan Tema" untuk menyimpannya.', 'success');
+  },
+
+  setMode(m) { Guru._mode = m; Guru._sinkronStudio(); Guru.pratinjauTema(); },
+
+  pakaiGaya(id) {
+    const g = GAYA_BY_ID[id]; if (!g) return;
+    Guru._ui = Object.assign({}, DEF_UI, g.u);
+    if (g.mode) Guru._mode = g.mode; else if (Guru._mode === 'dark') Guru._mode = 'light';
+    if (g.pal) ['primary', 'secondary', 'accent', 'bg', 'text'].forEach(k => { const el = document.getElementById('tema-' + k); if (el) el.value = g.pal[k]; });
+    Guru._sinkronStudio(); Guru.pratinjauTema();
+  },
+
+  filterGaya(f) {
+    Guru._fGaya = f;
+    document.querySelectorAll('#gaya-filter button').forEach(b => b.classList.toggle('on', b.dataset.f === f));
+    Guru.renderGaleriGaya();
+  },
+
+  acakGaya() {
+    const g = buatGayaAcak();
+    Guru._ui = Object.assign({}, DEF_UI, g.u); Guru._mode = g.mode;
+    Guru._sinkronStudio(); Guru.pratinjauTema();
+    toast('Gaya acak baru diterapkan — coba lagi sampai cocok!', 'success');
+  },
+
+  acakTotal() {
+    const p = buatPaletAcak();
+    ['primary', 'secondary', 'accent', 'bg', 'text'].forEach(k => { document.getElementById('tema-' + k).value = p[k]; });
+    Guru.acakGaya();
+  },
+
+  // Slider / pilihan Studio Gaya
+  studio(key, val) {
+    if (['r', 'elev', 'bw', 'glass', 'grad', 'dens'].includes(key)) val = Number(val);
+    else if (['pill', 'ink', 'float', 'caps', 'neon'].includes(key)) val = val ? 1 : 0;
+    Guru._ui[key] = val;
+    if (key === 'depth' && val === 'neu') { Guru._ui.bw = 0; Guru._ui.glass = 0; }
+    if (key === 'depth' && val === 'hard') { Guru._ui.bw = Math.max(Guru._ui.bw, 2); Guru._ui.ink = 1; }
+    if (key === 'glass' && val > 20 && (Guru._ui.pat === 'none' || Guru._ui.pat === 'lines')) Guru._ui.pat = 'aurora';
+    Guru._ui = normalisasiUI(Guru._ui);
+    Guru._sinkronStudio(); Guru.pratinjauTema();
+  },
+
+  _sinkronStudio() {
+    const u = Guru._ui; if (!u) return;
+    const set = (id, v) => { const el = document.getElementById(id); if (!el) return; if (el.type === 'checkbox') el.checked = !!v; else el.value = v; };
+    ['r', 'elev', 'bw', 'glass', 'grad', 'dens'].forEach(k => {
+      set('st-' + k, u[k]);
+      const o = document.getElementById('st-' + k + '-v'); if (o) o.textContent = u[k] + (k === 'dens' ? '%' : (k === 'r' || k === 'bw') ? 'px' : '');
+    });
+    ['depth', 'pat', 'side', 'font'].forEach(k => set('st-' + k, u[k]));
+    ['pill', 'ink', 'float', 'caps', 'neon'].forEach(k => set('st-' + k, u[k]));
+    document.querySelectorAll('#tema-mode-seg button').forEach(b => b.classList.toggle('on', b.dataset.m === Guru._mode));
+    const kd = document.getElementById('tema-kode'); if (kd) kd.value = '';
+  },
+
+  renderStudio() {
+    const sel = (id, opsi) => { const el = document.getElementById(id); if (el && !el.options.length) el.innerHTML = Object.keys(opsi).map(k => `<option value="${k}">${typeof opsi[k] === 'string' ? opsi[k] : opsi[k].nama}</option>`).join(''); };
+    sel('st-depth', OPSI_DEPTH); sel('st-pat', OPSI_POLA); sel('st-side', OPSI_SIDE); sel('st-font', GAYA_FONT);
+  },
+
+  renderGaleriGaya(tunda) {
+    const cont = document.getElementById('gaya-galeri'); if (!cont) return;
+    clearTimeout(Guru._tmGaleriTimer);
+    const kerja = () => {
+      const tema = Guru.bacaFormTema(), u = normalisasiUI(Guru._ui);
+      const cocok = (g) => { const b = normalisasiUI(g.u); return Object.keys(DEF_UI).every(k => b[k] === u[k]); };
+      const fl = Guru._fGaya || 'semua';
+      cont.innerHTML = GAYA_PRESET.filter(g => fl === 'semua' || (fl === 'gelap' && g.mode === 'dark') || (fl === 'terang' && g.mode !== 'dark') || (fl === 'paket' && g.pal)).map(g => {
+        const mode = g.mode ? g.mode : (Guru._mode === 'dark' ? 'light' : Guru._mode);
+        return `<div role="button" tabindex="0" class="gaya-kartu ${cocok(g) ? 'on' : ''}" onclick="Guru.pakaiGaya('${g.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();Guru.pakaiGaya('${g.id}')}" title="${g.info}">
+          <div class="gt" data-g="${g.id}"><div class="gt-side"><i class="a"></i><i></i><i></i></div>
+            <div class="gt-main"><div class="gt-card"><b></b><u></u><u></u><div class="gt-btns"><span class="gt-btn"></span><span class="gt-btn s"></span><span class="gt-btn c"></span></div></div></div></div>
+          <span class="gn">${g.nama}</span><span class="gd">${g.info}</span></div>`;
+      }).join('');
+      cont.querySelectorAll('.gt').forEach(el => {
+        const g = GAYA_BY_ID[el.dataset.g];
+        const t2 = Object.assign({}, tema, g.pal || {}, { mode: g.mode ? g.mode : (Guru._mode === 'dark' ? 'light' : Guru._mode) });
+        Tampilan.pasangVarPada(el, t2, Object.assign({}, DEF_UI, g.u));
+        muatFont(g.u.font);
+      });
+    };
+    if (tunda) Guru._tmGaleriTimer = setTimeout(kerja, 180); else kerja();
+  },
+
+  async muatFormTema() {
+    Guru.renderPaletPreset(); Guru.renderStudio();
+    const res = await api('getTema', { guruId: state.user.id });
+    if (!res.ok) return;
+    state.guru.tema = res.tema;
+    Guru.isiFormTema(res.tema);
+    Guru.renderGaleriGaya();
+  },
+
+  batalTema() {
+    const t = Tampilan.tersimpan;
+    if (!t) return;
+    Guru.isiFormTema(t); Guru.pratinjauTema();
+    toast('Perubahan dibatalkan, kembali ke tema tersimpan.');
+  },
+
+  async simpanTema() {
+    const tema = Tampilan.normalisasiTema(Guru.bacaFormTema());
+    const res = await api('simpanTema', { guruId: state.user.id, tema: JSON.stringify(tema) });
+    if (res.ok) { terapkanTema(tema); toast(tema.rot === 'tetap' ? 'Tema tersimpan & diterapkan.' : 'Tema tersimpan. Gaya akan berganti otomatis tiap hari.', 'success'); }
+  },
+
+  salinKodeGaya() {
+    const k = Tampilan.kode(Guru.bacaFormTema());
+    const el = document.getElementById('tema-kode'); el.value = k; el.select();
+    try { navigator.clipboard.writeText(k); toast('Kode gaya disalin. Tempel di perangkat/sekolah lain untuk memakai tampilan yang sama.', 'success'); }
+    catch (e) { toast('Kode ditampilkan — salin manual dari kotak.'); }
+  },
+
+  terapkanKodeGaya() {
+    const v = document.getElementById('tema-kode').value.trim();
+    if (!v) { toast('Tempel kode gaya dulu.', 'error'); return; }
+    try { const t = Tampilan.dariKode(v); Guru.isiFormTema(t); Guru.pratinjauTema(); toast('Kode gaya diterapkan. Klik "Simpan Tema" untuk menyimpan.', 'success'); }
+    catch (e) { toast('Kode gaya tidak valid.', 'error'); }
+  },
+
+  // ---------------- IDENTITAS APLIKASI (Logo & Nama CBT) ----------------
+  async muatFormBranding() {
+    const res = await api('getBranding', {});
+    if (!res.ok) return;
+    document.getElementById('branding-nama').value = res.branding.namaAplikasi || '';
+    const url = res.branding.logoUrl || '';
+    document.getElementById('branding-logo-url').value = url;
+    const prev = document.getElementById('branding-logo-preview');
+    const btnHapus = document.getElementById('branding-logo-hapus-btn');
+    if (url) { pasangSrcGambarAman_(prev, url); prev.classList.remove('hidden'); btnHapus.classList.remove('hidden'); }
+    else { prev.classList.add('hidden'); btnHapus.classList.add('hidden'); }
+  },
+
+  async uploadLogoAplikasi(ev) {
+    const file = ev.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result.split(',')[1];
+      toast('Mengunggah logo...');
+      const res = await api('uploadGambar', { base64, filename: file.name, mimeType: file.type, folder: 'CBT_Logo_Aplikasi' });
+      if (res.ok) {
+        document.getElementById('branding-logo-url').value = res.url;
+        const prev = document.getElementById('branding-logo-preview');
+        pasangSrcGambarAman_(prev, res.url); prev.classList.remove('hidden');
+        document.getElementById('branding-logo-hapus-btn').classList.remove('hidden');
+        toast('Logo berhasil diunggah. Klik "Simpan Identitas Aplikasi" untuk menerapkannya.', 'success');
+      } else {
+        toast('Gagal mengunggah logo: ' + res.error, 'error');
+      }
+    };
+    reader.readAsDataURL(file);
+  },
+
+  hapusLogoAplikasi() {
+    document.getElementById('branding-logo-url').value = '';
+    document.getElementById('branding-logo-file').value = '';
+    document.getElementById('branding-logo-preview').classList.add('hidden');
+    document.getElementById('branding-logo-hapus-btn').classList.add('hidden');
+  },
+
+  async simpanBranding() {
+    const branding = {
+      namaAplikasi: document.getElementById('branding-nama').value.trim(),
+      logoUrl: document.getElementById('branding-logo-url').value
+    };
+    const res = await api('simpanBranding', branding);
+    if (res.ok) { terapkanBranding(branding); toast('Identitas aplikasi tersimpan & diterapkan ke semua perangkat.', 'success'); }
+    else toast('Gagal menyimpan identitas aplikasi: ' + res.error, 'error');
+  },
+
+  // ---------------- SINKRON CADANGAN (tombol di sidebar, tampil di semua halaman) ----------------
+  // Backup manual kalau Pemantauan Ujian/Rekap Nilai/Analisis Soal terasa belum
+  // menunjukkan siswa yang sudah jelas-jelas sedang mengerjakan/menyelesaikan
+  // ujian -- memaksa server menuliskan SEKARANG JUGA data yang masih tertahan
+  // di cache (jawaban/status sesi) ke Google Sheets, tanpa menunggu jeda
+  // otomatis (maks. ~1 menit).
+  async paksaSinkronSekarang() {
+    if (!modeServerAktif()) { toast('Mode Server belum aktif — tidak ada Google Sheets untuk disinkron.', 'error'); return; }
+    toast('Mengirim data ujian yang sedang berlangsung ke Google Sheets...');
+    const res = await api('paksaFlushSesiSekarang', {});
+    if (!res.ok) { toast('Gagal sinkron: ' + (res.error || 'tidak diketahui'), 'error'); return; }
+    toast('Berhasil dikirim ke Google Sheets.', 'success');
+  },
+
+  // ---------------- TOMBOL "SEGARKAN" PER HALAMAN ----------------
+  // Mengambil data terbaru untuk satu halaman TANPA memuat ulang aplikasi: ujian yang
+  // dipilih, Filter Kelas, dan kotak cari tetap seperti sebelumnya (hanya isi tabel yang
+  // diperbarui). Juga berjalan di Mode Lokal.
+  tandaiDiperbarui_(tabId, gagal) {
+    const el = document.getElementById('segar-info-' + tabId);
+    if (!el) return;
+    el.classList.toggle('gagal', !!gagal);
+    el.textContent = gagal ? 'Gagal memperbarui' : 'Diperbarui ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  },
+
+  async segarkan(tabId, tombol) {
+    if (tombol && tombol.classList.contains('sedang')) return;
+    const selectUjian = { 'tab-rekap': 'pilih-ujian-rekap', 'tab-analisis': 'pilih-ujian-analisis', 'tab-pelanggaran': 'pilih-ujian-log', 'tab-pemantauan': 'pilih-ujian-pemantauan' }[tabId];
+    const pemuat = {
+      'tab-dashboard': () => Guru.muatDashboard(),
+      'tab-bank-soal': () => Guru.muatBankSoal(),
+      'tab-ujian': () => Guru.muatDaftarUjian(),
+      'tab-siswa': () => Guru.muatDaftarSiswa(),
+      'tab-login': () => Guru.muatStatusLogin(),
+      'tab-rekap': () => Guru.muatRekap(),
+      'tab-analisis': () => Guru.muatAnalisisSoal(),
+      'tab-pelanggaran': () => Guru.muatLogPelanggaran(),
+      'tab-pemantauan': () => Guru.muatPemantauan()
+    }[tabId];
+    if (!pemuat) return;
+    if (tombol) { tombol.classList.add('sedang'); tombol.setAttribute('aria-busy', 'true'); }
+    let berhasil = true;
+    try {
+      if (selectUjian && !document.getElementById(selectUjian).value) {
+        // Belum ada ujian dipilih: segarkan saja daftar ujiannya (mis. ada ujian baru).
+        await Guru.muatPilihanUjianUntukSelect(selectUjian);
+        toast('Pilih ujian terlebih dahulu, lalu klik Segarkan.', 'info');
+        return;
+      }
+      berhasil = (await pemuat()) !== false;
+    } catch (e) {
+      console.error(e); berhasil = false;
+    } finally {
+      if (tombol) { tombol.classList.remove('sedang'); tombol.removeAttribute('aria-busy'); }
+    }
+    Guru.tandaiDiperbarui_(tabId, !berhasil);
+  },
+
+  // Menarik ulang data HALAMAN YANG SEDANG DIBUKA (apa pun tabnya) dari Google
+  // Sheets sekarang juga, tanpa menunggu polling otomatis ~8 detik.
+  tarikHalamanAktifSekarang() {
+    if (!modeServerAktif()) { toast('Mode Server belum aktif — tidak ada Google Sheets untuk ditarik.', 'error'); return; }
+    const activeSection = document.querySelector('#guru-portal .main > section:not(.hidden)');
+    const tabId = activeSection ? activeSection.id : null;
+    const aksi = {
+      'tab-dashboard': () => Guru.muatDashboard(),
+      'tab-bank-soal': () => Guru.muatBankSoal(),
+      'tab-ujian': () => Guru.muatDaftarUjian(),
+      'tab-siswa': () => Guru.muatDaftarSiswa(),
+      'tab-login': () => Guru.muatStatusLogin(),
+      'tab-rekap': () => { const v = document.getElementById('pilih-ujian-rekap').value; v ? Guru.muatRekap() : Guru.muatPilihanUjianUntukSelect('pilih-ujian-rekap'); },
+      'tab-analisis': () => { const v = document.getElementById('pilih-ujian-analisis').value; v ? Guru.muatAnalisisSoal() : Guru.muatPilihanUjianUntukSelect('pilih-ujian-analisis'); },
+      'tab-pelanggaran': () => { const v = document.getElementById('pilih-ujian-log').value; v ? Guru.muatLogPelanggaran() : Guru.muatPilihanUjianUntukSelect('pilih-ujian-log'); },
+      'tab-pemantauan': () => { const v = document.getElementById('pilih-ujian-pemantauan').value; v ? Guru.muatPemantauan() : Guru.muatPilihanUjianUntukSelect('pilih-ujian-pemantauan'); },
+      'tab-pengaturan': () => tampilkanBadgeMode()
+    };
+    const fn = tabId && aksi[tabId];
+    if (fn) fn();
+    toast('Data halaman ini ditarik ulang dari Google Sheets.', 'success');
+  },
+
+  // ---------------- SINKRONISASI PAKSA (lapisan kedua, lihat tab Pengaturan) ----------------
+
+  // Menarik ulang Bank Soal, Ujian, dan Data Siswa dari Google Sheets saat ini juga
+  // (tanpa menunggu polling ~8 detik), sekaligus menyimpannya sebagai cadangan ke
+  // penyimpanan lokal (localStorage) perangkat ini.
+  async tarikDataDariSheetPaksa() {
+    if (!modeServerAktif()) { toast('Mode Server belum aktif — tidak ada Google Sheets untuk ditarik. Aktifkan dulu lewat "Atur Koneksi Google Sheets".', 'error'); return; }
+    toast('Menarik data dari Google Sheets...');
+    const [resSoal, resSiswa, resUjian] = await Promise.all([
+      api('getBankSoal', { guruId: state.user.id }),
+      api('getDaftarSiswa', {}),
+      api('getDaftarUjian', { guruId: state.user.id })
+    ]);
+    if (!resSoal.ok || !resSiswa.ok || !resUjian.ok) {
+      toast('Gagal menarik sebagian data: ' + (resSoal.error || resSiswa.error || resUjian.error || 'tidak diketahui'), 'error');
+      return;
+    }
+    const db = bacaDbLokalMentah();
+    db.bankSoal = resSoal.data;
+    db.siswa = resSiswa.data;
+    db.ujian = resUjian.data;
+    if (tulisDbLokalMentah(db)) {
+      toast(`Berhasil menarik ${resSoal.data.length} soal, ${resSiswa.data.length} siswa, ${resUjian.data.length} ujian dari Google Sheets (tersimpan juga sebagai cadangan lokal).`, 'success');
+    }
+    Guru.muatBankSoal(); Guru.muatDaftarSiswa(); Guru.muatDaftarUjian();
+  },
+
+  // Mengirim seluruh data di penyimpanan lokal (Mode Lokal) perangkat ini ke Google
+  // Sheets yang sedang terhubung — dipakai sekali saat pindah dari Mode Lokal ke Mode
+  // Server. Soal diimpor lebih dulu supaya ID baru dari server bisa dipetakan ke
+  // soal_ids tiap ujian sebelum ujian ikut dikirim (kalau tidak, ujian akan menunjuk
+  // ke soal yang salah/tidak ada).
+  async kirimDataLokalKeSheetPaksa() {
+    if (!modeServerAktif()) { toast('Aktifkan dulu Mode Server (isi URL Google Sheets) sebelum mengirim data lokal.', 'error'); return; }
+    const db = bacaDbLokalMentah();
+    const jumlahSoal = (db.bankSoal || []).length;
+    const jumlahSiswa = (db.siswa || []).length;
+    const jumlahUjian = (db.ujian || []).length;
+    if (jumlahSoal + jumlahSiswa + jumlahUjian === 0) { toast('Tidak ada data Mode Lokal di perangkat ini untuk dikirim.', 'error'); return; }
+    if (!(await Dialog.konfirmasi({
+      judul: 'Kirim Data Lokal ke Google Sheets?', tipe: 'warning', ikon: 'fa-cloud-arrow-up',
+      pesan: 'Salinan data lokal di perangkat ini akan **ditambahkan** ke Google Sheets yang sedang terhubung.\n\nPakai **sekali** saat pertama kali pindah dari Mode Lokal ke Mode Server. Mengulang pada data yang sama akan membuat data ganda.',
+      rincian: [['Soal', String(jumlahSoal)], ['Siswa', String(jumlahSiswa)], ['Ujian', String(jumlahUjian)]],
+      teksYa: 'Ya, Kirim Data'
+    }))) return;
+
+    toast('Mengirim data lokal ke Google Sheets...');
+    let berhasilSoal = 0, berhasilSiswa = 0, berhasilUjian = 0;
+    const petaIdSoal = {};
+
+    if (jumlahSoal > 0) {
+      const soalList = db.bankSoal.map(s => { const c = Object.assign({}, s); delete c.id; c.guru_id = state.user.id; return c; });
+      const r = await api('importSoal', { soalList: JSON.stringify(soalList) });
+      if (r.ok) {
+        berhasilSoal = r.count;
+        db.bankSoal.forEach((s, i) => { if (r.ids[i]) petaIdSoal[s.id] = r.ids[i]; });
+      }
+    }
+    if (jumlahSiswa > 0) {
+      const siswaList = db.siswa.map(s => ({ username: s.username, password: s.password, nama: s.nama, kelas: s.kelas }));
+      const r = await api('importSiswa', { siswaList: JSON.stringify(siswaList) });
+      if (r.ok) berhasilSiswa = r.count;
+    }
+    for (const u of (db.ujian || [])) {
+      const c = Object.assign({}, u);
+      delete c.id;
+      c.guru_id = state.user.id;
+      // ID soal lokal berubah setelah diimpor ke server — petakan ulang soal_ids
+      // ujian supaya tetap menunjuk ke soal yang benar.
+      c.soal_ids = String(u.soal_ids || '').split(',').filter(Boolean).map(oldId => petaIdSoal[oldId] || oldId).join(',');
+      const r = await api('simpanUjian', { ujian: JSON.stringify(c) });
+      if (r.ok) berhasilUjian++;
+    }
+    toast(`Selesai: ${berhasilSoal} soal, ${berhasilSiswa} siswa, ${berhasilUjian} ujian terkirim ke Google Sheets.`, 'success');
+    Guru.muatBankSoal(); Guru.muatDaftarSiswa(); Guru.muatDaftarUjian();
+  }
+};
+
+// Perbandingan teks yang tidak sensitif huruf besar/kecil & spasi di pinggir —
+// dipakai saat mencocokkan kategori/sub-kategori soal (lihat catatan di
+// normalisasiKategoriSoal_ dan action getBankSoal).
+function samaTeks_(a, b) {
+  return String(a == null ? '' : a).trim().toLowerCase() === String(b == null ? '' : b).trim().toLowerCase();
+}
+
+// Kolom "kategori" di file impor soal itu teks bebas, tapi dropdown di Buat
+// Ujian/Kelola Soal memakai kode baku huruf kecil ("kuis", "ulangan_harian",
+// "uts", "uas"). Fungsi ini menormalkan variasi penulisan umum (huruf besar,
+// spasi, dsb.) ke kode baku itu, supaya soal langsung cocok dengan filter di
+// Buat Ujian tanpa perlu diketik persis huruf kecil semua di file impor.
+function normalisasiKategoriSoal_(raw) {
+  const asli = String(raw || '').trim() || 'Kuis';
+  const bersih = asli.toLowerCase().replace(/[\s-]+/g, '_');
+  // Hanya kode lama (kuis, ulangan harian, UTS, UAS) yang disatukan ke kode baku.
+  // Nama bebas lain (mis. "Tekanan Zat") dibiarkan PERSIS seperti diketik -- dulu
+  // diubah jadi "tekanan_zat" sehingga tidak cocok dgn mapel yang dibuka & soalnya
+  // "hilang"/menumpuk di kategori lain.
+  if (['kuis', 'ulangan_harian', 'uts', 'uas'].includes(bersih)) return bersih;
+  if (bersih === 'ulanganharian' || bersih === 'harian') return 'ulangan_harian';
+  if (/^(ujian_)?tengah_semester$|^penilaian_tengah_semester$/.test(bersih)) return 'uts';
+  if (/^(ujian_)?akhir_semester$|^penilaian_akhir_semester$/.test(bersih)) return 'uas';
+  return asli;
+}
+
+function labelKategori(k) {
+  return { kuis: 'Kuis', ulangan_harian: 'Ulangan Harian', uts: 'UTS', uas: 'UAS' }[String(k || '').toLowerCase()] || k;
+}
+function labelTipe(t) {
+  return { pilihan_ganda: 'PG Biasa', checkbox: 'PG Kompleks', benar_salah: 'Benar/Salah', menjodohkan: 'Mencocokkan', uraian: 'Essay' }[t] || t;
+}
+// Urutan & label tab tipe soal dipakai di halaman "Kelola Soal" (grid mapel) —
+// lihat Guru.gantiTipeTabKelola & render tab di UI.htmlTipeTabs.
+const TIPE_SOAL_TAB = [
+  { tipe: 'pilihan_ganda', label: 'PG Biasa', sub: 'SINGLE CHOICE' },
+  { tipe: 'checkbox', label: 'PG Kompleks', sub: 'MULTI SELECT' },
+  { tipe: 'benar_salah', label: 'Benar/Salah', sub: 'PERNYATAAN' },
+  { tipe: 'menjodohkan', label: 'Jodohkan', sub: 'MATCHING' },
+  { tipe: 'uraian', label: 'Essay', sub: 'ISIAN SINGKAT' }
+];
+function labelKesulitan(k) {
+  return { mudah: 'Mudah', sedang: 'Sedang', sulit: 'Sulit' }[k] || 'Sedang';
+}
+function labelPelanggaran(j) {
+  return { keluar_fullscreen: 'Keluar dari mode layar penuh', pindah_tab: 'Berpindah tab / aplikasi', keluar_aplikasi: 'Keluar dari aplikasi' }[j] || j;
+}
+function formatTanggal(iso) {
+  if (!iso) return '-';
+  try { return new Date(iso).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return iso; }
+}
+
+// Lama pengerjaan (detik) = waktu selesai - waktu mulai. null kalau datanya tidak lengkap.
+function hitungDurasiDetik_(mulai, selesai) {
+  if (!mulai || !selesai) return null;
+  const a = new Date(mulai).getTime(), b = new Date(selesai).getTime();
+  if (isNaN(a) || isNaN(b) || b < a) return null;
+  return Math.round((b - a) / 1000);
+}
+
+// 3725 detik -> "1 jam 2 mnt 5 dtk"; 750 -> "12 mnt 30 dtk"
+function formatDurasi_(detik) {
+  if (detik === null || detik === undefined) return '-';
+  detik = Math.max(Math.floor(Number(detik) || 0), 0);
+  const j = Math.floor(detik / 3600), m = Math.floor((detik % 3600) / 60), d = detik % 60;
+  return (j ? j + ' jam ' : '') + ((j || m) ? m + ' mnt ' : '') + d + ' dtk';
+}
+
+// Dipakai tab "Pemantauan Ujian" (sisa waktu) & "Status Login" (lama tidak aktif).
+function formatSisaWaktu(detik) {
+  if (detik === null || detik === undefined) return '-';
+  detik = Math.max(Math.floor(Number(detik) || 0), 0);
+  const j = Math.floor(detik / 3600);
+  const m = Math.floor((detik % 3600) / 60);
+  const d = detik % 60;
+  const dua = n => String(n).padStart(2, '0');
+  return j > 0 ? `${j}:${dua(m)}:${dua(d)}` : `${dua(m)}:${dua(d)}`;
+}
+
+function formatSudahBerapaLama(iso) {
+  if (!iso) return '-';
+  const detik = Math.floor((new Date() - new Date(iso)) / 1000);
+  if (detik < 0) return 'baru saja';
+  if (detik < 60) return 'baru saja';
+  if (detik < 3600) return Math.floor(detik / 60) + ' menit lalu';
+  if (detik < 86400) return Math.floor(detik / 3600) + ' jam lalu';
+  return Math.floor(detik / 86400) + ' hari lalu';
+}
+
+// Dipakai tab "Analisis Soal": pertanyaan soal bisa berisi HTML hasil rich-text
+// editor (bold, warna, dst.) -- untuk tabel analisis/CSV, tampilkan versi teks
+// polosnya saja (tag dibuang, isi teksnya dipertahankan).
+function bersihkanHtml_(str) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = String(str == null ? '' : str);
+  return (tpl.content.textContent || '').replace(/\s+/g, ' ').trim();
+}
+function potongTeks_(str, maksPanjang) {
+  const s = String(str == null ? '' : str);
+  return s.length > maksPanjang ? s.slice(0, maksPanjang - 1) + '…' : s;
+}
+function unduhTeksSebagaiFile_(teks, namaFile) {
+  const blob = new Blob(['\ufeff' + teks], { type: 'text/csv;charset=utf-8;' }); // BOM supaya Excel baca UTF-8 dgn benar
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = namaFile;
+  a.click();
+}
+
+// ============================================================================
+// SISWA — sebelum ujian
+// ============================================================================
+const Siswa = {
+  mulaiPing() {
+    clearInterval(state.pingHandle);
+    const kirimPing = async () => {
+      if (!state.user) return;
+      const res = await api('ping', { role: 'siswa', siswaId: state.user.id, deviceId: state.deviceId });
+      // Status Blokir Akun ikut dibawa tiap ping, jadi portal berubah otomatis saat guru memblokir/membuka blokir.
+      if (res && res.ok && res.blokir) Siswa.terapkanStatusBlokir(res.blokir);
+    };
+    kirimPing(); // langsung sekali supaya status blokir terbaru tampil tanpa menunggu interval pertama
+    state.pingHandle = setInterval(kirimPing, CONFIG.PING_INTERVAL_MS);
+  },
+
+  // Tampilkan/sembunyikan banner "akun diblokir" & kunci kolom token. Server tetap
+  // menolak cekToken/mulaiUjian untuk akun diblokir -- ini hanya agar siswa langsung paham.
+  terapkanStatusBlokir(b) {
+    const aktif = !!(b && b.aktif);
+    const banner = document.getElementById('siswa-blokir-banner');
+    const input = document.getElementById('input-token-ujian');
+    const tombol = document.getElementById('btn-cari-ujian');
+    if (banner) {
+      banner.classList.toggle('hidden', !aktif);
+      const teks = document.getElementById('siswa-blokir-alasan');
+      if (teks) teks.textContent = aktif ? (b.alasan ? 'Alasan: ' + b.alasan : 'Hubungi guru untuk membuka blokir.') : '';
+    }
+    if (input) input.disabled = aktif;
+    if (tombol) tombol.disabled = aktif;
+    if (aktif) document.getElementById('konfirmasi-ujian')?.classList.add('hidden');
+    if (state.user) {
+      state.user.blokir = { aktif, alasan: (b && b.alasan) || '', sejak: (b && b.sejak) || '' };
+      try { sessionStorage.setItem('cbt_user', JSON.stringify(state.user)); } catch (e) { /* abaikan */ }
+    }
+  },
+
+  async cekToken() {
+    const token = document.getElementById('input-token-ujian').value.trim().toUpperCase();
+    const errEl = document.getElementById('token-error');
+    errEl.textContent = '';
+    if (!token) return;
+    const res = await api('cekToken', { token, siswaId: state.user && state.user.id });
+    if (!res.ok) { errEl.textContent = res.error; document.getElementById('konfirmasi-ujian').classList.add('hidden'); return; }
+    state.ujian = res.ujian;
+    document.getElementById('konf-judul-ujian').textContent = res.ujian.judul;
+    document.getElementById('konf-info-ujian').textContent = `Durasi: ${res.ujian.durasiMenit} menit • Kategori: ${labelKategori(res.ujian.kategori)}`;
+    document.getElementById('konfirmasi-ujian').classList.remove('hidden');
+  },
+
+  async mulaiUjian() {
+    const res = await api('mulaiUjian', { ujianId: state.ujian.id, siswaId: state.user.id, deviceId: state.deviceId });
+    if (!res.ok) { toast(res.error, 'error'); return; }
+
+    // Pemulihan: siswa sudah selesai tapi bukti orak-orik WAJIB belum terunggah (halaman sempat tertutup).
+    if (res.perluBukti) {
+      state.sesiId = res.sesiId;
+      state.submitting = true;
+      await BuktiUI.buka({ mode: res.buktiOrek, sesiId: res.sesiId, judul: res.judul || state.ujian.judul, pemulihan: true, nilai: res.nilai, lulus: res.lulus, ujianId: state.ujian.id });
+      state.submitting = false;
+      ExamEngine.tampilkanHasil(res.nilai, res.lulus, res.judul || state.ujian.judul);
+      return;
+    }
+
+    state.submitting = false; // reset sisa ujian sebelumnya
+    state.sesiId = res.sesiId;
+    state.soal = res.soal;
+    state.sisaDetik = res.sisaDetik;
+    state.maxPelanggaran = res.maxPelanggaran;
+    state.pelanggaran = res.pelanggaranSaatIni;
+    state.idxSoal = 0;
+
+    // gabungkan jawaban dari server dengan cache lokal (jaga-jaga koneksi sempat putus)
+    const cacheLokal = ambilCacheLokal(state.sesiId);
+    state.jawaban = Object.assign({}, res.jawabanTersimpan, cacheLokal.jawaban || {});
+    state.ragu = (cacheLokal.ragu && cacheLokal.ragu.length) ? cacheLokal.ragu : res.raguTersimpan;
+
+    UI.tampilkan('ujian-screen');
+    document.getElementById('ujian-judul-aktif').textContent = state.ujian.judul;
+    const peserta = [state.user.nama, state.user.kelas].filter(Boolean).join(' • ');
+    document.getElementById('ujian-peserta').textContent = peserta || '-';
+    const wm = document.getElementById('exam-watermark');
+    if (wm) {
+      wm.textContent = CONFIG.WATERMARK_GURU ? 'Guru Pengajar · ' + CONFIG.WATERMARK_GURU : '';
+    }
+    ExamEngine.renderGridSoal();
+    ExamEngine.renderSoal();
+    ExamEngine.mulaiTimer();
+    ExamEngine.mulaiAutosave();
+    AntiCheat.aktifkan();
+  },
+
+  soalSebelumnya() { if (state.idxSoal > 0) { state.idxSoal--; ExamEngine.renderSoal(); } },
+  soalBerikutnya() {
+    if (state.idxSoal < state.soal.length - 1) { state.idxSoal++; ExamEngine.renderSoal(); }
+    else Siswa.konfirmasiSubmit(); // soal terakhir: tombol berubah jadi "Selesai"
+  },
+  lompatKeSoal(i) { state.idxSoal = i; ExamEngine.renderSoal(); },
+
+  toggleRagu() {
+    const soalId = state.soal[state.idxSoal].id;
+    const checked = document.getElementById('chk-ragu').checked;
+    state.ragu = state.ragu.filter(id => id !== soalId);
+    if (checked) state.ragu.push(soalId);
+    simpanCacheLokal();
+    ExamEngine.renderGridSoal();
+  },
+
+  konfirmasiSubmit() { KumpulUI.buka(); },
+
+  kembaliKeUjian() {
+    AntiCheat._insiden = false; // kejadian sebelumnya selesai; kejadian berikutnya dihitung lagi
+    AntiCheat._hiddenSejak = 0;
+    document.getElementById('anticheat-warning').classList.add('hidden');
+    AntiCheat.mintaFullscreen();
+  }
+};
+
+// ============================================================================
+// UKURAN TAMPILAN SOAL (siswa): perbesar/perkecil teks soal, jawaban & gambar.
+// Tersimpan per perangkat (localStorage) supaya tidak perlu diatur ulang tiap soal.
+// ============================================================================
+const SkalaSoal = {
+  tingkat: [0.85, 1, 1.2, 1.4, 1.7],
+  idx: 1,
+  init() {
+    try { const v = parseInt(localStorage.getItem('cbt_skala_soal'), 10); if (v >= 0 && v < SkalaSoal.tingkat.length) SkalaSoal.idx = v; } catch (e) {}
+  },
+  ubah(arah) {
+    SkalaSoal.idx = Math.min(Math.max(SkalaSoal.idx + arah, 0), SkalaSoal.tingkat.length - 1);
+    SkalaSoal.simpan();
+  },
+  reset() { SkalaSoal.idx = 1; SkalaSoal.simpan(); },
+  simpan() {
+    try { localStorage.setItem('cbt_skala_soal', String(SkalaSoal.idx)); } catch (e) {}
+    SkalaSoal.terapkan();
+  },
+  terapkan() {
+    const s = SkalaSoal.tingkat[SkalaSoal.idx];
+    const card = document.getElementById('question-card');
+    if (card) card.style.setProperty('--skala', s);
+    const n = document.getElementById('skala-nilai');
+    if (n) n.textContent = Math.round(s * 100) + '%';
+    const k = document.getElementById('skala-kecil'), b = document.getElementById('skala-besar');
+    if (k) k.disabled = SkalaSoal.idx === 0;
+    if (b) b.disabled = SkalaSoal.idx === SkalaSoal.tingkat.length - 1;
+  }
+};
+SkalaSoal.init();
+
+// ============================================================================
+// KONFIRMASI KUMPULKAN UJIAN & LAYAR PENGIRIMAN (pengganti confirm() bawaan browser)
+// ============================================================================
+// ----------------------------------------------------------------------------
+// BUKTI ORAK-ORIK JAWABAN (siswa mengunggah foto kertas coretan setelah klik Selesai)
+// Urutan: nilai tersimpan di server -> halaman ini -> nilai akhir (lulus/remedial) tampil.
+// Jaminan terkirim: tiap foto diverifikasi ukurannya oleh server, otomatis dicoba ulang (4x),
+// kirim ulang tidak membuat duplikat, dan sebelum lanjut daftar foto diperiksa ulang ke server.
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// PENYIMPANAN PEMULIHAN LANGKAH UNGGAH BUKTI
+// Saat siswa membuka kamera/galeri di HP, browser sering mematikan/memuat ulang halaman (memori habis, aplikasi
+// kamera mengambil alih). sessionStorage bisa HILANG pada kasus itu sehingga siswa terlempar ke halaman login dan,
+// setelah login ulang, tidak dikembalikan ke langkah unggah -> terulang terus. Karena itu catatan "sedang di langkah
+// unggah bukti" disimpan JUGA di localStorage (kedaluwarsa 12 jam) beserta data akun siswa, dan dipakai untuk
+// memulihkan sesi otomatis maupun setelah login ulang. Catatan dihapus begitu semua foto terkirim / siswa keluar sah.
+// ----------------------------------------------------------------------------
+const BUKTI_TERTUNDA_KEY = 'cbt_bukti_tertunda';
+const BUKTI_TERTUNDA_TTL_MS = 12 * 3600 * 1000;
+const BuktiTertunda = {
+  simpan(rec) {
+    const isi = JSON.stringify(Object.assign({}, rec, { waktu: Date.now() }));
+    try { sessionStorage.setItem(BUKTI_TERTUNDA_KEY, isi); } catch (e) { /* abaikan */ }
+    try { localStorage.setItem(BUKTI_TERTUNDA_KEY, isi); } catch (e) { /* abaikan */ }
+  },
+  baca() {
+    const coba = (st) => { try { return JSON.parse(st.getItem(BUKTI_TERTUNDA_KEY) || 'null'); } catch (e) { return null; } };
+    const d = coba(sessionStorage) || coba(localStorage);
+    if (!d) return null;
+    if (d.waktu && Date.now() - d.waktu > BUKTI_TERTUNDA_TTL_MS) { BuktiTertunda.hapus(); return null; }
+    return d;
+  },
+  hapus() {
+    try { sessionStorage.removeItem(BUKTI_TERTUNDA_KEY); } catch (e) { /* abaikan */ }
+    try { localStorage.removeItem(BUKTI_TERTUNDA_KEY); } catch (e) { /* abaikan */ }
+  }
+};
+
+const BuktiFoto = {
+  MAKS_FOTO: 10,
+  // HP/tablet: atribut capture membuka aplikasi kamera bawaan. Laptop/PC: capture DIABAIKAN browser (hanya membuka pemilih
+  // file), jadi di sana kamera dibuka lewat webcam langsung (BuktiKamera).
+  perangkatSeluler() {
+    const ua = (navigator.userAgent || '');
+    return /Android|iPhone|iPad|iPod|Mobile|CriOS|FxiOS/i.test(ua) || ((navigator.maxTouchPoints || 0) > 1 && /Macintosh/.test(ua));
+  },
+  adalahHeic(file) { return /\.(heic|heif|hif)$/i.test(file.name || '') || /image\/(heic|heif)/i.test(file.type || ''); },
+
+  async _dekode(blob) {
+    if (window.createImageBitmap) {
+      try {
+        const bmp = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+        return { sumber: bmp, w: bmp.width, h: bmp.height, tutup: () => { try { bmp.close(); } catch (e) { /* abaikan */ } } };
+      } catch (e) { /* lanjut ke cara klasik */ }
+    }
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('decode')); i.src = url; });
+      return { sumber: img, w: img.naturalWidth, h: img.naturalHeight, tutup: () => {} };
+    } finally { URL.revokeObjectURL(url); }
+  },
+
+  // Ukuran asli foto (sesudah orientasi EXIF di browser modern) TANPA mendekode seluruh piksel.
+  async _ukuranAsli(blob) {
+    const url = URL.createObjectURL(blob);
+    try {
+      return await new Promise((res, rej) => { const i = new Image(); i.onload = () => res({ w: i.naturalWidth, h: i.naturalHeight }); i.onerror = () => rej(new Error('ukuran')); i.src = url; });
+    } finally { URL.revokeObjectURL(url); }
+  },
+  // HP berkamera 50-108 MP: mendekode foto utuh = ratusan MB RAM -> di HP RAM kecil browser DIMATIKAN sistem
+  // (\"Tidak dapat menyelesaikan operasi sebelumnya karena sisa memori sedikit\") dan siswa terlempar ke login.
+  // Karena itu foto diperkecil langsung saat dekode. Bila gagal/tidak didukung -> cara lama (_dekode).
+  async _dekodeHemat(blob, maksSisi) {
+    try {
+      if (window.createImageBitmap) {
+        const u = await BuktiFoto._ukuranAsli(blob);
+        const terbesar = Math.max(u.w, u.h);
+        if (u.w > 0 && u.h > 0 && terbesar > maksSisi) {
+          const tw = Math.max(1, Math.round(u.w * maksSisi / terbesar));
+          const bmp = await createImageBitmap(blob, { imageOrientation: 'from-image', resizeWidth: tw, resizeQuality: 'medium' });
+          const rasioAsli = u.w / u.h, rasioBmp = bmp.width / bmp.height;
+          if (Math.abs(rasioBmp - rasioAsli) / rasioAsli < 0.03) { // rasio cocok -> aman (bila tidak, orientasi berbeda: pakai cara lama)
+            return { sumber: bmp, w: bmp.width, h: bmp.height, tutup: () => { try { bmp.close(); } catch (e) { /* abaikan */ } } };
+          }
+          try { bmp.close(); } catch (e) { /* abaikan */ }
+        }
+      }
+    } catch (e) { /* lanjut ke cara lama */ }
+    return BuktiFoto._dekode(blob);
+  },
+
+  // Foto apa pun (JPG/PNG/WEBP/GIF/BMP/AVIF/HEIC/HEIF, resolusi tinggi) -> JPEG terkompresi yang aman dikirim.
+  async proses(file) {
+    const lokal = !modeServerAktif(); // Mode Lokal: penyimpanan browser terbatas -> foto dibuat lebih kecil
+    const maksSisi = lokal ? 1200 : (BuktiFoto.perangkatSeluler() ? 1600 : 2000), targetByte = lokal ? 250000 : 2200000;
+    let blob = file, dekode = null;
+    if (BuktiFoto.adalahHeic(file)) {
+      try { dekode = await BuktiFoto._dekodeHemat(file, maksSisi); } // Safari/iPhone bisa membaca HEIC langsung
+      catch (e) {
+        await muatPustaka_('heic2any'); // Chrome/Firefox/Android: konversi dgn pustaka
+        try {
+          const hasil = await window.heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
+          blob = Array.isArray(hasil) ? hasil[0] : hasil;
+        } catch (err) { throw new Error('Foto HEIC ini tidak bisa dibaca. Coba foto ulang atau ubah ke JPG.'); }
+      }
+    }
+    if (!dekode) {
+      try { dekode = await BuktiFoto._dekodeHemat(blob, maksSisi); }
+      catch (e) { throw new Error('Format gambar tidak didukung di perangkat ini. Pilih foto JPG/PNG/HEIC atau foto ulang.'); }
+    }
+    let skala = Math.min(1, maksSisi / Math.max(dekode.w, dekode.h, 1)), kualitas = lokal ? 0.7 : 0.86, hasilBlob = null;
+    for (let coba = 0; coba < 6; coba++) {
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(dekode.w * skala));
+      c.height = Math.max(1, Math.round(dekode.h * skala));
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); // PNG transparan -> latar putih (bukan hitam)
+      ctx.drawImage(dekode.sumber, 0, 0, c.width, c.height);
+      hasilBlob = await new Promise(r => c.toBlob(r, 'image/jpeg', kualitas));
+      c.width = c.height = 0; // lepaskan memori kanvas segera (penting di HP RAM kecil)
+      if (!hasilBlob) throw new Error('Gagal memproses foto. Coba lagi.');
+      if (hasilBlob.size <= targetByte) break;
+      kualitas = Math.max(0.55, kualitas - 0.08);
+      skala *= 0.85;
+    }
+    dekode.tutup();
+    return { blob: hasilBlob };
+  },
+
+  blobKeBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result).split(',')[1] || '');
+      r.onerror = () => reject(new Error('Gagal membaca foto.'));
+      r.readAsDataURL(blob);
+    });
+  }
+};
+
+const BuktiUI = {
+  _s: null,
+  _el(id) { return document.getElementById(id); },
+  _tunggu(ms) { return new Promise(r => setTimeout(r, ms)); },
+  _berjalan(i) { return i.status === 'proses' || i.status === 'antre' || i.status === 'unggah'; },
+
+  // Menampilkan halaman unggah; Promise selesai saat siswa boleh melihat nilai (semua foto terverifikasi / dilewati).
+  buka({ mode, sesiId, judul, pemulihan, nilai, lulus, ujianId, fotoAwal }) {
+    return new Promise(resolve => {
+      // fotoAwal: foto yang SUDAH tersimpan di server (mis. halaman dimuat ulang) -> tampil langsung berstatus Terkirim
+      const itemAwal = (fotoAwal || []).map(f => ({ uid: 's' + f.id, kunci: '', nama: f.nama || 'foto.jpg', status: 'ok', galat: '', blob: null, previewUrl: f.url || '', serverId: f.id }));
+      BuktiUI._s = { mode, sesiId, items: itemAwal, mengunggah: false, sibuk: false, selesai: false, resolve };
+      // Ingat bahwa siswa sedang di langkah ini: bila halaman sampai dimuat ulang, langsung dikembalikan ke sini (bukan ke beranda).
+      BuktiTertunda.simpan({ userId: state.user && state.user.id, user: state.user, sesiId, mode, judul, nilai, lulus, ujianId });
+      KumpulUI.sembunyikanSemua();
+      UI.tampilkan('bukti-screen');
+      window.scrollTo(0, 0);
+      BuktiUI._el('bukti-judul-ujian').textContent = judul || '-';
+      BuktiUI._el('bukti-terkirim-sub').textContent = pemulihan
+        ? (itemAwal.length ? 'Halaman dimuat ulang. Nilai Anda aman di server; selesaikan langkah ini untuk melihat nilai.' : 'Nilai Anda sudah tersimpan, tetapi bukti orak-orik belum diunggah.')
+        : 'Nilai Anda sudah tersimpan aman di server.';
+      BuktiUI._el('bukti-sub').textContent = mode === 'wajib'
+        ? 'Foto kertas coretan (orak-orik) yang Anda pakai saat mengerjakan, lalu unggah di sini. Wajib minimal 1 foto. Setelah semua foto terkirim, nilai akhir Anda akan ditampilkan.'
+        : 'Foto kertas coretan (orak-orik) Anda lalu unggah di sini. Langkah ini opsional. Setelah selesai, nilai akhir Anda akan ditampilkan.';
+      BuktiUI.render();
+      BuktiUI._pasangPenjaga();
+    });
+  },
+
+  // ---------------- PENJAGA HALAMAN: siswa tidak boleh meninggalkan halaman sebelum bukti terkirim ----------------
+  // Terkunci bila: bukti WAJIB dan belum ada satu pun foto terkirim, ATAU ada foto yang masih diproses/dikirim/gagal.
+  // (Mode opsional: hanya terkunci selama ada foto yang belum selesai terkirim.) Setelah semua foto berstatus Terkirim,
+  // kunci terbuka. Yang dijaga: tombol Back, F5/Ctrl+R, Alt+Kiri, tutup/muat-ulang tab (peringatan browser), tombol Keluar.
+  // Screenshot TIDAK dihalangi (tidak ada pemblokiran tombol PrintScreen/Win+Shift+S).
+  _perluTahan() {
+    const s = BuktiUI._s;
+    if (!s || s.selesai) return false;
+    const belumBeres = s.items.some(i => i.status !== 'ok');
+    return s.mode === 'wajib' ? (belumBeres || s.items.length === 0) : belumBeres;
+  },
+  _pesanTahan() {
+    const s = BuktiUI._s;
+    if (s && s.items.some(i => i.status !== 'ok')) {
+      return { judul: 'Foto Belum Selesai Terkirim', pesan: 'Ada foto yang **belum selesai dikirim ke server**.\nAnda **tidak bisa meninggalkan halaman ini** sebelum semua foto berstatus **Terkirim**.\n\nTunggu sampai selesai, atau ketuk **Coba lagi** pada foto yang gagal.' };
+    }
+    return { judul: 'Bukti Belum Diunggah', pesan: 'Bukti orak-orik jawaban Anda **belum diunggah dan dikirim ke server**.\nAnda **tidak bisa meninggalkan halaman ini**.\n\nUnggah terlebih dahulu foto bukti orak-orik, tunggu sampai berstatus **Terkirim**, lalu tekan **Selesai & Lihat Nilai**.' };
+  },
+  // true bila peringatan ditampilkan (artinya aksi keluar harus dibatalkan)
+  peringatanKeluar() {
+    if (!BuktiUI._perluTahan()) return false;
+    const t = BuktiUI._pesanTahan();
+    Dialog.info({ judul: t.judul, tipe: 'danger', ikon: 'fa-lock', pesan: t.pesan, teksYa: 'Mengerti, Lanjut Unggah', tanpaAntre: true });
+    return true;
+  },
+  _onPopState() {
+    if (!BuktiUI._perluTahan()) return;
+    try { history.pushState({ bukti: 1 }, '', location.href); } catch (e) { /* abaikan */ } // batalkan "kembali": tetap di halaman ini
+    BuktiUI.peringatanKeluar();
+  },
+  _onBeforeUnload(e) {
+    if (!BuktiUI._perluTahan()) return;
+    e.preventDefault();
+    e.returnValue = 'Bukti orak-orik belum diunggah dan dikirim. Anda tidak bisa meninggalkan halaman ini.';
+    return e.returnValue;
+  },
+  _onKeyTahan(e) {
+    if (!BuktiUI._perluTahan()) return;
+    const k = String(e.key || '').toLowerCase();
+    const muatUlang = k === 'f5' || ((e.ctrlKey || e.metaKey) && k === 'r');
+    const kembali = e.altKey && (k === 'arrowleft' || k === 'arrowright');
+    if (muatUlang || kembali) { e.preventDefault(); e.stopPropagation(); BuktiUI.peringatanKeluar(); }
+  },
+  // ---------------- WAJIB LAYAR PENUH selama bukti belum terkirim ----------------
+  // Layar penuh tidak bisa dipaksa oleh browser tanpa ketukan pengguna, jadi bila gagal (mis. halaman dimuat ulang)
+  // muncul penutup berisi tombol "Masuk Layar Penuh". Keluar layar penuh / pindah tab TIDAK menambah pelanggaran
+  // (nilai sudah tersimpan), tetapi memunculkan peringatan wajib unggah bukti. Saat siswa membuka kamera/galeri
+  // ada masa tenggang agar tidak dianggap meninggalkan halaman. Bila perangkat tidak mendukung layar penuh
+  // (mis. iPhone), pembatasan ini dilewati.
+  _graceSampai: 0,
+  _pergi: false,
+  _fsDidukung() { const el = document.documentElement; return !!(el.requestFullscreen || el.webkitRequestFullscreen); },
+  _adaFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); },
+  _mintaFullscreen() {
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (!req) return Promise.resolve(false);
+    try {
+      return Promise.resolve(req.call(el)).then(() => {
+        try { if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock(['Escape']).catch(() => {}); } catch (e) { /* abaikan */ }
+        return true;
+      }).catch(() => false);
+    } catch (e) { return Promise.resolve(false); }
+  },
+  _keluarFullscreen() {
+    try { if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); } catch (e) { /* abaikan */ }
+    try {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      else if (document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen();
+    } catch (e) { /* abaikan */ }
+  },
+  _overlayFs(tampil) {
+    let ov = document.getElementById('bukti-fs-overlay');
+    if (!ov) {
+      if (!tampil) return;
+      ov = document.createElement('div');
+      ov.id = 'bukti-fs-overlay';
+      ov.className = 'hidden';
+      ov.innerHTML = `<div class="fs-kartu" role="alertdialog" aria-modal="true" aria-labelledby="fs-judul">
+        <div class="fs-ikon"><i class="fa-solid fa-expand"></i></div>
+        <h3 id="fs-judul">Wajib Layar Penuh</h3>
+        <p>Anda <strong>wajib mengunggah bukti orak-orik jawaban</strong>. Halaman ini harus tetap dalam <strong>layar penuh</strong> sampai semua foto berstatus <strong>Terkirim</strong>.</p>
+        <button type="button" class="accent" id="fs-tombol"><i class="fa-solid fa-expand"></i> Masuk Layar Penuh</button>
+      </div>`;
+      document.body.appendChild(ov);
+      ov.querySelector('#fs-tombol').addEventListener('click', () => { BuktiUI._mintaFullscreen().then(() => BuktiUI._periksaFullscreen()); });
+    }
+    ov.classList.toggle('hidden', !tampil);
+    if (tampil) { const t = ov.querySelector('#fs-tombol'); if (t && !document.querySelector('.dlg-backdrop, .bk-sheet-backdrop')) t.focus(); }
+  },
+  // Tampilkan/sembunyikan penutup sesuai kondisi saat ini. Dipanggil tiap render() dan tiap perubahan layar penuh.
+  _periksaFullscreen() {
+    const perlu = BuktiUI._perluTahan() && BuktiUI._fsDidukung();
+    BuktiUI._overlayFs(perlu && !BuktiUI._adaFullscreen());
+  },
+  _peringatanLayarPenuh(pesan) {
+    if (!BuktiUI._perluTahan()) return;
+    const t = BuktiUI._pesanTahan();
+    Dialog.info({ judul: 'Wajib Unggah Bukti', tipe: 'danger', ikon: 'fa-lock', pesan: pesan + '\n\n' + t.pesan, teksYa: BuktiUI._fsDidukung() ? 'Mengerti, Kembali ke Layar Penuh' : 'Mengerti, Lanjut Unggah', tanpaAntre: true })
+      .then(() => { if (BuktiUI._s && BuktiUI._perluTahan()) BuktiUI._mintaFullscreen().then(() => BuktiUI._periksaFullscreen()); });
+  },
+  _onFsChange() {
+    if (!BuktiUI._s) return;
+    BuktiUI._periksaFullscreen();
+    if (BuktiUI._adaFullscreen() || !BuktiUI._perluTahan() || !BuktiUI._fsDidukung()) return;
+    if (Date.now() < BuktiUI._graceSampai) return; // sedang membuka kamera/galeri
+    BuktiUI._peringatanLayarPenuh('Anda **keluar dari layar penuh**.');
+  },
+  _onVisibilitas() {
+    if (!BuktiUI._s) return;
+    if (document.hidden) { BuktiUI._pergi = Date.now() >= BuktiUI._graceSampai; return; }
+    BuktiUI._graceSampai = Math.min(BuktiUI._graceSampai, Date.now() + 2500);
+    if (BuktiUI._pergi) {
+      BuktiUI._pergi = false;
+      if (BuktiUI._perluTahan()) BuktiUI._peringatanLayarPenuh('Anda **berpindah tab/aplikasi** dari halaman ini.');
+    }
+    BuktiUI._periksaFullscreen();
+  },
+  _onFokusKembali() { if (BuktiUI._s) BuktiUI._graceSampai = Math.min(BuktiUI._graceSampai, Date.now() + 2500); },
+  _mulaiGrace() { BuktiUI._graceSampai = Date.now() + 180000; },
+  _akhiriGrace() { BuktiUI._graceSampai = Date.now() + 2500; },
+
+  _guardAktif: false,
+  _pasangPenjaga() {
+    BuktiUI._guardAktif = true;
+    ['bukti-input-kamera', 'bukti-input-galeri'].forEach(id => {
+      const el = document.getElementById(id); if (!el) return;
+      el.addEventListener('click', BuktiUI._mulaiGrace);
+      el.addEventListener('change', BuktiUI._akhiriGrace);
+      el.addEventListener('cancel', BuktiUI._akhiriGrace);
+    });
+    document.addEventListener('fullscreenchange', BuktiUI._onFsChange);
+    document.addEventListener('webkitfullscreenchange', BuktiUI._onFsChange);
+    document.addEventListener('visibilitychange', BuktiUI._onVisibilitas);
+    window.addEventListener('focus', BuktiUI._onFokusKembali);
+    window.addEventListener('pageshow', BuktiUI._onFokusKembali);
+    BuktiUI._graceSampai = 0; BuktiUI._pergi = false;
+    if (BuktiUI._perluTahan() && BuktiUI._fsDidukung()) BuktiUI._mintaFullscreen().then(() => BuktiUI._periksaFullscreen());
+    try { history.pushState({ bukti: 1 }, '', location.href); } catch (e) { /* abaikan */ }
+    window.addEventListener('popstate', BuktiUI._onPopState);
+    window.addEventListener('beforeunload', BuktiUI._onBeforeUnload);
+    document.addEventListener('keydown', BuktiUI._onKeyTahan, true);
+    document.documentElement.classList.add('bukti-terkunci');
+    document.body.classList.add('bukti-terkunci');
+  },
+  _lepasPenjaga() {
+    BuktiUI._guardAktif = false;
+    ['bukti-input-kamera', 'bukti-input-galeri'].forEach(id => {
+      const el = document.getElementById(id); if (!el) return;
+      el.removeEventListener('click', BuktiUI._mulaiGrace);
+      el.removeEventListener('change', BuktiUI._akhiriGrace);
+      el.removeEventListener('cancel', BuktiUI._akhiriGrace);
+    });
+    document.removeEventListener('fullscreenchange', BuktiUI._onFsChange);
+    document.removeEventListener('webkitfullscreenchange', BuktiUI._onFsChange);
+    document.removeEventListener('visibilitychange', BuktiUI._onVisibilitas);
+    window.removeEventListener('focus', BuktiUI._onFokusKembali);
+    window.removeEventListener('pageshow', BuktiUI._onFokusKembali);
+    BuktiUI._overlayFs(false);
+    BuktiUI._keluarFullscreen();
+    window.removeEventListener('popstate', BuktiUI._onPopState);
+    window.removeEventListener('beforeunload', BuktiUI._onBeforeUnload);
+    document.removeEventListener('keydown', BuktiUI._onKeyTahan, true);
+    document.documentElement.classList.remove('bukti-terkunci');
+    document.body.classList.remove('bukti-terkunci');
+  },
+
+  // Dipanggil saat aplikasi dibuka lagi (mis. halaman dimuat ulang) dan siswa masih di langkah unggah bukti.
+  async pulihkanTertunda() {
+    const d = BuktiTertunda.baca();
+    if (!d || !state.user || String(d.userId) !== String(state.user.id)) return; // catatan siswa lain di perangkat ini: biarkan (kedaluwarsa sendiri)
+    if (BuktiUI._s) return; // sudah di halaman unggah
+    state.sesiId = d.sesiId;
+    state.ujian = { id: d.ujianId, judul: d.judul };
+    state.submitting = true;
+    let awal = [];
+    try { const cek = await api('getBuktiOrek', { sesiId: d.sesiId, siswaId: state.user.id }); if (cek && cek.ok) awal = cek.data || []; } catch (e) { /* tampil tanpa foto awal */ }
+    await BuktiUI.buka({ mode: d.mode, sesiId: d.sesiId, judul: d.judul, nilai: d.nilai, lulus: d.lulus, ujianId: d.ujianId, pemulihan: true, fotoAwal: awal });
+    state.submitting = false;
+    ExamEngine.tampilkanHasil(d.nilai, d.lulus, d.judul);
+  },
+
+  // Tombol "+" / tile "Tambah foto" -> lembar pilihan: Kamera atau Galeri.
+  // PENTING: input.click() dipanggil SINKRON di dalam handler klik tombol pilihan (bukan setelah await) supaya
+  // browser (terutama Safari/iPhone) tetap menganggapnya aksi pengguna dan membuka kamera/galeri.
+  bukaPilihan() {
+    const s = BuktiUI._s;
+    if (!s || s.sibuk || s.items.length >= BuktiFoto.MAKS_FOTO || document.getElementById('bk-sheet')) return;
+    const wrap = document.createElement('div');
+    wrap.id = 'bk-sheet';
+    wrap.className = 'bk-sheet-backdrop';
+    wrap.innerHTML = `<div class="bk-sheet" role="dialog" aria-modal="true" aria-label="Tambah foto bukti">
+      <div class="bk-sheet-judul">Tambah Foto Bukti</div>
+      <div class="bk-sheet-sub">Sisa ${BuktiFoto.MAKS_FOTO - s.items.length} foto. Pilih sumber foto:</div>
+      <button type="button" class="bk-sheet-opsi" data-sumber="kamera">
+        <span class="bk-sheet-ikon"><i class="fa-solid fa-camera"></i></span>
+        <span class="bk-sheet-teks"><b>Ambil Foto</b><small>Foto kertas coretan langsung memakai kamera</small></span>
+        <i class="fa-solid fa-chevron-right bk-sheet-panah"></i>
+      </button>
+      <button type="button" class="bk-sheet-opsi" data-sumber="galeri">
+        <span class="bk-sheet-ikon"><i class="fa-solid fa-images"></i></span>
+        <span class="bk-sheet-teks"><b>Pilih dari Galeri</b><small>Boleh pilih beberapa foto sekaligus (JPG, PNG, HEIC)</small></span>
+        <i class="fa-solid fa-chevron-right bk-sheet-panah"></i>
+      </button>
+      <button type="button" class="bk-sheet-batal" data-sumber="batal">Batal</button>
+    </div>`;
+    document.body.appendChild(wrap);
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); tutup(); } };
+    const tutup = () => { document.removeEventListener('keydown', onKey, true); wrap.remove(); };
+    document.addEventListener('keydown', onKey, true);
+    wrap.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-sumber]');
+      if (b) {
+        const sumber = b.dataset.sumber;
+        tutup();
+        if (sumber === 'kamera') BuktiUI.pilihKamera();
+        else if (sumber === 'galeri') document.getElementById('bukti-input-galeri').click();
+        return;
+      }
+      if (e.target === wrap) tutup();
+    });
+    const pertama = wrap.querySelector('.bk-sheet-opsi'); if (pertama) pertama.focus();
+  },
+
+  // Satu pintu untuk semua tombol "Kamera": HP -> kamera bawaan (sinkron dari klik); laptop/PC -> webcam di browser.
+  pilihKamera() {
+    const s = BuktiUI._s;
+    if (!s || s.sibuk) return;
+    // Kamera DI DALAM halaman (getUserMedia): siswa TIDAK pindah ke aplikasi kamera HP, jadi Chrome tidak ikut dimatikan
+    // sistem saat RAM HP kecil (penyebab siswa terlempar ke login). Aplikasi kamera bawaan HP hanya jadi cadangan.
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.isSecureContext) BuktiKamera.buka();
+    else if (BuktiFoto.perangkatSeluler()) document.getElementById('bukti-input-kamera').click();
+    else BuktiKamera.buka();
+  },
+
+  dariInput(input) {
+    const files = Array.from(input.files || []);
+    input.value = ''; // supaya foto yang sama bisa dipilih lagi
+    BuktiUI.tambah(files);
+  },
+
+  async tambah(files) {
+    const s = BuktiUI._s;
+    if (!s || !files.length) return;
+    const sisa = BuktiFoto.MAKS_FOTO - s.items.length;
+    if (sisa <= 0) { toast('Maksimal ' + BuktiFoto.MAKS_FOTO + ' foto.', 'error'); return; }
+    if (files.length > sisa) toast('Maksimal ' + BuktiFoto.MAKS_FOTO + ' foto. ' + (files.length - sisa) + ' foto diabaikan.', 'error');
+    const baru = files.slice(0, sisa).map((f, n) => ({
+      uid: 'f' + Date.now().toString(36) + n + Math.random().toString(36).slice(2, 6),
+      kunci: 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10),
+      nama: f.name || 'foto.jpg', status: 'proses', galat: '', blob: null, previewUrl: '', serverId: '', _file: f
+    }));
+    s.items.push(...baru);
+    BuktiUI.render();
+    for (const it of baru) { // berurutan: hemat memori untuk foto HEIC/resolusi tinggi
+      if (!s.items.includes(it)) continue;
+      try {
+        const hasil = await BuktiFoto.proses(it._file);
+        it.blob = hasil.blob;
+        it.previewUrl = URL.createObjectURL(hasil.blob);
+        it.status = 'antre';
+      } catch (e) {
+        it.status = 'gagal'; it.galat = e.message || 'Foto tidak bisa diproses.';
+      }
+      it._file = null;
+      BuktiUI.render();
+      BuktiUI._jalankanAntrean();
+    }
+  },
+
+  async _jalankanAntrean() {
+    const s = BuktiUI._s;
+    if (!s || s.mengunggah) return;
+    s.mengunggah = true;
+    try {
+      let it;
+      while (BuktiUI._s === s && (it = s.items.find(x => x.status === 'antre'))) {
+        it.status = 'unggah'; BuktiUI.render();
+        await BuktiUI._unggah(it);
+        BuktiUI.render();
+      }
+    } finally { s.mengunggah = false; BuktiUI.render(); }
+  },
+
+  async _unggah(it) {
+    const s = BuktiUI._s;
+    let base64;
+    try { base64 = await BuktiFoto.blobKeBase64(it.blob); } catch (e) { it.status = 'gagal'; it.galat = e.message; return; }
+    const fatal = /bukan milik|tidak ditemukan|tidak diaktifkan|Maksimal|Format gambar|Selesaikan ujian|penuh/i;
+    for (let k = 1; k <= 4; k++) {
+      const res = await api('uploadBuktiOrek', {
+        sesiId: s.sesiId, siswaId: state.user.id, base64, mimeType: 'image/jpeg', kunci: it.kunci,
+        filename: it.nama.replace(/\.[^.]+$/, '') + '.jpg'
+      });
+      if (res && res.ok && Number(res.bytes) === it.blob.size) {
+        it.status = 'ok'; it.serverId = res.id; it.galat = '';
+        return;
+      }
+      if (res && res.ok) { // server menyimpan, tapi ukurannya beda -> hapus lalu kirim ulang dgn kunci baru
+        it.galat = 'Ukuran berkas di server tidak cocok';
+        try { await api('hapusBuktiOrek', { id: res.id, sesiId: s.sesiId, siswaId: state.user.id }); } catch (e) { /* abaikan */ }
+        it.kunci = 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+      } else {
+        it.galat = (res && res.error) || 'Gagal mengirim foto';
+        if (fatal.test(it.galat)) break;
+      }
+      if (k < 4) await BuktiUI._tunggu(900 * k);
+    }
+    it.status = 'gagal';
+  },
+
+  ulang(uid) {
+    const s = BuktiUI._s; const it = s && s.items.find(x => x.uid === uid);
+    if (!it || !it.blob || it.status !== 'gagal') return;
+    it.status = 'antre'; it.galat = '';
+    BuktiUI.render();
+    BuktiUI._jalankanAntrean();
+  },
+
+  async hapus(uid) {
+    const s = BuktiUI._s; const it = s && s.items.find(x => x.uid === uid);
+    if (!it || it.status === 'unggah' || it.status === 'proses') return;
+    if (it.status === 'ok' && it.serverId) {
+      const res = await api('hapusBuktiOrek', { id: it.serverId, sesiId: s.sesiId, siswaId: state.user.id });
+      if (!res || !res.ok) { toast('Gagal menghapus foto dari server. Coba lagi.', 'error'); return; }
+    }
+    if (it.previewUrl) URL.revokeObjectURL(it.previewUrl);
+    s.items = s.items.filter(x => x.uid !== uid);
+    BuktiUI.render();
+  },
+
+  async lewati() {
+    const s = BuktiUI._s;
+    if (!s || s.mode !== 'opsional' || s.items.length) return;
+    const ya = await Dialog.konfirmasi({
+      judul: 'Lewati Unggah Bukti?', tipe: 'warning', ikon: 'fa-forward',
+      pesan: 'Anda tidak akan mengunggah foto coretan untuk ujian ini. Nilai akhir akan langsung ditampilkan.',
+      teksYa: 'Ya, Lewati', teksBatal: 'Kembali'
+    });
+    if (ya) BuktiUI._selesai();
+  },
+
+  // Verifikasi akhir: daftar foto di SERVER harus memuat semua foto yang ditandai terkirim.
+  async lanjut() {
+    const s = BuktiUI._s;
+    if (!s || s.sibuk || s.selesai) return;
+    if (s.items.some(BuktiUI._berjalan)) { toast('Tunggu sampai semua foto selesai dikirim.', 'info'); return; }
+    if (s.items.some(i => i.status === 'gagal')) { toast('Ada foto yang gagal terkirim. Ketuk "Coba lagi" atau hapus foto tersebut.', 'error'); return; }
+    const terkirim = s.items.filter(i => i.status === 'ok');
+    if (s.mode === 'wajib' && terkirim.length === 0) { toast('Unggah minimal 1 foto bukti orak-orik.', 'error'); return; }
+    s.sibuk = true; BuktiUI.render();
+    try {
+      if (terkirim.length) {
+        const cek = await api('getBuktiOrek', { sesiId: s.sesiId, siswaId: state.user.id });
+        if (!cek || !cek.ok) { toast('Gagal memeriksa kiriman: ' + ((cek && cek.error) || 'koneksi bermasalah') + '. Coba lagi.', 'error'); return; }
+        const idServer = new Set((cek.data || []).map(x => x.id));
+        const hilang = terkirim.filter(i => !idServer.has(i.serverId));
+        if (hilang.length) {
+          hilang.forEach(i => { i.status = 'gagal'; i.galat = 'Belum tercatat di server'; });
+          toast(hilang.length + ' foto belum tercatat di server. Ketuk "Coba lagi" pada foto tersebut.', 'error');
+          return;
+        }
+      }
+      toast(terkirim.length ? 'Semua foto bukti sudah diterima server ✓' : 'Dilanjutkan tanpa foto.', 'success');
+      BuktiUI._selesai();
+    } finally {
+      if (BuktiUI._s === s) { s.sibuk = false; BuktiUI.render(); }
+    }
+  },
+
+  _selesai() {
+    const s = BuktiUI._s;
+    if (!s || s.selesai) return;
+    s.selesai = true;
+    BuktiUI._lepasPenjaga();
+    BuktiTertunda.hapus();
+    s.items.forEach(i => { if (i.previewUrl) URL.revokeObjectURL(i.previewUrl); });
+    BuktiUI._s = null;
+    s.resolve();
+  },
+
+  render() {
+    const s = BuktiUI._s;
+    if (!s) return;
+    if (BuktiUI._guardAktif) BuktiUI._periksaFullscreen(); // penutup layar penuh hilang sendiri saat semua foto terkirim
+    const total = s.items.length;
+    const ok = s.items.filter(i => i.status === 'ok').length;
+    const gagal = s.items.filter(i => i.status === 'gagal').length;
+    const sibukN = s.items.filter(BuktiUI._berjalan).length;
+    const ikon = { ok: 'fa-circle-check', unggah: 'fa-spinner fa-spin', proses: 'fa-spinner fa-spin', antre: 'fa-clock', gagal: 'fa-triangle-exclamation' };
+    const label = { ok: 'Terkirim', unggah: 'Mengirim...', proses: 'Memproses...', antre: 'Menunggu giliran' };
+    const tileTambah = total < BuktiFoto.MAKS_FOTO ? `
+      <div class="bk-tambah ${s.sibuk ? 'nonaktif' : ''}" role="button" tabindex="0" aria-label="Tambah foto: pilih kamera atau galeri"
+           onclick="BuktiUI.bukaPilihan()" onkeydown="if (event.target === this && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); BuktiUI.bukaPilihan(); }">
+        <span class="bk-plus"><i class="fa-solid fa-plus"></i></span>
+        <span class="bk-tambah-judul">Tambah foto</span>
+        <span class="bk-tambah-sisa">Sisa ${BuktiFoto.MAKS_FOTO - total} foto</span>
+        <div class="bk-tambah-aksi">
+          <button type="button" class="bk-btn-kamera" onclick="event.stopPropagation(); BuktiUI.pilihKamera()"><i class="fa-solid fa-camera"></i> Kamera</button>
+          <button type="button" class="bk-btn-galeri" onclick="event.stopPropagation(); document.getElementById('bukti-input-galeri').click()"><i class="fa-solid fa-images"></i> Galeri</button>
+        </div>
+      </div>` : '';
+    BuktiUI._el('bukti-aksi').classList.toggle('hidden', total > 0); // tombol besar hanya saat belum ada foto; selanjutnya pakai tile "+"
+    BuktiUI._el('bukti-grid').innerHTML = (total === 0) ? '' : s.items.map((it, n) => `
+      <div class="bk-item ${it.status}">
+        <div class="bk-thumb">${it.previewUrl ? `<img src="${it.previewUrl}" alt="Foto ${n + 1}">` : '<i class="fa-solid fa-image bk-ph"></i>'}
+          <span class="bk-badge"><i class="fa-solid ${ikon[it.status]}"></i></span>
+        </div>
+        <div class="bk-info">
+          <span class="bk-nama" title="${escapeHtml_(it.nama)}">${escapeHtml_(it.nama)}</span>
+          <span class="bk-status">${it.status === 'gagal' ? escapeHtml_(it.galat || 'Gagal') : label[it.status]}</span>
+        </div>
+        ${it.status === 'gagal' && it.blob ? `<button type="button" class="bk-ulang" onclick="BuktiUI.ulang('${it.uid}')"><i class="fa-solid fa-rotate-right"></i> Coba lagi</button>` : ''}
+        <button type="button" class="bk-hapus" aria-label="Hapus foto" ${(it.status === 'unggah' || it.status === 'proses') ? 'disabled' : ''} onclick="BuktiUI.hapus('${it.uid}')"><i class="fa-solid fa-xmark"></i></button>
+      </div>`).join('') + tileTambah;
+
+    const prog = BuktiUI._el('bukti-progres');
+    prog.classList.toggle('hidden', total === 0);
+    BuktiUI._el('bukti-progres-isi').style.width = (total ? Math.round(ok / total * 100) : 0) + '%';
+    BuktiUI._el('bukti-progres-teks').textContent = `${ok} dari ${total} foto terkirim` + (gagal ? ` • ${gagal} gagal` : '');
+
+    let boleh = true, hint;
+    if (s.sibuk) { boleh = false; hint = 'Memeriksa kiriman ke server...'; }
+    else if (sibukN) { boleh = false; hint = 'Mohon tunggu, foto sedang diproses dan dikirim. Jangan tutup halaman ini.'; }
+    else if (gagal) { boleh = false; hint = 'Ada foto yang gagal. Ketuk "Coba lagi" atau hapus foto tersebut.'; }
+    else if (ok === 0) { boleh = false; hint = s.mode === 'wajib' ? 'Unggah minimal 1 foto bukti orak-orik untuk melihat nilai.' : 'Belum ada foto. Tambahkan foto, atau lewati langkah ini.'; }
+    else hint = 'Semua foto sudah terkirim. Ketuk tombol di bawah untuk melihat nilai.';
+    BuktiUI._el('bukti-hint').textContent = hint;
+    const btn = BuktiUI._el('bukti-btn-lanjut');
+    btn.disabled = !boleh;
+    btn.innerHTML = s.sibuk ? '<i class="fa-solid fa-spinner fa-spin"></i> Memeriksa kiriman...' : '<i class="fa-solid fa-flag-checkered"></i> Selesai &amp; Lihat Nilai';
+    BuktiUI._el('bukti-btn-lewati').classList.toggle('hidden', !(s.mode === 'opsional' && total === 0));
+    // banner kunci: oranye "jangan keluar" selama terkunci, hijau saat semua foto sudah terkirim
+    const kunci = BuktiUI._el('bukti-kunci'), tahan = BuktiUI._perluTahan();
+    if (kunci) {
+      kunci.classList.toggle('hidden', s.mode === 'opsional' && total === 0);
+      kunci.classList.toggle('terbuka', !tahan);
+      kunci.querySelector('i').className = tahan ? 'fa-solid fa-lock' : 'fa-solid fa-lock-open';
+      BuktiUI._el('bukti-kunci-teks').textContent = tahan
+        ? 'Jangan keluar atau menutup halaman ini sebelum semua foto berstatus Terkirim.'
+        : 'Semua foto sudah terkirim. Tekan "Selesai & Lihat Nilai" untuk melanjutkan.';
+    }
+  }
+};
+
+// Galeri foto bukti orak-orik untuk GURU (dibuka dari kolom "Bukti" di Rekap Nilai).
+// Penampil gambar: perbesar / perkecil / putar kiri-kanan / pas layar, zoom roda mouse, geser (drag), cubit (pinch),
+// klik gambar = zoom cepat. Arah putar tiap foto diingat (localStorage) supaya tidak perlu diputar lagi saat dibuka ulang.
+const BuktiGaleri = {
+  _s: null,
+  ZOOM_MIN: 0.5, ZOOM_MAKS: 8,
+  _besar(url) { return String(url || '').replace(/sz=w\d+/, 'sz=w2000'); },
+  _kunciRot(f) { return 'cbt_rot_' + String(f.id || f.url).slice(-60); },
+  _bacaRot(f) { try { const v = localStorage.getItem(BuktiGaleri._kunciRot(f)); return v === null ? null : (Number(v) || 0); } catch (e) { return null; } },
+  _simpanRot(f, r) { try { localStorage.setItem(BuktiGaleri._kunciRot(f), String(r)); } catch (e) { /* abaikan */ } },
+
+  buka(sesiId) {
+    const r = (state.guru._rekapAktif || []).find(x => String(x.sesiId) === String(sesiId));
+    const foto = r && Array.isArray(r.bukti) ? r.bukti : [];
+    if (!foto.length) return;
+    BuktiGaleri.tutup();
+    const wrap = document.createElement('div');
+    wrap.className = 'bg-backdrop';
+    wrap.innerHTML = `<div class="bg-panel" role="dialog" aria-modal="true" aria-label="Bukti orak-orik">
+      <div class="bg-head">
+        <div><div class="bg-judul">Bukti Orak-Orik — ${escapeHtml_(r.nama)}</div>
+        <div class="bg-sub">${escapeHtml_(r.kelas)} • Nilai ${escapeHtml_(r.nilai)} • ${foto.length} foto</div></div>
+        <button type="button" class="bg-tutup" data-aksi="tutup" aria-label="Tutup"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="bg-viewer">
+        <button type="button" class="bg-nav" data-aksi="prev" aria-label="Foto sebelumnya"><i class="fa-solid fa-chevron-left"></i></button>
+        <div class="bg-stage" id="bg-stage" title="Klik gambar untuk memperbesar / mengembalikan">
+          <img id="bg-img" alt="Foto bukti" draggable="false">
+          <div class="bg-galat hidden" id="bg-galat">Gambar gagal dimuat. Coba tombol "Buka ukuran asli" di bawah.</div>
+          <div class="bg-tools" role="toolbar" aria-label="Alat gambar">
+            <button type="button" data-alat="kecil" title="Perkecil ( - )"><i class="fa-solid fa-magnifying-glass-minus"></i><span class="bg-lbl">Perkecil</span></button>
+            <span class="bg-zoom" id="bg-zoom">100%</span>
+            <button type="button" data-alat="besar" title="Perbesar ( + )"><i class="fa-solid fa-magnifying-glass-plus"></i><span class="bg-lbl">Perbesar</span></button>
+            <span class="bg-sekat"></span>
+            <button type="button" data-alat="kiri" title="Putar ke kiri ( L )"><i class="fa-solid fa-rotate-left"></i><span class="bg-lbl">Putar Kiri</span></button>
+            <button type="button" data-alat="kanan" title="Putar ke kanan ( R )"><i class="fa-solid fa-rotate-right"></i><span class="bg-lbl">Putar Kanan</span></button>
+            <span class="bg-sekat"></span>
+            <button type="button" data-alat="pas" title="Pas layar ( 0 )"><i class="fa-solid fa-expand"></i><span class="bg-lbl">Pas Layar</span></button>
+          </div>
+        </div>
+        <button type="button" class="bg-nav" data-aksi="next" aria-label="Foto berikutnya"><i class="fa-solid fa-chevron-right"></i></button>
+      </div>
+      <div class="bg-bar"><span id="bg-hitung"></span><span class="bg-petunjuk">Roda mouse = zoom • seret = geser • klik gambar = perbesar</span><a id="bg-asli" class="bg-link" rel="noopener"></a></div>
+      <div class="bg-strip">${foto.map((f, i) => `<button type="button" class="bg-th" data-idx="${i}"><img src="${escapeHtml_(f.url)}" alt="Foto ${i + 1}" loading="lazy"></button>`).join('')}</div>
+    </div>`;
+    document.body.appendChild(wrap);
+    const s = BuktiGaleri._s = { wrap, foto, idx: 0, nama: r.nama, rot: 0, zoom: 1, px: 0, py: 0, nw: 0, nh: 0, ptr: new Map(), gerak: false, rotTerakhir: 0 };
+    s.onKey = (e) => {
+      const k = e.key;
+      if (k === 'Escape') { e.stopPropagation(); BuktiGaleri.tutup(); }
+      else if (k === 'ArrowLeft') BuktiGaleri.geser(-1);
+      else if (k === 'ArrowRight') BuktiGaleri.geser(1);
+      else if (k === '+' || k === '=') { e.preventDefault(); BuktiGaleri.ubahZoom(1.25); }
+      else if (k === '-' || k === '_') { e.preventDefault(); BuktiGaleri.ubahZoom(0.8); }
+      else if (k === '0') { e.preventDefault(); BuktiGaleri.pas(); }
+      else if (k === 'r' || k === 'R') { e.preventDefault(); BuktiGaleri.putar(90); }
+      else if (k === 'l' || k === 'L') { e.preventDefault(); BuktiGaleri.putar(-90); }
+    };
+    document.addEventListener('keydown', s.onKey, true);
+
+    let mulaiDiLatar = false;
+    wrap.addEventListener('mousedown', (e) => { mulaiDiLatar = e.target === wrap; });
+    wrap.addEventListener('click', (e) => {
+      if (e.target === wrap && mulaiDiLatar) { BuktiGaleri.tutup(); return; }
+      const th = e.target.closest('[data-idx]');
+      if (th) { BuktiGaleri.tampil(Number(th.dataset.idx)); return; }
+      const alat = e.target.closest('[data-alat]');
+      if (alat) {
+        const a = alat.dataset.alat;
+        if (a === 'besar') BuktiGaleri.ubahZoom(1.25);
+        else if (a === 'kecil') BuktiGaleri.ubahZoom(0.8);
+        else if (a === 'kiri') BuktiGaleri.putar(-90);
+        else if (a === 'kanan') BuktiGaleri.putar(90);
+        else if (a === 'pas') BuktiGaleri.pas();
+        return;
+      }
+      const aksi = e.target.closest('[data-aksi]');
+      if (!aksi) return;
+      if (aksi.dataset.aksi === 'tutup') BuktiGaleri.tutup();
+      else BuktiGaleri.geser(aksi.dataset.aksi === 'next' ? 1 : -1);
+    });
+
+    // --- interaksi pada kanvas gambar: roda = zoom, drag = geser, 2 jari = cubit, klik = zoom cepat ---
+    const stage = wrap.querySelector('#bg-stage');
+    const titikPusat = (e) => { const b = stage.getBoundingClientRect(); return { x: e.clientX - (b.left + b.width / 2), y: e.clientY - (b.top + b.height / 2) }; };
+    stage.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const p = titikPusat(e);
+      BuktiGaleri.setZoom(s.zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15), p.x, p.y);
+    }, { passive: false });
+    stage.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('.bg-tools') || (e.button !== undefined && e.button > 0)) return;
+      try { stage.setPointerCapture(e.pointerId); } catch (err) { /* abaikan */ }
+      s.ptr.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (s.ptr.size === 1) { s.gerak = false; s.total = 0; }
+      if (s.ptr.size === 2) { const [a, b] = Array.from(s.ptr.values()); s.jarakAwal = Math.hypot(a.x - b.x, a.y - b.y) || 1; s.zoomAwal = s.zoom; s.gerak = true; }
+    });
+    stage.addEventListener('pointermove', (e) => {
+      const lama = s.ptr.get(e.pointerId);
+      if (!lama) return;
+      const baru = { x: e.clientX, y: e.clientY };
+      if (s.ptr.size >= 2) {
+        s.ptr.set(e.pointerId, baru);
+        const [a, b] = Array.from(s.ptr.values());
+        const d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+        const bb = stage.getBoundingClientRect();
+        BuktiGaleri.setZoom(s.zoomAwal * d / s.jarakAwal, (a.x + b.x) / 2 - (bb.left + bb.width / 2), (a.y + b.y) / 2 - (bb.top + bb.height / 2));
+        return;
+      }
+      const dx = baru.x - lama.x, dy = baru.y - lama.y;
+      s.ptr.set(e.pointerId, baru);
+      s.total += Math.abs(dx) + Math.abs(dy);
+      if (s.total > 4) s.gerak = true;
+      if (s.gerak) { s.px += dx; s.py += dy; BuktiGaleri._klem(); BuktiGaleri._terapkan(); stage.classList.add('menggeser'); }
+    });
+    const lepas = (e) => {
+      if (!s.ptr.has(e.pointerId)) return;
+      const hanyaSatu = s.ptr.size === 1;
+      s.ptr.delete(e.pointerId);
+      stage.classList.remove('menggeser');
+      if (hanyaSatu && !s.gerak && e.type === 'pointerup') { // klik (bukan geser): zoom cepat di titik klik
+        const p = titikPusat(e);
+        if (s.zoom > 1.05) { s.zoom = 1; s.px = 0; s.py = 0; BuktiGaleri._terapkan(); }
+        else BuktiGaleri.setZoom(2.5, p.x, p.y);
+      }
+    };
+    stage.addEventListener('pointerup', lepas);
+    stage.addEventListener('pointercancel', lepas);
+
+    BuktiGaleri.tampil(0);
+  },
+
+  _ukuran() { const st = BuktiGaleri._s.wrap.querySelector('#bg-stage'); return { w: st.clientWidth || 800, h: st.clientHeight || 500 }; },
+  _dimRotasi() { const s = BuktiGaleri._s, tegak = s.rot % 180 === 0; return { w: tegak ? s.nw : s.nh, h: tegak ? s.nh : s.nw }; },
+  _fit() {
+    const s = BuktiGaleri._s; if (!s.nw || !s.nh) return 1;
+    const u = BuktiGaleri._ukuran(), d = BuktiGaleri._dimRotasi();
+    return Math.min(u.w / d.w, u.h / d.h, 1);
+  },
+  _skala() { return BuktiGaleri._fit() * BuktiGaleri._s.zoom; },
+  _klem() { // gambar tidak boleh "hilang": bila lebih kecil dari kanvas -> di tengah; bila lebih besar -> sampai tepi
+    const s = BuktiGaleri._s, u = BuktiGaleri._ukuran(), d = BuktiGaleri._dimRotasi(), k = BuktiGaleri._skala();
+    const mx = Math.max(0, (d.w * k - u.w) / 2), my = Math.max(0, (d.h * k - u.h) / 2);
+    s.px = Math.max(-mx, Math.min(mx, s.px)); s.py = Math.max(-my, Math.min(my, s.py));
+  },
+  _terapkan() {
+    const s = BuktiGaleri._s; if (!s) return;
+    const img = s.wrap.querySelector('#bg-img');
+    if (s.nw && s.nh) {
+      img.style.width = s.nw + 'px'; img.style.height = s.nh + 'px';
+      img.style.marginLeft = (-s.nw / 2) + 'px'; img.style.marginTop = (-s.nh / 2) + 'px';
+      img.style.transform = `translate(${s.px.toFixed(1)}px, ${s.py.toFixed(1)}px) rotate(${s.rot}deg) scale(${BuktiGaleri._skala().toFixed(4)})`;
+    }
+    s.wrap.querySelector('#bg-zoom').textContent = Math.round(s.zoom * 100) + '%';
+    const u = BuktiGaleri._ukuran(), d = BuktiGaleri._dimRotasi(), k = BuktiGaleri._skala();
+    s.wrap.querySelector('#bg-stage').classList.toggle('geser', d.w * k > u.w + 1 || d.h * k > u.h + 1);
+    const tbl = (a) => s.wrap.querySelector(`[data-alat="${a}"]`);
+    tbl('kecil').disabled = s.zoom <= BuktiGaleri.ZOOM_MIN + 1e-6;
+    tbl('besar').disabled = s.zoom >= BuktiGaleri.ZOOM_MAKS - 1e-6;
+  },
+
+  // zoom relatif terhadap "pas layar" (100%); titik (cx, cy) = posisi kursor dari pusat kanvas, tetap di tempatnya
+  setZoom(z, cx = 0, cy = 0) {
+    const s = BuktiGaleri._s; if (!s) return;
+    z = Math.max(BuktiGaleri.ZOOM_MIN, Math.min(BuktiGaleri.ZOOM_MAKS, z));
+    const k = z / s.zoom;
+    s.px = cx - k * (cx - s.px); s.py = cy - k * (cy - s.py);
+    s.zoom = z;
+    BuktiGaleri._klem(); BuktiGaleri._terapkan();
+  },
+  ubahZoom(faktor) { const s = BuktiGaleri._s; if (s) BuktiGaleri.setZoom(s.zoom * faktor); },
+  pas() { const s = BuktiGaleri._s; if (!s) return; s.zoom = 1; s.px = 0; s.py = 0; BuktiGaleri._terapkan(); },
+  putar(derajat) {
+    const s = BuktiGaleri._s; if (!s) return;
+    s.rot = ((s.rot + derajat) % 360 + 360) % 360;
+    s.rotTerakhir = s.rot;
+    BuktiGaleri._simpanRot(s.foto[s.idx], s.rot);
+    s.zoom = 1; s.px = 0; s.py = 0; // setelah diputar, tampilkan utuh supaya langsung terbaca
+    BuktiGaleri._terapkan();
+  },
+
+  geser(d) {
+    const s = BuktiGaleri._s; if (!s) return;
+    BuktiGaleri.tampil((s.idx + d + s.foto.length) % s.foto.length);
+  },
+
+  tampil(i) {
+    const s = BuktiGaleri._s; if (!s) return;
+    s.idx = i;
+    const f = s.foto[i];
+    const simpan = BuktiGaleri._bacaRot(f);
+    s.rot = simpan !== null ? simpan : s.rotTerakhir; // foto belum pernah diputar: ikut arah putar terakhir (biasanya satu HP = satu orientasi)
+    s.zoom = 1; s.px = 0; s.py = 0; s.nw = 0; s.nh = 0;
+    const img = s.wrap.querySelector('#bg-img'), galat = s.wrap.querySelector('#bg-galat');
+    galat.classList.add('hidden'); img.classList.remove('hidden', 'siap');
+    img.onload = () => { if (BuktiGaleri._s !== s || s.idx !== i) return; s.nw = img.naturalWidth || 1; s.nh = img.naturalHeight || 1; img.classList.add('siap'); BuktiGaleri._terapkan(); };
+    img.onerror = () => { img.classList.add('hidden'); galat.classList.remove('hidden'); };
+    img.src = BuktiGaleri._besar(f.url);
+    s.wrap.querySelector('#bg-hitung').textContent = `Foto ${i + 1} dari ${s.foto.length}`;
+    const a = s.wrap.querySelector('#bg-asli');
+    if (String(f.url).startsWith('data:')) { // Mode Lokal: foto tersimpan di perangkat ini -> tawarkan unduh
+      a.removeAttribute('target'); a.href = f.url; a.download = 'bukti-orak-orik-' + String(s.nama).replace(/\W+/g, '-') + '-' + (i + 1) + '.jpg';
+      a.innerHTML = '<i class="fa-solid fa-download"></i> Unduh foto';
+    } else {
+      a.removeAttribute('download'); a.href = f.urlAsli || f.url; a.target = '_blank';
+      a.innerHTML = '<i class="fa-solid fa-up-right-from-square"></i> Buka ukuran asli';
+    }
+    s.wrap.querySelectorAll('.bg-th').forEach((b, n) => b.classList.toggle('aktif', n === i));
+    const aktif = s.wrap.querySelector('.bg-th.aktif'); if (aktif && aktif.scrollIntoView) aktif.scrollIntoView({ block: 'nearest', inline: 'center' });
+    BuktiGaleri._terapkan();
+  },
+
+  tutup() {
+    const s = BuktiGaleri._s; if (!s) return;
+    document.removeEventListener('keydown', s.onKey, true);
+    s.wrap.remove();
+    BuktiGaleri._s = null;
+  }
+};
+
+// Kamera web untuk laptop/PC: pratinjau langsung, tombol jepret, ulangi, ganti kamera, "tambah lagi".
+const BuktiKamera = {
+  _s: null,
+
+  _pesanGalat(e) {
+    const n = (e && e.name) || '';
+    if (/NotAllowed|PermissionDenied|Security/.test(n)) return 'Izin kamera ditolak. Klik ikon kamera/gembok di bilah alamat browser, pilih "Izinkan", lalu tekan Coba Lagi.';
+    if (/NotFound|DevicesNotFound/.test(n)) return 'Kamera tidak ditemukan di perangkat ini. Gunakan tombol Pilih dari Galeri.';
+    if (/NotReadable|TrackStart|Abort/.test(n)) return 'Kamera sedang dipakai aplikasi lain (mis. Zoom atau Meet). Tutup aplikasi itu lalu tekan Coba Lagi.';
+    return 'Kamera tidak bisa dibuka (' + ((e && (e.message || e.name)) || 'galat tidak dikenal') + ').';
+  },
+
+  async buka() {
+    if (BuktiKamera._s) return;
+    const us = BuktiUI._s;
+    if (!us) return;
+    if (us.items.length >= BuktiFoto.MAKS_FOTO) { toast('Maksimal ' + BuktiFoto.MAKS_FOTO + ' foto.', 'error'); return; }
+    if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
+      toast('Kamera tidak bisa diakses di browser ini (butuh HTTPS). Silakan pilih foto dari Galeri.', 'error');
+      document.getElementById('bukti-input-galeri').click();
+      return;
+    }
+    const wrap = document.createElement('div');
+    wrap.className = 'kc-backdrop';
+    wrap.id = 'kc-modal';
+    wrap.innerHTML = `<div class="kc-panel" role="dialog" aria-modal="true" aria-label="Ambil foto dengan kamera">
+      <div class="kc-head">
+        <div><div class="kc-judul">Ambil Foto Bukti</div><div class="kc-sub" id="kc-sub">Arahkan kamera ke kertas coretan dan pastikan tulisannya terlihat jelas.</div></div>
+        <button type="button" class="kc-tutup" data-kc="tutup" aria-label="Tutup kamera"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="kc-stage">
+        <video id="kc-video" autoplay playsinline muted></video>
+        <img id="kc-hasil" class="hidden" alt="Hasil foto">
+        <div class="kc-info" id="kc-info"><i class="fa-solid fa-spinner fa-spin"></i><span>Membuka kamera...</span></div>
+      </div>
+      <div class="kc-aksi" id="kc-aksi"></div>
+    </div>`;
+    document.body.appendChild(wrap);
+    const st = BuktiKamera._s = { wrap, stream: null, devs: [], idx: 0, blob: null, urlHasil: '', ditambah: 0, mode: 'muat' };
+    st.onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); BuktiKamera.tutup(); } };
+    document.addEventListener('keydown', st.onKey, true);
+    let mulaiDiLatar = false;
+    wrap.addEventListener('mousedown', (e) => { mulaiDiLatar = e.target === wrap; });
+    wrap.addEventListener('click', (e) => {
+      if (e.target === wrap && mulaiDiLatar) { BuktiKamera.tutup(); return; }
+      const b = e.target.closest('[data-kc]');
+      if (!b || b.disabled) return;
+      const a = b.dataset.kc;
+      if (a === 'tutup') BuktiKamera.tutup();
+      else if (a === 'rana') BuktiKamera._ambil();
+      else if (a === 'ulang') BuktiKamera._kembaliLive();
+      else if (a === 'gunakan') BuktiKamera._gunakan(false);
+      else if (a === 'lagi') BuktiKamera._gunakan(true);
+      else if (a === 'ganti') BuktiKamera._ganti();
+      else if (a === 'coba') BuktiKamera._nyalakan();
+      else if (a === 'galeri') { BuktiKamera.tutup(); document.getElementById('bukti-input-galeri').click(); }
+      else if (a === 'bawaan') { BuktiKamera.tutup(); document.getElementById('bukti-input-kamera').click(); }
+    });
+    await BuktiKamera._nyalakan();
+  },
+
+  _el(id) { return document.getElementById(id); },
+
+  _aksi(mode) {
+    const st = BuktiKamera._s; if (!st) return;
+    st.mode = mode;
+    const el = BuktiKamera._el('kc-aksi');
+    if (mode === 'live') {
+      el.innerHTML = (st.devs.length > 1 ? '<button type="button" class="kc-btn" data-kc="ganti"><i class="fa-solid fa-camera-rotate"></i> Ganti Kamera</button>' : '') +
+        '<button type="button" class="kc-rana" data-kc="rana" aria-label="Ambil foto" title="Ambil foto"></button>';
+    } else if (mode === 'hasil') {
+      el.innerHTML = '<button type="button" class="kc-btn" data-kc="ulang"><i class="fa-solid fa-rotate-left"></i> Ulangi</button>' +
+        '<button type="button" class="kc-btn" data-kc="lagi"><i class="fa-solid fa-plus"></i> Simpan &amp; Ambil Lagi</button>' +
+        '<button type="button" class="kc-btn utama" data-kc="gunakan"><i class="fa-solid fa-check"></i> Gunakan Foto</button>';
+    } else if (mode === 'galat') {
+      el.innerHTML = '<button type="button" class="kc-btn utama" data-kc="coba"><i class="fa-solid fa-rotate-right"></i> Coba Lagi</button>' +
+        '<button type="button" class="kc-btn" data-kc="galeri"><i class="fa-solid fa-images"></i> Pilih dari Galeri</button>' +
+        (BuktiFoto.perangkatSeluler() ? '<button type="button" class="kc-btn" data-kc="bawaan"><i class="fa-solid fa-camera"></i> Pakai Aplikasi Kamera HP</button>' : '');
+    } else { el.innerHTML = ''; }
+  },
+
+  _info(html, galat) {
+    const el = BuktiKamera._el('kc-info'); if (!el) return;
+    el.className = 'kc-info' + (galat ? ' galat' : '');
+    el.innerHTML = html;
+    el.classList.toggle('hidden', !html);
+  },
+
+  _henti() {
+    const st = BuktiKamera._s;
+    if (st && st.stream) { try { st.stream.getTracks().forEach(t => t.stop()); } catch (e) { /* abaikan */ } st.stream = null; }
+  },
+
+  async _nyalakan(deviceId) {
+    const st = BuktiKamera._s; if (!st) return;
+    BuktiKamera._henti();
+    BuktiKamera._el('kc-video').classList.remove('hidden');
+    BuktiKamera._el('kc-hasil').classList.add('hidden');
+    BuktiKamera._info('<i class="fa-solid fa-spinner fa-spin"></i><span>Membuka kamera... Jika muncul permintaan izin, klik <b>Izinkan</b>.</span>');
+    BuktiKamera._aksi('muat');
+    const ukuran = { width: { ideal: 1920 }, height: { ideal: 1080 } };
+    const urutan = [
+      { audio: false, video: deviceId ? Object.assign({ deviceId: { exact: deviceId } }, ukuran) : Object.assign({ facingMode: { ideal: 'environment' } }, ukuran) },
+      { audio: false, video: true } // cadangan bila batasan di atas tidak didukung kamera
+    ];
+    let stream = null, galat = null;
+    for (const c of urutan) {
+      try { stream = await navigator.mediaDevices.getUserMedia(c); break; }
+      catch (e) { galat = e; if (/NotAllowed|PermissionDenied|Security|NotFound|DevicesNotFound/.test((e && e.name) || '')) break; }
+    }
+    if (BuktiKamera._s !== st) { if (stream) stream.getTracks().forEach(t => t.stop()); return; } // ditutup saat menunggu izin
+    if (!stream) {
+      BuktiKamera._info('<i class="fa-solid fa-video-slash"></i><span>' + escapeHtml_(BuktiKamera._pesanGalat(galat)) + '</span>', true);
+      BuktiKamera._aksi('galat');
+      return;
+    }
+    st.stream = stream;
+    const v = BuktiKamera._el('kc-video');
+    v.srcObject = stream;
+    try { await v.play(); } catch (e) { /* autoplay sudah cukup */ }
+    try {
+      const semua = await navigator.mediaDevices.enumerateDevices();
+      st.devs = semua.filter(d => d.kind === 'videoinput');
+      const vt = stream.getVideoTracks && stream.getVideoTracks()[0];
+      const idAktif = vt && vt.getSettings && vt.getSettings().deviceId;
+      st.idx = Math.max(0, st.devs.findIndex(d => d.deviceId === idAktif));
+    } catch (e) { /* daftar kamera opsional */ }
+    BuktiKamera._info('');
+    BuktiKamera._aksi('live');
+  },
+
+  _ganti() {
+    const st = BuktiKamera._s; if (!st || st.devs.length < 2) return;
+    st.idx = (st.idx + 1) % st.devs.length;
+    BuktiKamera._nyalakan(st.devs[st.idx].deviceId);
+  },
+
+  _ambil() {
+    const st = BuktiKamera._s; if (!st) return;
+    const v = BuktiKamera._el('kc-video');
+    if (!v.videoWidth || !v.videoHeight) { toast('Kamera belum siap, tunggu sebentar lalu coba lagi.', 'info'); return; }
+    const skala = Math.min(1, (BuktiFoto.perangkatSeluler() ? 1600 : 2000) / Math.max(v.videoWidth, v.videoHeight));
+    const c = document.createElement('canvas');
+    c.width = Math.round(v.videoWidth * skala); c.height = Math.round(v.videoHeight * skala);
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); // tidak dibalik (mirror) supaya tulisan tetap terbaca benar
+    c.toBlob((blob) => {
+      if (!BuktiKamera._s) return;
+      if (!blob) { toast('Gagal mengambil foto. Coba lagi.', 'error'); return; }
+      if (st.urlHasil) URL.revokeObjectURL(st.urlHasil);
+      st.blob = blob; st.urlHasil = URL.createObjectURL(blob);
+      const img = BuktiKamera._el('kc-hasil'); img.src = st.urlHasil;
+      img.classList.remove('hidden'); v.classList.add('hidden');
+      try { v.pause(); } catch (e) { /* abaikan */ }
+      BuktiKamera._aksi('hasil');
+    }, 'image/jpeg', 0.92);
+  },
+
+  _kembaliLive() {
+    const st = BuktiKamera._s; if (!st) return;
+    BuktiKamera._el('kc-hasil').classList.add('hidden');
+    const v = BuktiKamera._el('kc-video'); v.classList.remove('hidden');
+    try { const p = v.play(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* abaikan */ }
+    st.blob = null;
+    BuktiKamera._aksi('live');
+  },
+
+  _gunakan(lagi) {
+    const st = BuktiKamera._s; if (!st || !st.blob) return;
+    const file = new File([st.blob], 'kamera-' + Date.now() + '.jpg', { type: 'image/jpeg' });
+    st.ditambah++;
+    BuktiUI.tambah([file]); // diproses & diunggah otomatis di latar belakang
+    const us = BuktiUI._s;
+    if (lagi && us && us.items.length < BuktiFoto.MAKS_FOTO) {
+      BuktiKamera._el('kc-sub').textContent = st.ditambah + ' foto sudah ditambahkan. Ambil foto berikutnya, atau tutup bila sudah cukup.';
+      BuktiKamera._kembaliLive();
+    } else {
+      if (lagi) toast('Batas ' + BuktiFoto.MAKS_FOTO + ' foto tercapai.', 'info');
+      BuktiKamera.tutup();
+    }
+  },
+
+  tutup() {
+    const st = BuktiKamera._s; if (!st) return;
+    document.removeEventListener('keydown', st.onKey, true);
+    BuktiKamera._henti(); // matikan kamera (lampu indikator padam)
+    if (st.urlHasil) URL.revokeObjectURL(st.urlHasil);
+    st.wrap.remove();
+    BuktiKamera._s = null;
+  }
+};
+
+const KumpulUI = {
+  _percobaan: 0,
+  _el(id) { return document.getElementById(id); },
+  _dijawab(v) { return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0); },
+
+  buka() {
+    if (state.submitting) return;
+    const total = state.soal.length;
+    const kosong = [], ragu = [];
+    state.soal.forEach((s, i) => {
+      if (!KumpulUI._dijawab(state.jawaban[s.id])) kosong.push(i);
+      if (state.ragu.includes(s.id)) ragu.push(i);
+    });
+    const e = KumpulUI._el.bind(KumpulUI);
+    e('kumpul-n-jawab').textContent = total - kosong.length;
+    e('kumpul-n-kosong').textContent = kosong.length;
+    e('kumpul-n-ragu').textContent = ragu.length;
+    e('kumpul-waktu').textContent = formatSisaWaktu(state.sisaDetik);
+    const perhatian = kosong.length > 0 || ragu.length > 0;
+    e('kumpul-ikon').className = 'kumpul-ikon' + (perhatian ? ' warn' : '');
+    e('kumpul-ikon').innerHTML = perhatian ? '<i class="fa-solid fa-triangle-exclamation"></i>' : '<i class="fa-solid fa-paper-plane"></i>';
+    e('kumpul-judul').textContent = perhatian ? 'Periksa Dulu Jawaban Anda' : 'Kumpulkan Jawaban?';
+    e('kumpul-sub').textContent = perhatian
+      ? 'Masih ada soal yang perlu diperhatikan sebelum ujian dikumpulkan.'
+      : 'Semua soal sudah dijawab. Setelah dikumpulkan, jawaban tidak dapat diubah.';
+    const peringatan = e('kumpul-peringatan');
+    peringatan.classList.toggle('hidden', !perhatian);
+    if (perhatian) {
+      const teks = [];
+      if (kosong.length) teks.push(kosong.length + ' soal belum dijawab');
+      if (ragu.length) teks.push(ragu.length + ' soal masih ditandai ragu-ragu');
+      e('kumpul-peringatan-teks').textContent = teks.join(' dan ') + '. Ketuk nomor untuk kembali ke soal:';
+      const chip = (i, cls) => `<button type="button" class="${cls}" onclick="KumpulUI.lompat(${i})">${i + 1}</button>`;
+      const semua = Array.from(new Set(kosong.concat(ragu))).sort((a, b) => a - b);
+      e('kumpul-chips').innerHTML = semua.map(i => chip(i, kosong.includes(i) ? '' : 'rg')).join('');
+    }
+    const perluCek = kosong.length > 0;
+    e('kumpul-cek-wrap').classList.toggle('hidden', !perluCek);
+    e('kumpul-cek').checked = false;
+    e('kumpul-btn-ya').disabled = perluCek;
+    e('modal-kumpul').classList.remove('hidden');
+    document.addEventListener('keydown', KumpulUI._esc);
+    setTimeout(() => { try { e('kumpul-btn-ya').parentNode.firstElementChild.focus(); } catch (x) {} }, 50);
+  },
+  _esc(ev) { if (ev.key === 'Escape') KumpulUI.tutup(); },
+  cekBerubah() { KumpulUI._el('kumpul-btn-ya').disabled = !KumpulUI._el('kumpul-cek').checked; },
+  tutup() {
+    KumpulUI._el('modal-kumpul').classList.add('hidden');
+    document.removeEventListener('keydown', KumpulUI._esc);
+  },
+  lompat(i) { KumpulUI.tutup(); Siswa.lompatKeSoal(i); },
+  kirim() {
+    if (KumpulUI._el('kumpul-btn-ya').disabled) return;
+    KumpulUI.tutup();
+    ExamEngine.submitUjian();
+  },
+
+  tampilKirim(alasan) {
+    KumpulUI.tutup();
+    KumpulUI._percobaan = 0;
+    const e = KumpulUI._el.bind(KumpulUI);
+    e('kirim-spinner').className = 'kumpul-spinner';
+    e('kirim-judul').textContent = alasan === 'waktu' ? 'Waktu Ujian Habis' : 'Mengirim jawaban...';
+    e('kirim-sub').textContent = alasan === 'waktu'
+      ? 'Jawaban Anda sedang dikumpulkan otomatis. Jangan menutup halaman ini.'
+      : 'Mohon tunggu dan jangan menutup halaman ini.';
+    e('overlay-kirim').classList.remove('hidden');
+  },
+  gagal() {
+    const e = KumpulUI._el.bind(KumpulUI);
+    KumpulUI._percobaan++;
+    e('kirim-spinner').className = 'kumpul-spinner err';
+    e('kirim-judul').textContent = 'Koneksi bermasalah';
+    e('kirim-sub').textContent = 'Jawaban Anda aman di perangkat ini. Mencoba mengirim ulang otomatis (percobaan ke-' + (KumpulUI._percobaan + 1) + ')...';
+    setTimeout(() => { if (state.submitting) e('kirim-spinner').className = 'kumpul-spinner'; }, 2500);
+  },
+  sukses(subTeks) {
+    const e = KumpulUI._el.bind(KumpulUI);
+    e('kirim-spinner').className = 'kumpul-spinner ok';
+    e('kirim-spinner').innerHTML = '<i class="fa-solid fa-check" style="font-size:1.6rem;line-height:44px;color:var(--c-success)"></i>';
+    e('kirim-judul').textContent = 'Jawaban Terkirim';
+    e('kirim-sub').textContent = subTeks || 'Menyiapkan hasil ujian Anda...';
+    return new Promise(r => setTimeout(r, 900));
+  },
+  sembunyikanSemua() {
+    const e = KumpulUI._el.bind(KumpulUI);
+    e('overlay-kirim').classList.add('hidden');
+    e('kirim-spinner').innerHTML = '';
+    KumpulUI.tutup();
+  }
+};
+
+// ============================================================================
+// MESIN UJIAN (render soal, timer, autosave, submit, hasil)
+// ============================================================================
+const ExamEngine = {
+  renderGridSoal() {
+    const grid = document.getElementById('soal-grid');
+    grid.innerHTML = state.soal.map((s, i) => {
+      let cls = '';
+      if (state.jawaban[s.id] !== undefined) cls += ' answered';
+      if (state.ragu.includes(s.id)) cls += ' ragu';
+      if (i === state.idxSoal) cls += ' current';
+      return `<button class="${cls}" onclick="Siswa.lompatKeSoal(${i})">${i + 1}</button>`;
+    }).join('');
+
+    // Ringkasan progres (bar tipis di top bar + hitungan di panel navigasi)
+    const total = state.soal.length;
+    const nJawab = state.soal.filter(s => state.jawaban[s.id] !== undefined).length;
+    const nRagu = state.soal.filter(s => state.ragu.includes(s.id)).length;
+    const isi = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    isi('nav-progress-teks', `${nJawab} / ${total}`);
+    isi('lg-jawab', nJawab); isi('lg-ragu', nRagu); isi('lg-kosong', total - nJawab);
+    const fill = document.getElementById('exam-progress-fill');
+    if (fill) fill.style.width = (total ? Math.round(nJawab / total * 100) : 0) + '%';
+  },
+
+  renderSoal() {
+    const soal = state.soal[state.idxSoal];
+    const card = document.getElementById('question-card');
+    card.innerHTML = renderKontenSoal(soal, { nomor: state.idxSoal + 1, total: state.soal.length, interaktif: true, jawaban: state.jawaban, pecah: true });
+    card.classList.toggle('ada-gambar', !!card.querySelector('.soal-kiri img')); // layar lebar: soal bergambar -> dua kolom
+    renderMatika(card);
+    document.getElementById('chk-ragu').checked = state.ragu.includes(soal.id);
+    document.getElementById('btn-soal-prev').disabled = state.idxSoal === 0;
+    const btnNext = document.getElementById('btn-soal-next');
+    const terakhir = state.idxSoal === state.soal.length - 1;
+    btnNext.disabled = false;
+    btnNext.classList.toggle('selesai', terakhir);
+    btnNext.innerHTML = terakhir ? '<i class="fa-solid fa-flag-checkered"></i> Selesai' : 'Berikutnya &rarr;';
+    SkalaSoal.terapkan();
+    ExamEngine.renderGridSoal();
+  },
+
+  // PERFORMA: memilih opsi cukup mengganti kelas "selected" di elemen yang sudah ada,
+  // TIDAK membangun ulang seluruh soal (yang memuat ulang gambar & menjalankan ulang
+  // KaTeX tiap klik -- penyebab utama layar ujian terasa berat di HP).
+  pilihJawabanTunggal(soalId, i) {
+    state.jawaban[soalId] = i; simpanCacheLokal();
+    const items = document.querySelectorAll('#question-card .opsi-item');
+    if (items.length) items.forEach((el, k) => el.classList.toggle('selected', k === i));
+    else ExamEngine.renderSoal();
+    ExamEngine.renderGridSoal();
+  },
+  toggleJawabanGanda(soalId, i) {
+    const arr = state.jawaban[soalId] || [];
+    const idx = arr.indexOf(i);
+    if (idx === -1) arr.push(i); else arr.splice(idx, 1);
+    state.jawaban[soalId] = arr; simpanCacheLokal();
+    const items = document.querySelectorAll('#question-card .opsi-item');
+    if (items.length) {
+      items.forEach((el, k) => {
+        const dipilih = arr.includes(k);
+        el.classList.toggle('selected', dipilih);
+        const huruf = el.querySelector('.opsi-huruf');
+        if (huruf) huruf.textContent = dipilih ? '\u2713' : String.fromCharCode(65 + k);
+      });
+    } else ExamEngine.renderSoal();
+    ExamEngine.renderGridSoal();
+  },
+  pilihJodoh(soalId, i, val) {
+    const jwb = state.jawaban[soalId] || {};
+    jwb[i] = val; state.jawaban[soalId] = jwb; simpanCacheLokal(); ExamEngine.renderGridSoal();
+  },
+  // PERFORMA: jawaban uraian diketik per huruf -- simpan ke localStorage & gambar ulang
+  // kotak nomor cukup setelah siswa berhenti mengetik sejenak (state langsung terbarui,
+  // jadi tidak ada jawaban yang hilang saat dikumpulkan).
+  isiJawabanUraian(soalId, val) {
+    state.jawaban[soalId] = val;
+    clearTimeout(state._uraianTimer);
+    state._uraianTimer = setTimeout(() => {
+      if (!state.sesiId || state.submitting) return;
+      simpanCacheLokal(); ExamEngine.renderGridSoal();
+    }, 350);
+  },
+
+  mulaiTimer() {
+    clearInterval(state.timerHandle);
+    ExamEngine.tampilkanWaktu();
+    state.timerHandle = setInterval(() => {
+      state.sisaDetik--;
+      ExamEngine.tampilkanWaktu();
+      if (state.sisaDetik <= 0) { clearInterval(state.timerHandle); ExamEngine.submitUjian('waktu'); }
+    }, 1000);
+  },
+
+  tampilkanWaktu() {
+    const s = Math.max(state.sisaDetik, 0);
+    const jam = String(Math.floor(s / 3600)).padStart(2, '0');
+    const menit = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+    const detik = String(s % 60).padStart(2, '0');
+    const el = document.getElementById('timer-display');
+    el.textContent = `${jam}:${menit}:${detik}`;
+    el.classList.toggle('low', s <= CONFIG.TIMER_LOW_THRESHOLD_SEC);
+  },
+
+  mulaiAutosave() {
+    clearInterval(state.autosaveHandle);
+    state.autosaveHandle = setInterval(() => ExamEngine.sinkronKeServer(), CONFIG.AUTOSAVE_INTERVAL_MS);
+  },
+
+  async sinkronKeServer() {
+    if (!state.sesiId || state.submitting) return;
+    await api('simpanJawaban', { sesiId: state.sesiId, jawaban: JSON.stringify(state.jawaban), ragu: JSON.stringify(state.ragu) });
+  },
+
+  // Tombol "💾 Simpan Sekarang" di layar ujian — lapisan kedua manual di luar
+  // penyimpanan otomatis tiap CONFIG.AUTOSAVE_INTERVAL_MS, untuk siswa yang ingin
+  // memastikan jawabannya sudah terkirim (mis. sebelum sinyal internet terasa tidak stabil).
+  async simpanSekarang() {
+    if (!state.sesiId || state.submitting) return;
+    toast('Menyimpan jawaban...');
+    await ExamEngine.sinkronKeServer();
+    toast('Jawaban tersimpan ke server.', 'success');
+  },
+
+  async submitUjian(alasan) {
+    if (state.submitting) return;
+    state.submitting = true;
+    clearTimeout(state._uraianTimer);
+    clearInterval(state.timerHandle);
+    clearInterval(state.autosaveHandle);
+    AntiCheat.nonaktifkan();
+    KumpulUI.tampilKirim(alasan);
+    const res = await api('submitUjian', { sesiId: state.sesiId, jawaban: JSON.stringify(state.jawaban) });
+    hapusCacheLokal(state.sesiId);
+    if (res.ok) {
+      // NILAI SUDAH TERSIMPAN di server di titik ini (submitUjian sukses). Bila guru mengaktifkan bukti
+      // orak-orik, siswa diarahkan ke halaman unggah foto DULU; nilai akhir (lulus/remedial) baru tampil setelahnya.
+      const modeBukti = res.buktiOrek === 'wajib' || res.buktiOrek === 'opsional' ? res.buktiOrek : '';
+      await KumpulUI.sukses(modeBukti ? 'Selanjutnya: unggah bukti orak-orik jawaban Anda.' : '');
+      if (modeBukti) await BuktiUI.buka({ mode: modeBukti, sesiId: state.sesiId, judul: state.ujian.judul, nilai: res.nilai, lulus: res.lulus, ujianId: state.ujian.id });
+      ExamEngine.tampilkanHasil(res.nilai, res.lulus, state.ujian.judul);
+    } else {
+      KumpulUI.gagal();
+      setTimeout(() => ExamEngine.submitUjian(alasan), 3000);
+      state.submitting = false;
+    }
+  },
+
+  // ---------------- DETAIL JAWABAN (siswa, setelah nilai keluar) ----------------
+  detailItems: [],
+  detailFilter: 'salah',
+  detailSesiId: null,
+
+  async bukaDetailJawaban() {
+    const sesiId = ExamEngine.detailSesiId || state.sesiId;
+    if (!sesiId) return;
+    const btn = document.getElementById('btn-detail-jawaban');
+    if (btn) btn.disabled = true;
+    try {
+      const res = await api('getDetailJawaban', { sesiId, siswaId: state.user ? state.user.id : '' });
+      if (!res || !res.ok) { toast((res && res.error) || 'Gagal memuat detail jawaban.', 'error'); return; }
+      ExamEngine.detailItems = res.items || [];
+      document.getElementById('detail-judul-ujian').textContent = res.judulUjian || '-';
+      document.getElementById('detail-nilai').textContent = res.nilai;
+      const adaSalah = ExamEngine.detailItems.some(it => it.status !== 'benar');
+      ExamEngine.detailFilter = adaSalah ? 'salah' : 'semua';
+      ExamEngine.renderDetailJawaban();
+      UI.tampilkan('detail-screen');
+      window.scrollTo(0, 0);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  },
+
+  tutupDetailJawaban() { UI.tampilkan('hasil-screen'); },
+
+  gantiFilterDetail(f) {
+    ExamEngine.detailFilter = f;
+    ExamEngine.renderDetailJawaban();
+  },
+
+  renderDetailJawaban() {
+    const items = ExamEngine.detailItems;
+    const nSalah = items.filter(it => it.status !== 'benar').length;
+    const nBenar = items.length - nSalah;
+    document.getElementById('detail-ringkas').textContent = items.length + ' soal · ' + nBenar + ' benar · ' + nSalah + ' perlu diperiksa';
+    const f = ExamEngine.detailFilter;
+    document.getElementById('detail-tab-salah').classList.toggle('active', f === 'salah');
+    document.getElementById('detail-tab-semua').classList.toggle('active', f === 'semua');
+    document.getElementById('detail-tab-salah').textContent = 'Yang Salah / Belum Benar (' + nSalah + ')';
+    document.getElementById('detail-tab-semua').textContent = 'Semua Soal (' + items.length + ')';
+    const tampil = [];
+    items.forEach((it, i) => { if (f === 'semua' || it.status !== 'benar') tampil.push({ it, no: i + 1 }); });
+    const cont = document.getElementById('detail-list');
+    cont.innerHTML = tampil.length
+      ? tampil.map(x => ExamEngine.htmlItemDetail_(x.it, x.no)).join('')
+      : '<div class="dj-kosong"><i class="fa-solid fa-circle-check"></i><p>Semua jawaban Anda benar. Tidak ada soal yang perlu diperiksa.</p></div>';
+    renderMatika(cont);
+  },
+
+  htmlItemDetail_(it, no, opsiTampil) {
+    // opsiTampil.guru = true: dipakai di Portal Guru (Detail Jawaban per siswa) -> kata ganti "Anda" diganti "siswa".
+    const G = !!(opsiTampil && opsiTampil.guru);
+    const label = { benar: 'Benar', salah: 'Salah', sebagian: 'Sebagian benar', kosong: 'Tidak dijawab', manual: G ? 'Perlu dikoreksi' : 'Dikoreksi guru' }[it.status] || it.status;
+    const opsiObj = (o) => (o && typeof o === 'object') ? o : { teks: o || '', gambar: '' };
+    let isi = '';
+    if (it.tipe === 'pilihan_ganda' || it.tipe === 'benar_salah' || it.tipe === 'checkbox') {
+      const dipilih = it.jawaban === null ? [] : (Array.isArray(it.jawaban) ? it.jawaban.map(Number) : [Number(it.jawaban)]);
+      const kunci = it.kunciTampil || [];
+      isi += '<div class="opsi-list">' + (it.opsi || []).map((o, i) => {
+        const item = opsiObj(o);
+        const benar = kunci.indexOf(i) !== -1;
+        const pilih = dipilih.indexOf(i) !== -1;
+        const kelas = benar ? 'dj-benar' : (pilih ? 'dj-salah' : '');
+        const tag = benar && pilih ? (G ? 'Dipilih siswa · Kunci' : 'Jawaban Anda · Kunci') : (benar ? 'Kunci jawaban' : (pilih ? (G ? 'Dipilih siswa' : 'Jawaban Anda') : ''));
+        return `<div class="opsi-item opsi-readonly dj-opsi ${kelas}">
+          <span class="opsi-huruf">${String.fromCharCode(65 + i)}</span>
+          <span class="opsi-konten">${kontenSoalHtml(item.teks)}${item.gambar ? tagGambarAman_(item.gambar, 'opsi-gambar-tampil', 'Gambar opsi') : ''}</span>
+          ${tag ? `<span class="dj-tag">${tag}</span>` : ''}
+        </div>`;
+      }).join('') + '</div>';
+      if (kunci.length === 0) isi += G ? '<p class="dj-catatan">Kunci jawaban soal ini belum diatur / tidak ditemukan. Periksa soal ini di Bank Soal.</p>' : '<p class="dj-catatan">Kunci jawaban soal ini belum diatur / tidak ditemukan. Mohon laporkan ke guru.</p>';
+    } else if (it.tipe === 'menjodohkan') {
+      const kiri = (it.opsi && it.opsi.kiri) || [], kanan = (it.opsi && it.opsi.kanan) || [];
+      const jwb = (it.jawaban && typeof it.jawaban === 'object') ? it.jawaban : {};
+      const kunci = it.kunciTampil || {};
+      isi += '<div class="dj-jodoh">' + kiri.map((tk, i) => {
+        const j = jwb[i];
+        const adaJwb = j !== undefined && j !== null && j !== '';
+        const benar = adaJwb && String(j) === String(kunci[i]);
+        return `<div class="dj-jodoh-row ${benar ? 'dj-benar' : 'dj-salah'}">
+          <div class="dj-jodoh-kiri">${escapeHtml_(tk)}</div>
+          <div>${G ? 'Jawaban siswa' : 'Jawaban Anda'}: <strong>${adaJwb ? escapeHtml_(kanan[j] == null ? '-' : String(kanan[j])) : '(kosong)'}</strong></div>
+          ${benar ? '' : `<div>Kunci: <strong>${kunci[i] !== undefined ? escapeHtml_(kanan[kunci[i]] == null ? '-' : String(kanan[kunci[i]])) : '(belum diatur)'}</strong></div>`}
+        </div>`;
+      }).join('') + '</div>';
+    } else { // uraian
+      const kata = ((it.kunciTampil && it.kunciTampil.kataKunci) || []).filter(k => String(k).trim());
+      isi += `<div class="dj-uraian"><div class="dj-label">${G ? 'Jawaban siswa' : 'Jawaban Anda'}</div><div class="dj-uraian-teks">${it.jawaban ? escapeHtml_(String(it.jawaban)) : '<em>(kosong)</em>'}</div></div>`;
+      isi += kata.length
+        ? `<p class="dj-catatan">Kata kunci penilaian: <strong>${kata.map(escapeHtml_).join(', ')}</strong></p>`
+        : (G ? '<p class="dj-catatan">Soal uraian ini belum punya kata kunci, jadi perlu Anda koreksi manual.</p>' : '<p class="dj-catatan">Soal uraian ini dikoreksi manual oleh guru.</p>');
+    }
+    const pembahasan = it.pembahasan && !richTeksKosong_(it.pembahasan)
+      ? `<div class="dj-pembahasan"><div class="dj-label">Pembahasan</div>${kontenSoalHtml(it.pembahasan)}</div>` : '';
+    return `<article class="dj-card dj-status-${it.status}">
+      <header class="dj-head">
+        <span class="dj-no">Soal ${no}</span>
+        <span class="dj-badge dj-badge-${it.status}">${label}</span>
+        <span class="dj-skor">Skor ${it.skor} / ${it.bobot}</span>
+      </header>
+      <div class="pertanyaan">${kontenSoalHtml(it.pertanyaan)}</div>
+      ${it.gambar ? tagGambarAman_(it.gambar, 'gambar-soal', 'Gambar soal') + '<div class="dj-zoom-hint"><i class="fa-solid fa-magnifying-glass-plus"></i> Ketuk gambar untuk memperbesar</div>' : ''}
+      ${isi}
+      ${pembahasan}
+    </article>`;
+  },
+
+  // Sesi diblokir karena melebihi batas pelanggaran: bila bukti orak-orik diaktifkan, siswa tetap harus melewati langkah unggah.
+  async lanjutSetelahBlokir_(res) {
+    let mode = '';
+    try {
+      const cek = await api('getBuktiOrek', { sesiId: state.sesiId, siswaId: state.user.id });
+      if (cek && cek.ok && (cek.mode === 'wajib' || cek.mode === 'opsional')) mode = cek.mode;
+    } catch (e) { /* tanpa langkah bukti */ }
+    const peringatan = document.getElementById('anticheat-warning');
+    if (peringatan) peringatan.classList.add('hidden');
+    if (mode) await BuktiUI.buka({ mode, sesiId: state.sesiId, judul: state.ujian.judul, nilai: res.nilai, lulus: res.lulus, ujianId: state.ujian.id });
+    ExamEngine.tampilkanHasil(res.nilai, res.lulus, state.ujian.judul);
+  },
+
+  tampilkanHasil(nilai, lulus, judul) {
+    KumpulUI.sembunyikanSemua();
+    UI.tampilkan('hasil-screen');
+    document.getElementById('hasil-judul-ujian').textContent = judul;
+    document.getElementById('hasil-nilai').textContent = nilai;
+    const statusEl = document.getElementById('hasil-status');
+    const isLulus = lulus === true || String(lulus) === 'true';
+    const kat = kategoriNilai_(nilai);
+    statusEl.textContent = kat.label;
+    statusEl.style.background = kat.latar;
+    statusEl.style.color = kat.warna;
+    document.getElementById('hasil-nilai').style.color = kat.warna;
+    document.getElementById('hasil-card').dataset.kategori = kat.kode;
+    // BUG LAMA: pesan default ditampilkan dulu, lalu diganti pesan guru setelah getHasil
+    // selesai. Kalau getHasil gagal/lambat (sinyal siswa jelek, server sibuk) kegagalannya
+    // diam-diam ditelan dan pesan DEFAULT tertinggal -- pesan guru "kadang tidak muncul".
+    // Sekarang: tampilkan "memuat", ambil pesan guru dgn beberapa kali percobaan, dan
+    // pesan default HANYA dipakai bila semua percobaan gagal (atau guru memang tak mengisi).
+    const elPesan = document.getElementById('hasil-instruksi');
+    const btnDetail = document.getElementById('btn-detail-jawaban');
+    if (btnDetail) btnDetail.style.display = 'none';
+    ExamEngine.detailSesiId = state.sesiId;
+    const sesiIdSaatIni = state.sesiId;
+    const tokenTampil = (ExamEngine._tokenHasil = (ExamEngine._tokenHasil || 0) + 1);
+    const pakaiDefault = () => { if (ExamEngine._tokenHasil === tokenTampil) elPesan.textContent = pesanUntukNilai_(nilai, ''); };
+    if (!sesiIdSaatIni) { pakaiDefault(); }
+    else {
+      elPesan.textContent = 'Memuat pesan dari guru...';
+      (async () => {
+        for (let k = 1; k <= 4; k++) {
+          let res = null;
+          try { res = await api('getHasil', { sesiId: sesiIdSaatIni }); } catch (e) { res = null; }
+          if (ExamEngine._tokenHasil !== tokenTampil) return; // layar hasil sudah berganti
+          if (res && res.ok) {
+            let teks = pesanUntukNilai_(nilai, res.pesanNilai);
+            if (!isLulus && res.instruksiRemedial) teks += '\n\n' + res.instruksiRemedial;
+            elPesan.textContent = teks;
+            if (btnDetail && res.tampilDetail !== false) btnDetail.style.display = '';
+            return;
+          }
+          await new Promise(r => setTimeout(r, 800 * k));
+        }
+        pakaiDefault();
+      })();
+    }
+
+    // Ikon lingkaran (centang utk lulus, seru utk perlu remedial) + ring skor
+    // melingkar yang terisi sesuai persentase nilai (0-100) -- murni kosmetik,
+    // dianimasikan lewat transisi CSS pada stroke-dashoffset.
+    const iconWrap = document.getElementById('hasil-icon-wrap');
+    const icon = document.getElementById('hasil-icon');
+    iconWrap.classList.remove('gagal');
+    iconWrap.style.background = kat.latar; iconWrap.style.color = kat.warna;
+    icon.className = kat.ikon;
+    const ring = document.getElementById('hasil-skor-progress');
+    const keliling = 2 * Math.PI * 52;
+    const persen = Math.max(0, Math.min(100, Number(nilai) || 0));
+    ring.style.stroke = kat.warna;
+    ring.style.strokeDashoffset = keliling; // mulai kosong dulu...
+    requestAnimationFrame(() => {
+      ring.style.strokeDashoffset = String(keliling * (1 - persen / 100));
+    });
+  }
+};
+
+// ----------------------------------------------------------------------------
+// CACHE LOKAL (menjaga jawaban tetap aman walau koneksi internet terputus)
+// ----------------------------------------------------------------------------
+function simpanCacheLokal() {
+  if (!state.sesiId) return;
+  localStorage.setItem('cbt_cache_' + state.sesiId, JSON.stringify({ jawaban: state.jawaban, ragu: state.ragu, disimpan: Date.now() }));
+}
+function ambilCacheLokal(sesiId) {
+  try { return JSON.parse(localStorage.getItem('cbt_cache_' + sesiId) || '{}'); } catch (e) { return {}; }
+}
+function hapusCacheLokal(sesiId) { localStorage.removeItem('cbt_cache_' + sesiId); }
+
+// ============================================================================
+// ANTI-CHEAT
+// ============================================================================
+const AntiCheat = {
+  aktif: false,
+
+  aktifkan() {
+    AntiCheat.aktif = true;
+    AntiCheat._insiden = false;
+    AntiCheat.mintaFullscreen();
+    document.addEventListener('fullscreenchange', AntiCheat.onFullscreenChange);
+    document.addEventListener('visibilitychange', AntiCheat.onVisibilityChange);
+    window.addEventListener('blur', AntiCheat.onBlur);
+    document.addEventListener('copy', AntiCheat.blokirAksi);
+    document.addEventListener('paste', AntiCheat.blokirAksi);
+    document.addEventListener('cut', AntiCheat.blokirAksi);
+    document.addEventListener('contextmenu', AntiCheat.blokirAksi);
+    window.addEventListener('beforeunload', AntiCheat.onBeforeUnload);
+  },
+
+  nonaktifkan() {
+    AntiCheat.aktif = false;
+    document.removeEventListener('fullscreenchange', AntiCheat.onFullscreenChange);
+    document.removeEventListener('visibilitychange', AntiCheat.onVisibilityChange);
+    window.removeEventListener('blur', AntiCheat.onBlur);
+    document.removeEventListener('copy', AntiCheat.blokirAksi);
+    document.removeEventListener('paste', AntiCheat.blokirAksi);
+    document.removeEventListener('cut', AntiCheat.blokirAksi);
+    document.removeEventListener('contextmenu', AntiCheat.blokirAksi);
+    window.removeEventListener('beforeunload', AntiCheat.onBeforeUnload);
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  },
+
+  mintaFullscreen() {
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+    if (req) req.call(el).catch(() => { /* beberapa browser mobile tidak mendukung fullscreen API */ });
+  },
+
+  // Catat percobaan salin/tempel/potong/klik kanan (tetap diblokir, TIDAK menambah hitungan pelanggaran).
+  _terakhirCatat: {},
+  blokirAksi(ev) {
+    ev.preventDefault();
+    const peta = { copy: 'salin_teks', paste: 'tempel_teks', cut: 'potong_teks', contextmenu: 'klik_kanan' };
+    const jenis = peta[ev.type];
+    const now = Date.now();
+    if (jenis && now - (AntiCheat._terakhirCatat[jenis] || 0) > 10000) { // dibatasi 1x / 10 detik per jenis
+      AntiCheat._terakhirCatat[jenis] = now;
+      AntiCheat.catat(jenis, '');
+    }
+  },
+
+  catat(jenis, detail) {
+    if (!state.sesiId || state.submitting) return;
+    api('catatAktivitas', { sesiId: state.sesiId, jenis, detail: detail || '' }).catch(() => {});
+  },
+
+  onBeforeUnload(ev) {
+    if (AntiCheat.aktif) { ev.preventDefault(); ev.returnValue = ''; }
+  },
+
+  onFullscreenChange() {
+    if (!AntiCheat.aktif || document.fullscreenElement) return;
+    // Layar mati / pindah aplikasi otomatis ikut mengeluarkan browser dari layar penuh.
+    // Tunggu sebentar: kalau ternyata halaman disembunyikan, itu SATU kejadian yang sama
+    // dan ditangani onVisibilityChange (bukan pelanggaran tambahan).
+    setTimeout(() => {
+      if (!AntiCheat.aktif || document.fullscreenElement || AntiCheat._insiden) return;
+      if (document.hidden || AntiCheat._hiddenSejak) return;
+      AntiCheat.laporPelanggaran('keluar_fullscreen', 'Anda keluar dari mode layar penuh.');
+    }, 700);
+  },
+
+  _hiddenSejak: 0,
+  onVisibilityChange() {
+    if (!AntiCheat.aktif) return;
+    if (document.hidden) {
+      AntiCheat._hiddenSejak = Date.now();
+      AntiCheat.laporPelanggaran('pindah_tab', 'Layar Anda mati atau Anda meninggalkan halaman ujian (pindah tab/aplikasi).');
+    } else if (AntiCheat._hiddenSejak) {
+      const detik = Math.round((Date.now() - AntiCheat._hiddenSejak) / 1000);
+      AntiCheat._hiddenSejak = 0;
+      AntiCheat.catat('kembali', 'Pergi selama ' + (detik >= 60 ? Math.floor(detik / 60) + ' menit ' + (detik % 60) + ' detik' : detik + ' detik'));
+    }
+  },
+
+  onBlur() {
+    if (AntiCheat.aktif && document.hidden) AntiCheat.laporPelanggaran('keluar_aplikasi', 'Anda keluar dari aplikasi ujian.');
+  },
+
+  // Satu "kejadian" (mis. satu kali layar mati) cuma dihitung SATU pelanggaran, walau browser
+  // memicu beberapa event sekaligus (pindah tab + keluar layar penuh + blur). Kejadian dianggap
+  // selesai saat siswa menekan tombol "Kembali ke Ujian" (Siswa.kembaliKeUjian).
+  _insiden: false,
+  async laporPelanggaran(jenis, pesan) {
+    if (!state.sesiId || state.submitting || AntiCheat._insiden) return;
+    AntiCheat._insiden = true;
+    document.getElementById('anticheat-pesan').textContent = pesan;
+    document.getElementById('anticheat-sisa').textContent = '';
+    document.getElementById('anticheat-warning').classList.remove('hidden');
+    const res = await api('lapor', { sesiId: state.sesiId, jenis, jawaban: JSON.stringify(state.jawaban) });
+    if (res.ok) {
+      state.pelanggaran = res.pelanggaran;
+      document.getElementById('pelanggaran-indikator').textContent = `Pelanggaran: ${state.pelanggaran}/${state.maxPelanggaran}`;
+      document.getElementById('anticheat-sisa').textContent = state.maxPelanggaran >= 999 ? '' : `Sisa pelanggaran: ${Math.max(state.maxPelanggaran - state.pelanggaran, 0)}. Jika sisa habis, ujian diblokir dan jawaban dikirim otomatis.`;
+      if (res.blokir) {
+        state.submitting = true;
+        clearInterval(state.timerHandle);
+        clearInterval(state.autosaveHandle);
+        AntiCheat.nonaktifkan();
+        hapusCacheLokal(state.sesiId);
+        document.getElementById('anticheat-pesan').textContent = 'Anda melebihi batas pelanggaran ujian. Ujian diblokir dan jawaban Anda telah dikirim otomatis.';
+        document.getElementById('anticheat-sisa').textContent = '';
+        setTimeout(() => ExamEngine.lanjutSetelahBlokir_(res), 2500);
+      }
+    }
+  }
+};
+
+// ============================================================================
+// LIGHTBOX "PERBESAR GAMBAR" — opsi KEDUA di samping pembesaran otomatis
+// (min-width) yang sudah ada lewat CSS di .question-card img.gambar-soal /
+// .opsi-gambar-tampil / gambar inline pertanyaan-opsi. Fitur ini TIDAK
+// mengubah ukuran/tampilan gambar yang sudah dirender di kartu soal sama
+// sekali -- ia hanya menambah kemampuan siswa mengklik gambar itu untuk
+// membukanya di lapisan (overlay) terpisah lalu memperbesarnya sendiri
+// (tombol +/-, gulir mouse, cubit dua jari di HP, atau klik-dua-kali), dan
+// menggeser gambar saat sudah diperbesar. Menutup lightbox mengembalikan
+// tampilan soal persis seperti semula karena elemen gambar aslinya di kartu
+// soal tidak pernah disentuh/diubah.
+const ImageLightbox = {
+  skala: 1, skalaMin: 1, skalaMaks: 6,
+  geserX: 0, geserY: 0,
+  aktif: false, menggeser: false, mulaiX: 0, mulaiY: 0,
+  jarakSentuhAwal: 0, skalaAwalSentuh: 1,
+
+  buka(src) {
+    if (!src) return;
+    const overlay = document.getElementById('gambar-lightbox');
+    const img = document.getElementById('gambar-lightbox-img');
+    img.src = src;
+    ImageLightbox.reset();
+    overlay.classList.remove('hidden');
+    ImageLightbox.aktif = true;
+  },
+
+  tutup() {
+    document.getElementById('gambar-lightbox').classList.add('hidden');
+    document.getElementById('gambar-lightbox-img').src = '';
+    ImageLightbox.aktif = false;
+  },
+
+  // Klik pada area gelap di luar gambar/toolbar menutup lightbox; klik pada
+  // gambar atau tombol toolbar TIDAK menutup (supaya tidak mengganggu saat
+  // menggeser/klik tombol zoom).
+  klikBackdrop(ev) {
+    if (ev.target.id === 'gambar-lightbox' || ev.target.id === 'gambar-lightbox-panel') ImageLightbox.tutup();
+  },
+
+  terapkan() {
+    const img = document.getElementById('gambar-lightbox-img');
+    img.style.transform = `translate(${ImageLightbox.geserX}px, ${ImageLightbox.geserY}px) scale(${ImageLightbox.skala})`;
+    document.getElementById('gambar-lightbox-persen').textContent = Math.round(ImageLightbox.skala * 100) + '%';
+  },
+
+  reset() {
+    ImageLightbox.skala = 1; ImageLightbox.geserX = 0; ImageLightbox.geserY = 0;
+    ImageLightbox.terapkan();
+  },
+
+  zoom(arah, fokus) {
+    const lama = ImageLightbox.skala;
+    let baru = arah > 0 ? lama * 1.35 : lama / 1.35;
+    baru = Math.max(ImageLightbox.skalaMin, Math.min(ImageLightbox.skalaMaks, baru));
+    if (baru === ImageLightbox.skalaMin) { ImageLightbox.geserX = 0; ImageLightbox.geserY = 0; }
+    ImageLightbox.skala = baru;
+    ImageLightbox.terapkan();
+  },
+
+  toggleDobelKlik() { ImageLightbox.skala > 1 ? ImageLightbox.reset() : (ImageLightbox.skala = 2.2, ImageLightbox.terapkan()); },
+
+  onWheel(ev) {
+    ev.preventDefault();
+    ImageLightbox.zoom(ev.deltaY < 0 ? 1 : -1);
+  },
+
+  onMouseDown(ev) {
+    if (ImageLightbox.skala <= 1) return;
+    ImageLightbox.menggeser = true;
+    ImageLightbox.mulaiX = ev.clientX - ImageLightbox.geserX;
+    ImageLightbox.mulaiY = ev.clientY - ImageLightbox.geserY;
+    document.getElementById('gambar-lightbox-panel').classList.add('menggeser');
+  },
+  onMouseMove(ev) {
+    if (!ImageLightbox.menggeser) return;
+    ImageLightbox.geserX = ev.clientX - ImageLightbox.mulaiX;
+    ImageLightbox.geserY = ev.clientY - ImageLightbox.mulaiY;
+    ImageLightbox.terapkan();
+  },
+  onMouseUp() {
+    ImageLightbox.menggeser = false;
+    document.getElementById('gambar-lightbox-panel').classList.remove('menggeser');
+  },
+
+  jarakSentuh(t) { return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY); },
+
+  onTouchStart(ev) {
+    if (ev.touches.length === 2) {
+      ImageLightbox.jarakSentuhAwal = ImageLightbox.jarakSentuh(ev.touches);
+      ImageLightbox.skalaAwalSentuh = ImageLightbox.skala;
+    } else if (ev.touches.length === 1 && ImageLightbox.skala > 1) {
+      ImageLightbox.menggeser = true;
+      ImageLightbox.mulaiX = ev.touches[0].clientX - ImageLightbox.geserX;
+      ImageLightbox.mulaiY = ev.touches[0].clientY - ImageLightbox.geserY;
+    }
+  },
+  onTouchMove(ev) {
+    if (ev.touches.length === 2 && ImageLightbox.jarakSentuhAwal) {
+      ev.preventDefault();
+      const rasio = ImageLightbox.jarakSentuh(ev.touches) / ImageLightbox.jarakSentuhAwal;
+      ImageLightbox.skala = Math.max(ImageLightbox.skalaMin, Math.min(ImageLightbox.skalaMaks, ImageLightbox.skalaAwalSentuh * rasio));
+      ImageLightbox.terapkan();
+    } else if (ev.touches.length === 1 && ImageLightbox.menggeser) {
+      ev.preventDefault();
+      ImageLightbox.geserX = ev.touches[0].clientX - ImageLightbox.mulaiX;
+      ImageLightbox.geserY = ev.touches[0].clientY - ImageLightbox.mulaiY;
+      ImageLightbox.terapkan();
+    }
+  },
+  onTouchEnd(ev) {
+    if (ev.touches.length < 2) ImageLightbox.jarakSentuhAwal = 0;
+    if (ev.touches.length === 0) ImageLightbox.menggeser = false;
+  },
+
+  // Dipasang sekali saat aplikasi dimuat. Memakai DELEGASI di fase capture,
+  // dibatasi hanya pada gambar di dalam ".question-card" (kartu soal siswa
+  // saat ujian & pratinjau soal Guru) -- TIDAK menyentuh gambar di kotak
+  // rich-text editor / pratinjau upload di form Tambah-Ubah Soal, supaya
+  // fitur klik-untuk-menempatkan-kursor saat mengedit soal tetap normal.
+  // stopPropagation dipasang supaya klik gambar tidak ikut memicu onclick
+  // pilihan jawaban (label opsi) di baliknya.
+  pasang() {
+    document.addEventListener('click', (ev) => {
+      const img = ev.target.closest('.question-card img, .dj-card img');
+      if (!img) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      ImageLightbox.buka(img.currentSrc || img.src);
+    }, true);
+
+    const panel = document.getElementById('gambar-lightbox-panel');
+    panel.addEventListener('wheel', ImageLightbox.onWheel, { passive: false });
+    panel.addEventListener('mousedown', ImageLightbox.onMouseDown);
+    window.addEventListener('mousemove', ImageLightbox.onMouseMove);
+    window.addEventListener('mouseup', ImageLightbox.onMouseUp);
+    panel.addEventListener('touchstart', ImageLightbox.onTouchStart, { passive: true });
+    panel.addEventListener('touchmove', ImageLightbox.onTouchMove, { passive: false });
+    panel.addEventListener('touchend', ImageLightbox.onTouchEnd);
+    document.getElementById('gambar-lightbox-img').addEventListener('dblclick', ImageLightbox.toggleDobelKlik);
+    document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && ImageLightbox.aktif) ImageLightbox.tutup(); });
+  }
+};
+
+// ============================================================================
+// INISIALISASI
+// ============================================================================
+window.addEventListener('DOMContentLoaded', () => {
+  state.deviceId = getDeviceId();
+  tampilkanBadgeMode();
+  muatTemaGlobal();
+  muatBrandingGlobal();
+  // Penanda koneksi di layar login: langsung terlihat apakah HP ini terhubung ke server
+  // (Google Sheets) atau masih Mode Lokal (penyebab umum siswa "tidak bisa login").
+  (function () {
+    const el = document.getElementById('login-mode-status');
+    if (!el) return;
+    if (modeServerAktif()) { el.textContent = ''; }
+    else { el.textContent = '⚠ Mode Lokal — belum terhubung ke server. Akun buatan guru tidak akan dikenali di perangkat ini.'; el.style.color = '#e0433d'; }
+  })();
+  Auth.pulihkanSesiLogin();
+  ImageLightbox.pasang();
+});
+
+// Terus mencatat posisi kursor/seleksi terakhir di kotak Pertanyaan & Opsi
+// Jawaban (lihat UI.rtExec dkk.) — supaya tombol toolbar (termasuk color
+// picker, yang memindahkan fokus keluar dari kotaknya) tetap tahu di mana
+// pemformatan harus diterapkan.
+// Rumus yang baru diketik manual ("$...$") otomatis dirender begitu kursor keluar dari kotak.
+document.addEventListener('focusout', (ev) => {
+  const ed = ev.target && ev.target.closest ? ev.target.closest('.rich-editable') : null;
+  if (!ed) return;
+  const salin = ed.cloneNode(true);
+  salin.querySelectorAll('.katex').forEach(k => k.remove());
+  if (/\$[^$\n]+\$/.test(salin.textContent)) rtRenderUlang_(ed);
+});
+// Klik 2x pada rumus di kotak editor -> ubah rumusnya (LaTeX).
+document.addEventListener('dblclick', async (ev) => {
+  const k = ev.target && ev.target.closest ? ev.target.closest('.rich-editable .katex') : null;
+  if (!k) return;
+  const ed = k.closest('.rich-editable');
+  const ann = k.querySelector('annotation[encoding="application/x-tex"]');
+  const baru = await Dialog.input({
+    judul: 'Ubah Rumus', ikon: 'fa-square-root-variable',
+    pesan: 'Ubah rumus dalam format **LaTeX**. Kosongkan lalu simpan untuk menghapus rumus.',
+    label: 'Rumus (LaTeX)', nilai: ann ? ann.textContent : '', teksYa: 'Simpan Rumus'
+  });
+  if (baru !== null && !k.isConnected) return;
+  if (baru === null) return;
+  if (!baru.trim()) k.remove(); else k.replaceWith(document.createTextNode('$' + baru.trim() + '$'));
+  rtRenderUlang_(ed);
+});
+
+document.addEventListener('selectionchange', () => {
+  if (document.activeElement && document.activeElement.closest && document.activeElement.closest('.rich-editable')) {
+    UI.rtSimpanSeleksi();
+  }
+});
+
+// Hemat kuota: hentikan polling saat tab/aplikasi disembunyikan (mis. layar HP
+// dikunci atau berpindah aplikasi), lalu lanjutkan lagi saat aktif kembali.
+document.addEventListener('visibilitychange', () => {
+  if (!state.user || state.user.role !== 'guru') return;
+  if (document.hidden) {
+    clearInterval(state.autoRefreshHandle);
+  } else {
+    const activeTab = document.querySelector('#guru-portal .main > section:not(.hidden)');
+    if (activeTab) UI.mulaiAutoRefreshGuru(activeTab.id);
+  }
+});
+
+
+// ----------------------------------------------------------------------------
+// TAMPILAN HP: tabel "ledger" otomatis tampil sebagai KARTU di layar kecil.
+// Tiap <td> diberi data-label dari judul kolomnya (dipakai CSS ::before). Tabel
+// lebar (> 8 kolom, mis. matriks jawaban siswa x soal) dibiarkan sebagai tabel
+// yang bisa digeser. Aman terhadap render ulang (MutationObserver, ber-debounce).
+// ----------------------------------------------------------------------------
+(function () {
+  let jadwal = null;
+  function labeli() {
+    jadwal = null;
+    document.querySelectorAll('table.ledger').forEach(t => {
+      if (t.dataset.kartu === '0') return;
+      const ths = Array.from(t.querySelectorAll('thead tr:first-child > th, tr:first-child > th'));
+      if (!ths.length || ths.length > 8) { t.dataset.kartu = '0'; return; }
+      t.classList.add('ledger-kartu'); t.dataset.kartu = '1';
+      const label = ths.map(th => th.textContent.trim());
+      t.querySelectorAll('tbody tr, tr').forEach(tr => {
+        if (tr.parentElement.tagName === 'THEAD') return;
+        const tds = Array.from(tr.children).filter(c => c.tagName === 'TD');
+        if (tds.length !== label.length) { if (tds.length === 1) tds[0].classList.add('td-penuh'); return; }
+        tds.forEach((td, i) => { if (!td.hasAttribute('data-label')) td.setAttribute('data-label', label[i]); });
+      });
+    });
+  }
+  function minta() { if (!jadwal) jadwal = setTimeout(labeli, 80); }
+  window.addEventListener('DOMContentLoaded', () => {
+    new MutationObserver(minta).observe(document.body, { childList: true, subtree: true });
+    minta();
+  });
+})();

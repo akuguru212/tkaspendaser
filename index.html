@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Simulasi TKA | Pusmendik</title>
+
+<!-- ======================= LOGO / IKON APLIKASI (PWA) =======================
+     Supaya saat halaman ini "Ditambahkan ke Layar Utama" (Add to Home Screen)
+     di HP, ikon aplikasi otomatis muncul -- bukan cuma screenshot polos.
+     Berkas ikon ada di folder icons/ (logo bawaan: ikon ungu-pink + lambang sekolah, lihat
+     README bagian "Ganti Logo Aplikasi"). Kalau guru sudah menyimpan logo
+     asli lewat Portal Guru > Pengaturan > Identitas Aplikasi, id="app-favicon"
+     dan id="app-apple-icon" di bawah ini otomatis diganti ke logo itu juga
+     (lihat terapkanBranding() di app.js) -- supaya ikon Layar Utama ikut
+     memakai logo terbaru, tidak perlu edit file ini secara manual lagi. -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/logo-test-32.png" id="app-favicon">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/logo-test-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png" id="app-apple-icon">
+<meta name="theme-color" content="#326698">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ANBK SMP Negeri 2 Seririt" id="app-apple-title">
+<meta name="mobile-web-app-capable" content="yes">
+
+<!-- PERFORMA: sambungan ke CDN dibuka lebih awal, dan CSS pihak ketiga (ikon & KaTeX)
+     dimuat TANPA memblokir tampilan halaman login (dulu halaman kosong sampai keduanya selesai diunduh). -->
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+<link rel="dns-prefetch" href="https://script.google.com">
+<link rel="stylesheet" href="style.css?v=44">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
+<link rel="stylesheet" href="anbk.css?v=44">
+<!-- Font Awesome: ikon sidebar & tombol (gaya dashboard modern) -->
+<link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
+<!-- KaTeX: render persamaan matematika (LaTeX) di dalam soal -->
+<link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css" onload="this.onload=null;this.rel='stylesheet'">
+<noscript>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+</noscript>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<!-- SheetJS (baca/tulis .xlsx) & Mammoth (baca .docx) HANYA dipakai Portal Guru, jadi TIDAK lagi
+     dimuat di sini (dulu ~1,5 MB memblokir halaman untuk SETIAP siswa). Keduanya dimuat otomatis
+     saat dibutuhkan lewat muatPustaka_() di app.js. -->
+</head>
+<body>
+
+<div id="top-loading-bar"></div>
+<div id="toast"></div>
+
+<!-- ======================= LOGIN ======================= -->
+<div id="login-screen" class="anbk-page anbk-login">
+  <header class="anbk-hero"><div class="anbk-hero-in"><div class="anbk-brand"><img class="anbk-logo-tw" src="icons/tutwuri.png" alt="Tut Wuri Handayani"><img class="anbk-logo-sch" src="icons/smpn2.png" alt="SMP Negeri 2 Seririt"><div class="anbk-brand-t"><b>PUSMENDIK</b><span>APLIKASI ANBK</span></div></div></div></header>
+  <main class="anbk-center">
+    <form id="form-login" class="anbk-card anbk-card-login" onsubmit="Auth.login(event)" autocomplete="on">
+      <h1 id="login-judul">Selamat Datang</h1>
+      <p id="login-sub">Silakan login dengan menggunakan username dan password yang anda miliki</p>
+      <div class="anbk-ig"><i class="fa-solid fa-circle-user"></i><input type="text" id="login-username" placeholder="Username" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required></div>
+      <div class="anbk-ig"><i class="fa-solid fa-lock"></i><input type="password" id="login-password" placeholder="Password" autocomplete="current-password" required><button type="button" class="anbk-eye" tabindex="-1" onclick="Anbk.toggleSandi(this)" aria-label="Lihat sandi"><i class="fa-solid fa-eye"></i></button></div>
+      <button type="submit" id="btn-login-submit" class="anbk-btn anbk-btn-primary anbk-btn-block">Login</button>
+      <div id="login-error" class="anbk-err" role="alert"></div>
+      <p id="login-mode-status" class="anbk-modestatus"></p>
+    </form>
+  </main>
+  <footer class="anbk-foot">Aplikasi simulasi latihan TKA &middot; SMP Negeri 2 Seririt &middot; <a href="#guru" onclick="Anbk.pilihPortal('guru',event)" id="anbk-link-guru">Portal Guru</a><a href="#" onclick="Anbk.pilihPortal('siswa',event)" id="anbk-link-siswa" class="hidden">Portal Peserta</a></footer>
+</div>
+
+<!-- ======================= MODAL: DETAIL PELANGGARAN SISWA ======================= -->
+<div id="modal-log-pelanggaran" class="modal-backdrop hidden" onclick="if(event.target===this)UI.tutupModal('modal-log-pelanggaran')">
+  <div class="modal">
+    <h3 id="log-pelanggaran-judul">Detail Pelanggaran</h3>
+    <p class="subtitle" style="margin-top:-.4rem">Kronologi kejadian selama ujian, dari yang paling awal. Browser tidak bisa membedakan "pindah tab" dari "layar dimatikan", jadi keduanya tercatat sebagai satu jenis.</p>
+    <div id="log-pelanggaran-isi"></div>
+    <div class="modal-close-row"><button class="secondary" onclick="UI.tutupModal('modal-log-pelanggaran')">Tutup</button></div>
+  </div>
+</div>
+
+<!-- ======================= MODAL: PENGATURAN SERVER ======================= -->
+<div id="modal-server" class="modal-backdrop hidden">
+  <div class="modal">
+    <h3>Pengaturan Server (Google Sheets)</h3>
+    <p class="subtitle">
+      Tempel URL Web App Google Apps Script Anda di sini supaya semua data (bank soal, data siswa,
+      ujian, hasil) otomatis tersimpan ke Google Sheets dan bisa diakses secara real-time dari
+      perangkat lain (HP, laptop, komputer lab, dst). Kosongkan &amp; simpan untuk kembali ke
+      Mode Lokal (data hanya di perangkat ini). Panduan membuat URL ini ada di README bagian
+      "Setup Backend (Google Apps Script)".
+    </p>
+    <div class="field">
+      <label>URL Web App</label>
+      <input type="text" id="server-url-input" placeholder="https://script.google.com/macros/s/xxxxx/exec">
+    </div>
+    <p id="server-status" class="subtitle"></p>
+
+    <div id="server-snippet-box" class="hidden" style="background:var(--c-bg);border:1px solid var(--c-line);border-radius:var(--radius);padding:.8rem;margin-bottom:1rem">
+      <p class="subtitle" style="margin-top:0">
+        <strong>Supaya SEMUA siswa (bukan cuma perangkat ini) otomatis ikut memakai Google
+        Sheets ini</strong> tanpa perlu mengatur apa pun di HP masing-masing — karena siswa
+        sengaja tidak diberi akses ke layar pengaturan ini — salin baris di bawah, lalu di
+        <code>app.js</code> cari baris <code>API_URL: ''</code> (dekat baris paling atas) dan
+        ganti dengan baris ini, kemudian upload ulang <code>app.js</code> ke Netlify:
+      </p>
+      <div style="display:flex;gap:.4rem;align-items:center">
+        <code id="server-snippet-text" style="flex:1;overflow-x:auto;white-space:nowrap;background:var(--c-surface);border:1px solid var(--c-line);border-radius:3px;padding:.5rem .6rem;font-size:.82rem"></code>
+        <button type="button" class="secondary small" onclick="UI.salinSnippetApiUrl()">📋 Salin</button>
+      </div>
+    </div>
+
+    <div class="modal-close-row" style="justify-content:space-between">
+      <div>
+        <button class="secondary" onclick="UI.tesKoneksiServer()">Tes Koneksi</button>
+        <button class="danger small" onclick="UI.hapusPengaturanServer()">Pakai Mode Lokal</button>
+      </div>
+      <div>
+        <button class="secondary" onclick="UI.tutupModal('modal-server')">Tutup</button>
+        <button class="accent" onclick="UI.simpanPengaturanServer()">Simpan (perangkat ini saja)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= PORTAL GURU ======================= -->
+<div id="guru-portal" class="shell hidden">
+  <div class="mobile-topbar">
+    <span class="mt-logo app-logo-slot"><i class="fa-solid fa-graduation-cap"></i></span>
+    <span class="mobile-topbar-title"><small class="mt-brand"><span class="app-brand-nama">ANBK SMP Negeri 2 Seririt</span> · Guru</small><strong id="mobile-title-guru">Dashboard</strong></span>
+    <button type="button" class="hamburger-btn" onclick="UI.bukaMenuMobile('guru')" aria-label="Buka menu">☰</button>
+  </div>
+  <nav class="bottom-nav" id="bottom-nav-guru" aria-label="Navigasi utama">
+    <button type="button" class="active" data-tab="tab-dashboard" onclick="UI.gantiTabGuru('tab-dashboard')"><i class="fa-solid fa-gauge-high"></i><span>Beranda</span></button>
+    <button type="button" data-tab="tab-bank-soal" onclick="UI.gantiTabGuru('tab-bank-soal')"><i class="fa-solid fa-layer-group"></i><span>Soal</span></button>
+    <button type="button" data-tab="tab-ujian" onclick="UI.gantiTabGuru('tab-ujian')"><i class="fa-solid fa-calendar-days"></i><span>Ujian</span></button>
+    <button type="button" data-tab="tab-rekap" onclick="UI.gantiTabGuru('tab-rekap')"><i class="fa-solid fa-clipboard-check"></i><span>Nilai</span></button>
+    <button type="button" data-tab="menu" onclick="UI.bukaMenuMobile('guru')"><i class="fa-solid fa-bars"></i><span>Lainnya</span></button>
+  </nav>
+  <div class="sidebar-overlay" id="sidebar-overlay-guru" onclick="UI.tutupMenuMobile('guru')"></div>
+  <aside class="sidebar" id="sidebar-guru">
+    <button type="button" class="sidebar-close-btn" onclick="UI.tutupMenuMobile('guru')" aria-label="Tutup menu">✕</button>
+    <div class="sidebar-brand">
+      <span class="sidebar-logo app-logo-slot"><i class="fa-solid fa-graduation-cap"></i></span>
+      <span>
+        <h2 class="brand app-brand-nama">ANBK SMP Negeri 2 Seririt</h2>
+        <p class="brand-sub">Portal Guru</p>
+      </span>
+    </div>
+
+    <nav class="nav-scroll">
+      <button class="nav-tab active" data-tab="tab-dashboard" onclick="UI.gantiTabGuru('tab-dashboard')"><i class="fa-solid fa-gauge-high nav-ico"></i><span>Dashboard</span></button>
+      <button class="nav-tab" data-tab="tab-bank-soal" onclick="UI.gantiTabGuru('tab-bank-soal')"><i class="fa-solid fa-layer-group nav-ico"></i><span>Bank Soal</span></button>
+      <button class="nav-tab" data-tab="tab-ujian" onclick="UI.gantiTabGuru('tab-ujian')"><i class="fa-solid fa-calendar-days nav-ico"></i><span>Kelola Ujian</span></button>
+      <button class="nav-tab" data-tab="tab-rekap" onclick="UI.gantiTabGuru('tab-rekap')"><i class="fa-solid fa-clipboard-check nav-ico"></i><span>Rekap Nilai</span></button>
+      <button class="nav-tab" data-tab="tab-analisis" onclick="UI.gantiTabGuru('tab-analisis')"><i class="fa-solid fa-chart-pie nav-ico"></i><span>Analisis Soal</span></button>
+      <button class="nav-tab" data-tab="tab-pelanggaran" onclick="UI.gantiTabGuru('tab-pelanggaran')"><i class="fa-solid fa-triangle-exclamation nav-ico"></i><span>Log Pelanggaran</span></button>
+      <button class="nav-tab" data-tab="tab-pemantauan" onclick="UI.gantiTabGuru('tab-pemantauan')"><i class="fa-solid fa-eye nav-ico"></i><span>Pemantauan Ujian</span></button>
+      <button class="nav-tab" data-tab="tab-siswa" onclick="UI.gantiTabGuru('tab-siswa')"><i class="fa-solid fa-users nav-ico"></i><span>Data Siswa</span></button>
+      <button class="nav-tab" data-tab="tab-login" onclick="UI.gantiTabGuru('tab-login')"><i class="fa-solid fa-lock nav-ico"></i><span>Status Login</span></button>
+      <button class="nav-tab" data-tab="tab-pengaturan" onclick="UI.gantiTabGuru('tab-pengaturan')"><i class="fa-solid fa-gear nav-ico"></i><span>Pengaturan</span></button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="who">Masuk sebagai<br><strong id="guru-nama-label">-</strong></div>
+      <button class="secondary" style="width:100%" onclick="Auth.logout()"><i class="fa-solid fa-right-from-bracket"></i> Keluar</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="anbk-guru-band" aria-hidden="true">
+      <img class="agb-logo" src="icons/tutwuri.png" alt=""><img class="agb-logo" src="icons/smpn2.png" alt="">
+      <span class="agb-teks"><b>PUSMENDIK</b><small>APLIKASI ANBK &middot; <span class="app-brand-nama">ANBK SMP Negeri 2 Seririt</span></small></span>
+      <span class="agb-user"><span id="guru-band-nama">Portal Guru</span><i class="agb-ico fa-solid fa-user"></i></span>
+    </div>
+    <!-- ---------- TAB: DASHBOARD ---------- -->
+    <section id="tab-dashboard">
+      <div class="dash-top">
+        <div><h2>Dashboard</h2><span class="dash-chip" id="dash-mode-chip"></span></div>
+        <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap"><button type="button" class="secondary btn-segarkan" title="Ambil data terbaru tanpa mengubah pilihan ujian &amp; kelas" onclick="Guru.segarkan('tab-dashboard', this)"><i class="fa-solid fa-rotate"></i> Segarkan</button><span class="segar-info" id="segar-info-tab-dashboard" aria-live="polite"></span><label class="dash-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Cari ujian atau token..." oninput="Guru.filterDashboardUjian(this.value)"></label></div>
+      </div>
+
+      <div class="dash-hero">
+        <div class="dash-avatar" id="dash-avatar">G</div>
+        <div class="dash-hero-body">
+          <span class="dash-date" id="dash-date"></span>
+          <h3>Selamat datang, <span id="dash-nama">Guru</span></h3>
+          <p id="dash-ringkas">Memuat ringkasan...</p>
+          <div class="dash-hero-btns">
+            <button onclick="UI.bukaModalUjian()"><i class="fa-solid fa-plus"></i> Buat Ujian Baru</button>
+            <button class="secondary" onclick="UI.gantiTabGuru('tab-bank-soal')"><i class="fa-solid fa-layer-group"></i> Kelola Bank Soal</button>
+            <button class="secondary" onclick="UI.gantiTabGuru('tab-rekap')"><i class="fa-solid fa-clipboard-check"></i> Rekap Nilai</button>
+          </div>
+        </div>
+        <i class="fa-solid fa-graduation-cap dash-hero-deco"></i>
+      </div>
+
+      <div class="dash-grid" id="dashboard-cards">
+        <div class="dash-card dash-card-skeleton">Memuat ringkasan...</div>
+      </div>
+
+      <div class="dash-cols">
+        <div class="panel">
+          <div class="dash-ph"><h3>Bank soal per mapel</h3><p>Jumlah soal aktif pada 7 mapel terbanyak</p></div>
+          <div id="dash-chart-mapel"></div>
+        </div>
+        <div class="panel">
+          <div class="dash-ph"><h3>Status ujian</h3><p>Komposisi seluruh ujian yang terdaftar</p></div>
+          <div id="dash-donut"></div>
+        </div>
+      </div>
+
+      <div class="dash-section-head">
+        <h3>Ujian terbaru</h3>
+        <button type="button" class="secondary small" onclick="UI.gantiTabGuru('tab-ujian')">Lihat semua</button>
+      </div>
+      <div class="panel" id="dashboard-ujian-terbaru">Memuat...</div>
+    </section>
+
+    <!-- ---------- TAB: BANK SOAL ---------- -->
+    <section id="tab-bank-soal" class="hidden">
+      <h2>Bank Soal</h2>
+      <p class="subtitle">Kelola soal per Mapel: pilihan ganda, pilihan ganda kompleks, benar/salah, mencocokkan, dan essay.</p>
+
+      <!-- ============ LEVEL A: GRID MAPEL ============ -->
+      <div id="grid-mapel-view">
+        <div class="toolbar" style="margin-bottom:1rem">
+          <div></div>
+          <div class="toolbar-actions">
+            <button type="button" class="secondary btn-segarkan" title="Ambil data terbaru tanpa mengubah pilihan ujian &amp; kelas" onclick="Guru.segarkan('tab-bank-soal', this)"><i class="fa-solid fa-rotate"></i> Segarkan</button><span class="segar-info" id="segar-info-tab-bank-soal" aria-live="polite"></span>
+            <button class="secondary" onclick="Guru.bukaModalKelolaKategori()">⚙ Kelola Kategori</button>
+            <button class="secondary" id="btn-lihat-arsip" onclick="Guru.bukaArsipSoal()">🗄 Arsip</button>
+          </div>
+        </div>
+        <div class="mapel-grid" id="grid-mapel-list">Memuat...</div>
+      </div>
+
+      <!-- ============ ARSIP LEVEL A: GRID KATEGORI YANG DIARSIPKAN (lintas Mapel) ============ -->
+      <div id="arsip-soal-view" class="hidden">
+        <div class="kelola-soal-header">
+          <button class="secondary icon" title="Kembali" onclick="Guru.kembaliKeGridMapel()">←</button>
+          <div class="kelola-soal-header-judul">
+            <h2 style="margin:0">Arsip Soal</h2>
+            <span class="subtitle" style="display:block;margin:0">Kategori/Mapel yang dihapus dari Bank Soal muncul di sini sebagai kartu tersendiri — klik kartunya untuk melihat semua soal di dalamnya, atau kembalikan/hapus permanen sekaligus 1 kategori penuh.</span>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="mapel-grid" id="grid-arsip-kategori-list">Memuat...</div>
+        </div>
+      </div>
+
+      <!-- ============ ARSIP LEVEL B: DAFTAR SOAL DALAM 1 KATEGORI ARSIP ============ -->
+      <div id="arsip-kategori-view" class="hidden">
+        <div class="kelola-soal-header">
+          <button class="secondary icon" title="Kembali ke Arsip" onclick="Guru.kembaliKeArsipGrid()">←</button>
+          <div class="kelola-soal-header-judul">
+            <h2 id="arsip-kategori-judul" style="margin:0">Kategori</h2>
+            <span class="subtitle" style="display:block;margin:0">Soal yang diarsipkan dari kategori ini. Kembalikan satu per satu, atau sekaligus lewat tombol di atas.</span>
+          </div>
+          <div class="toolbar-actions">
+            <button class="secondary" id="btn-arsip-kategori-kembalikan" onclick="Guru.kembalikanKategoriArsip()">↩ Kembalikan Semua</button>
+            <button class="danger" id="btn-arsip-kategori-hapus" onclick="Guru.hapusKategoriArsipPermanen()">🗑 Hapus Permanen Semua</button>
+          </div>
+        </div>
+        <div class="panel">
+          <div id="daftar-arsip-kategori-soal">Memuat...</div>
+        </div>
+      </div>
+
+      <!-- ============ LEVEL B: KELOLA SOAL (1 Mapel) ============ -->
+      <div id="kelola-soal-view" class="hidden">
+        <div class="kelola-soal-header">
+          <button class="secondary icon" title="Kembali" onclick="Guru.kembaliKeGridMapel()">←</button>
+          <div class="kelola-soal-header-judul">
+            <h2 id="kelola-soal-judul" style="margin:0">Mapel</h2>
+            <span class="subtitle" id="kelola-soal-token" style="display:block;margin:0"></span>
+          </div>
+          <div class="toolbar-actions">
+            <button class="secondary" onclick="Guru.pratinjauKategoriAktif()">👁 Pratinjau Semua Soal</button>
+            <button class="secondary" onclick="Guru.bukaModalKelolaKategori()">Edit Info</button>
+          </div>
+        </div>
+
+        <div class="tipe-tabs" id="tipe-tabs-list"></div>
+
+        <div class="panel">
+          <div class="aksi-cards-grid">
+            <div class="aksi-card aksi-card-utama" onclick="UI.bukaModalSoal()">
+              <div class="aksi-card-ico">✏</div>
+              <div class="aksi-card-judul">Tambah Soal Manual</div>
+              <div class="aksi-card-desc">Isi formulir soal secara manual.</div>
+            </div>
+            <div class="aksi-card" onclick="document.getElementById('input-import-soal').click()">
+              <div class="aksi-card-ico">📄</div>
+              <div class="aksi-card-judul">Import dari Excel (.xlsx)</div>
+              <div class="aksi-card-desc">Isi tabel: 1 baris = 1 soal, tinggal isi Opsi A/B/C/D &amp; kolom Kunci pakai huruf.</div>
+              <div class="aksi-card-aksi-row">
+                <button type="button" class="secondary small" onclick="event.stopPropagation();Guru.unduhTemplateSoal()">⬇ Unduh Template</button>
+                <label class="secondary small aksi-card-pilih-gambar" onclick="event.stopPropagation()">
+                  🖼 Gambar Pendukung <span id="label-jumlah-gambar-xlsx"></span>
+                  <input type="file" id="input-import-soal-gambar" accept="image/*" multiple class="hidden" onchange="UI.perbaruiLabelJumlahGambar('input-import-soal-gambar','label-jumlah-gambar-xlsx')">
+                </label>
+              </div>
+              <input type="file" id="input-import-soal" accept=".xlsx,.csv" class="hidden" onchange="Guru.importSoalDariFile(event)">
+            </div>
+            <div class="aksi-card" onclick="document.getElementById('input-import-soal-docx').click()">
+              <div class="aksi-card-ico">📄</div>
+              <div class="aksi-card-judul">Import dari Word (.docx)</div>
+              <div class="aksi-card-desc">Format tabel sama seperti template Excel — gambar yang ditempel langsung di kolom "Gambar"/Pertanyaan/Opsi otomatis terdeteksi &amp; terunggah, tanpa perlu pilih file terpisah.</div>
+              <div class="aksi-card-aksi-row">
+                <button type="button" class="secondary small" onclick="event.stopPropagation();Guru.unduhTemplateSoalDocx()">⬇ Unduh Template</button>
+                <label class="secondary small aksi-card-pilih-gambar" onclick="event.stopPropagation()">
+                  🖼 Gambar Pendukung (opsional) <span id="label-jumlah-gambar-docx"></span>
+                  <input type="file" id="input-import-soal-docx-gambar" accept="image/*" multiple class="hidden" onchange="UI.perbaruiLabelJumlahGambar('input-import-soal-docx-gambar','label-jumlah-gambar-docx')">
+                </label>
+              </div>
+              <input type="file" id="input-import-soal-docx" accept=".docx" class="hidden" onchange="Guru.importSoalDariDocx(event)">
+            </div>
+          </div>
+          <p class="subtitle" style="margin-top:.8rem">
+            <strong>Kategori:</strong> semua soal yang diimpor dari halaman ini otomatis masuk ke mapel yang sedang dibuka — isi kolom "Kategori" di file tidak perlu diisi (diabaikan).
+          </p>
+          <p class="subtitle" style="margin-top:.4rem">
+            <strong>Soal bergambar (Excel):</strong> di kolom "Gambar" pada tabel, cukup ketik nama file gambarnya saja
+            (mis. <code>soal1.jpg</code>) — lalu sebelum klik kartu Import, klik dulu <strong>"🖼 Gambar Pendukung"</strong>
+            di kartu yang sama &amp; pilih semua file gambar terkait sekaligus (boleh banyak file). Sistem otomatis
+            mencocokkan berdasarkan nama file. Boleh juga langsung isi kolom "Gambar" dengan link gambar publik.
+          </p>
+          <p class="subtitle" style="margin-top:.4rem">
+            <strong>Soal bergambar (Word):</strong> tempel/sisipkan gambarnya LANGSUNG di dalam sel tabel Word
+            (kolom "Gambar", atau bahkan di tengah teks Pertanyaan/Opsi) — saat diimpor, gambar tersebut otomatis
+            terdeteksi &amp; terunggah sendiri, tidak perlu lagi mengetik nama file atau memilih file gambar terpisah.
+            Tombol "🖼 Gambar Pendukung" di kartu Word tetap bisa dipakai sebagai cara alternatif (cocok nama file)
+            kalau kamu lebih suka begitu.
+          </p>
+
+
+          <div class="toolbar" style="margin-top:1.2rem">
+            <div class="row" style="flex:1;margin:0;gap:.6rem;flex-wrap:wrap">
+              <select id="filter-kategori-soal" class="hidden" onchange="Guru.renderDaftarSoal()"><option value="">Semua kategori</option></select>
+              <select id="filter-subkategori-soal" onchange="Guru.renderDaftarSoal()" style="max-width:220px">
+                <option value="">Semua sub-kategori</option>
+              </select>
+              <select id="filter-status-soal" onchange="Guru.renderDaftarSoal()" style="max-width:160px">
+                <option value="aktif" selected>Bank Soal (Aktif)</option>
+                <option value="arsip">Arsip</option>
+                <option value="semua">Semua status</option>
+              </select>
+              <label style="display:flex;align-items:center;gap:.4rem;font-weight:400;white-space:nowrap">
+                <input type="checkbox" id="filter-riwayat-soal" onchange="Guru.renderDaftarSoal()" style="width:auto">
+                Riwayat (pernah dipakai saja)
+              </label>
+              <label style="display:flex;align-items:center;gap:.4rem;font-weight:400;white-space:nowrap">
+                <input type="checkbox" id="filter-belum-kunci-soal" onchange="Guru.renderDaftarSoal()" style="width:auto">
+                Belum ada kunci saja
+              </label>
+            </div>
+          </div>
+          <p class="subtitle" style="margin-top:-.6rem">
+            Soal yang dibuat tapi belum dipakai bisa <strong>diarsipkan</strong> supaya tidak mengganggu daftar aktif,
+            lalu diedit &amp; dikembalikan kapan saja lewat filter status "Arsip". Centang <strong>"Riwayat"</strong>
+            untuk melihat soal yang sudah pernah dipakai di ujian mana saja.
+          </p>
+          <div id="daftar-bank-soal">Memuat...</div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ---------- TAB: KELOLA UJIAN ---------- -->
+    <section id="tab-ujian" class="hidden">
+      <h2>Kelola Ujian</h2>
+      <p class="subtitle">Atur durasi, jadwal token, toleransi keterlambatan, dan batas pelanggaran anti-cheat.</p>
+      <div class="panel">
+        <div class="toolbar">
+          <div></div>
+          <button type="button" class="secondary btn-segarkan" title="Ambil data terbaru tanpa mengubah pilihan ujian &amp; kelas" onclick="Guru.segarkan('tab-ujian', this)"><i class="fa-solid fa-rotate"></i> Segarkan</button><span class="segar-info" id="segar-info-tab-ujian" aria-live="polite"></span>
+          <button class="accent" onclick="UI.bukaModalUjian()">+ Buat Ujian</button>
+        </div>
+
+        <div id="daftar-ujian">Memuat...</div>
+      </div>
+    </section>
+
+    <!-- ---------- TAB: REKAP NILAI ---------- -->
+    <section id="tab-rekap" class="hidden">
+      <h2>Rekap Nilai</h2>
+      <p class="subtitle">Pilih ujian untuk melihat rekap nilai seluruh siswa dan mengunduhnya.</p>
+      <div class="panel">
+        <div class="toolbar">
+          <select id="pilih-ujian-rekap" onchange="Guru.muatRekap()" style="max-width:320px"></select>
+          <button type="button" class="secondary btn-segarkan" title="Ambil data terbaru tanpa mengubah pilihan ujian &amp; kelas" onclick="Guru.segarkan('tab-rekap', this)"><i class="fa-solid fa-rotate"></i> Segarkan</button><span class="segar-info" id="segar-info-tab-rekap" aria-live="polite"></span>
+          <button class="secondary" onclick="Guru.unduhRekapCSV()" title="Unduh nilai sesuai Filter Kelas & pencarian yang sedang tampil (pilih satu kelas = nilai kelas itu saja)">⬇ Unduh (sesuai filter)</button>
+          <button class="secondary" onclick="Guru.unduhRekapCSV('semua')" title="Unduh nilai SEMUA kelas pada ujian ini: 1 sheet gabungan + 1 sheet per kelas">⬇ Semua Kelas</button>
+          <button class="secondary" onclick="Guru.unduhEvaluasiSalah()" title="Unduh Excel evaluasi: ringkasan benar/salah per siswa + daftar soal yang salah beserta jawaban siswa & kunci (mengikuti filter yang tampil)">⬇ Evaluasi Jawaban Salah</button>
+          <button class="secondary" onclick="Guru.cetakDetailKelas()" title="Cetak / simpan PDF detail jawaban seluruh siswa yang tampil (pilih Filter Kelas dulu untuk satu kelas): halaman 1 daftar nama, lalu tiap siswa satu bagian berisi soal yang salah">🖨 Cetak Detail Kelas (PDF)</button>
+          <button class="secondary" onclick="Guru.unduhRekapCSV('semuaUjian')" title="Unduh nilai dari SEMUA ujian sekaligus (mengikuti Filter Kelas): 1 sheet gabungan + 1 sheet per kelas">⬇ Semua Ujian</button>
+          <button class="danger" title="Hapus nilai siswa yang dicentang pada tabel di bawah" onclick="Guru.hapusNilaiTerpilih()">🗑 Hapus Terpilih</button>
+          <button class="danger" title="Hapus SEMUA nilai pada ujian yang sedang dipilih. Kalau Filter Kelas/pencarian aktif, hanya yang sedang tampil yang dihapus." onclick="Guru.hapusSemuaNilaiUjian()">🗑 Hapus Semua Nilai</button>
+          <button class="secondary" title="Hitung ulang nilai semua siswa di ujian ini memakai jawaban yang sudah tersimpan, tanpa mengulang ujian -- berguna kalau ada perbaikan pada logika penilaian (mis. soal dengan opsi teracak)." onclick="Guru.hitungUlangNilai()">🔄 Hitung Ulang Nilai</button>
+        </div>
+        <div class="filter-bar">
+          <input type="search" id="cari-rekap" placeholder="🔍 Cari nama siswa..." oninput="Guru.renderTabelRekap_()" autocomplete="off"><label class="filter-cek" id="lbl-blokir-rekap" title="Tampilkan hanya yang diblokir"><input type="checkbox" id="blokir-rekap" onchange="Guru.renderTabelRekap_()"> 🚫 Diblokir saja <span id="blokir-rekap-jml"></span></label><select id="status-rekap" onchange="Guru.renderTabelRekap_()" title="Filter hasil: lulus/remedial atau kategori nilai" style="width:auto"><option value="">Semua Hasil</option><option value="lulus">✅ Lulus</option><option value="remedial">🔁 Remedial</option><option value="kat:istimewa">🏅 Istimewa (≥ 95)</option><option value="kat:baik">👍 Baik (≥ 76,67)</option><option value="kat:memadai">➖ Memadai (50 – 76,66)</option><option value="kat:kurang">⚠️ Kurang (&lt; 50)</option></select>
+          <select id="kelas-rekap" onchange="Guru.renderTabelRekap_()" title="Filter per kelas"><option value="">Semua Kelas</option></select>
+          <span class="filter-info" id="kelas-rekap-info"></span>
+        </div>
+        <div id="tabel-rekap">Pilih ujian terlebih dahulu.</div>
+      </div>
+    </section>
+
+    <!-- ---------- TAB: ANALISIS SOAL & JAWABAN SISWA ---------- -->
+    <section id="tab-analisis" class="hidden">
+      <h2>📊 Analisis Soal &amp; Jawaban Siswa</h2>
+      <p class="subtitle">
+        Pilih ujian untuk melihat soal mana yang ternyata paling banyak dijawab salah (sulit) atau paling banyak
+        dijawab benar (mudah), beserta pola jawaban tiap siswa per soal. Dihitung dari siswa yang sudah
+        <strong>menyelesaikan</strong> ujian ini.
+      </p>
+      <div class="panel">
+        <div class="toolbar">
+          <select id="pilih-ujian-analisis" onchange="Guru.muatAnalisisSoal()" style="max-width:320px"></select>
+          <button type="button" class="secondary btn-segarkan" title="Ambil data terbaru tanpa mengubah pilihan ujian &amp; kelas" onclick="Guru.segarkan('tab-analisis', this)"><i class="fa-solid fa-rotate"></i> Segarkan</button><span class="segar-info" id="segar-info-tab-analisis" aria-live="polite"></span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="toolbar">
+          <h3 style="margin:0">Analisis Butir Soal</h3>
+          <button class="secondary" onclick="Guru.unduhAnalisisSoalCSV()">⬇ Unduh Excel (.xlsx)</button>
+        </div>
+        <div id="tabel-analisis-soal">Pilih ujian terlebih dahulu.</div>
+      </div>
+
+      <div class="panel">
+        <div class="toolbar">
+          <h3 style="margin:0">Analisis Jawaban Siswa (per soal)</h3>
+          <button class="secondary" onclick="Guru.unduhAnalisisJawabanCSV()">⬇ Unduh Excel (.xlsx)</button>
+        </div>
+        <div class="filter-bar">
+          <input type="search" id="cari-analisis" placeholder="🔍 Cari nama siswa..." oninput="Guru.renderAnalisisJawaban()" autocomplete="off">
+          <select id="kelas-analisis" onchange="Guru.renderAnalisisJawaban()" title="Filter per kelas"><option value="">Semua Kelas</option></select>
+          <span class="filter-info" id="kelas-analisis-info"></span>
+        </div>
+        <div id="tabel-analisis-jawaban"></div>
+      </div>
+    </section>
+
+    <!-- ---------- TAB: LOG PELANGGARAN ---------- -->
+    <section id="tab-pelanggaran" class="hidden">
+      <h2>Log Pelanggaran Anti-Cheat</h2>
+      <p class="subtitle">Riwayat pelanggaran (pindah tab, keluar fullscreen, dll.) per ujian.</p>
+      <div class="panel">
+        <div class="toolbar">
+          <select id="pilih-ujian-log" onchange="Guru.muatLogPelanggaran()" style="max-width:320px"></select>
+          <button type="button" class="secondary btn-segarkan" title="Ambil data terbaru tanpa mengubah pilihan ujian &amp; kelas" onclick="Guru.segarkan('tab-pelanggaran', this)"><i class="fa-solid fa-rotate"></i> Segarkan</button><span class="segar-info" id="segar-info-tab-pelanggaran" aria-live="polite"></span>
+        </div>
+        <div class="filter-bar">
+          <input type="search" id="cari-log" placeholder="🔍 Cari nama siswa..." oninput="Guru.renderLogPelanggaran_()" autocomplete="off">
+          <select id="kelas-log" onchange="Guru.renderLogPelanggaran_()" title="Filter per kelas"><option value="">Semua Kelas</option></select>
+          <span class="filter-info" id="kelas-log-info"></span>
+        </div>
+        <div id="tabel-log">Pilih ujian terlebih dahulu.</div>
+      </div>
+    </section>
+
+    <!-- ---------- TAB: PEMANTAUAN UJIAN (live monitoring) ---------- -->
+    <section id="tab-pemantauan" class="hidden">
+      <h2>🖥 Pemantauan Ujian</h2>
+      <p class="subtitle">
+        Pilih ujian untuk melihat siapa saja yang sedang mengerjakan/​sudah selesai, sisa waktu, jumlah soal yang
+        sudah terjawab, dan jumlah pelanggaran anti-cheat -- lengkap dengan aksi untuk tiap siswa.
+      </p>
+      <div class="panel">
+        <div class="toolbar">
+          <select id="pilih-ujian-pemantauan" onchange="Guru.muatPemantauan()" style="max-width:320px"></select>
+          <button type="button" class="secondary btn-segarkan" title="Ambil data terbaru tanpa mengubah pilihan ujian &amp; kelas" onclick="Guru.segarkan('tab-pemantauan', this)"><i class="fa-solid fa-rotate"></i> Segarkan</button><span class="segar-info" id="segar-info-tab-pemantauan" aria-live="polite"></span>
+        </div>
+        <p class="subtitle" style="margin-top:-.6rem">
+          <strong>⏱ Tambah Waktu</strong> — memberi waktu ekstra ke satu siswa saja (mis. karena koneksi sempat
+          putus), tanpa mengubah durasi siswa lain.<br>
+          <strong>🧹 Hapus Pelanggaran</strong> — pelanggaran siswa itu langsung jadi 0; kalau sesinya sedang
+          diblokir karena melewati batas pelanggaran, sesi otomatis dibuka lagi dan siswa bisa <em>langsung
+          melanjutkan dari soal terakhir yang dikerjakan</em>, tanpa perlu mengulang ujian dari awal.<br>
+          <strong>✅ Selesaikan Paksa</strong> — mengakhiri ujian siswa itu sekarang juga memakai jawaban terakhir
+          yang tersimpan (autosave), lalu nilai langsung dihitung.<br>
+          <strong>↺ Reset</strong> — menghapus sesi sepenuhnya; kalau siswa membuka ujian ini lagi, dianggap belum
+          pernah mengerjakan sama sekali (soal diacak ulang, jawaban kosong, waktu mulai dari 0). Pakai ini hanya
+          kalau memang perlu mengulang total dari awal.
+        </p>
+        <div class="filter-bar">
+          <input type="search" id="cari-pemantauan" placeholder="🔍 Cari nama siswa..." oninput="Guru.renderTabelPemantauan()" autocomplete="off"><label class="filter-cek" id="lbl-blokir-pemantauan" title="Tampilkan hanya yang diblokir"><input type="checkbox" id="blokir-pemantauan" onchange="Guru.renderTabelPemantauan()"> 🚫 Diblokir saja <span id="blokir-pemantauan-jml"></span></label>
+          <select id="kelas-pemantauan" onchange="Guru.renderTabelPemantauan()" title="Filter per kelas"><option value="">Semua Kelas</option></select>
+          <span class="filter-info" id="kelas-pemantauan-info"></span>
+        </div>
+        <div id="tabel-pemantauan">Pilih ujian terlebih dahulu.</div>
+      </div>
+    </section>
+
+    <!-- ---------- TAB: DATA SISWA ---------- -->
+    <section id="tab-siswa" class="hidden">
+      <h2>Data Siswa</h2>
+      <p class="subtitle">Kredensial akun siswa. Tambahkan satu per satu, atau impor massal dari file .xlsx/.csv.</p>
+
+      <datalist id="daftar-kelas-siswa"></datalist>
+
+      <div class="panel">
+        <h3>Tambah Siswa Manual</h3>
+        <div class="row">
+          <div class="field"><label>Nama Lengkap</label><input type="text" id="siswa-manual-nama" placeholder="mis. Budi Santoso"></div>
+          <div class="field"><label>Kelas</label><input type="text" id="siswa-manual-kelas" list="daftar-kelas-siswa" placeholder="mis. 9A — pilih dari daftar atau ketik baru"></div>
+          <div class="field">
+            <label>Username</label>
+            <div style="display:flex;gap:.4rem">
+              <input type="text" id="siswa-manual-username" placeholder="kosongkan untuk dibuatkan otomatis (TP + 13 angka)">
+              <button type="button" class="secondary icon" title="Buatkan username otomatis format TKA (TP + 13 angka)" onclick="Guru.generateUsernameManual()">🪄</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Password</label>
+            <div style="display:flex;gap:.4rem">
+              <input type="text" id="siswa-manual-password" placeholder="kosongkan untuk dibuatkan otomatis">
+              <button type="button" class="secondary icon" title="Buatkan password otomatis format TKA (6 angka + *)" onclick="Guru.generatePasswordManual()">🎲</button>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field"><label>NISN</label><input type="text" id="siswa-manual-nisn" inputmode="numeric" placeholder="10 digit"></div>
+          <div class="field"><label>Jenis Kelamin</label><select id="siswa-manual-jk"><option value="">-</option><option value="L">Laki-Laki</option><option value="P">Perempuan</option></select></div>
+          <div class="field"><label>Tempat Lahir</label><input type="text" id="siswa-manual-tempat"></div>
+          <div class="field"><label>Tanggal Lahir</label><input type="date" id="siswa-manual-tgl"></div>
+        </div>
+        <button class="accent" id="btn-tambah-siswa-manual" onclick="Guru.tambahSiswaManual()">+ Tambah Siswa</button>
+      </div>
+
+      <div class="panel">
+        <div class="toolbar">
+          <h3 style="margin:0">Impor Massal</h3>
+          <div class="toolbar-actions">
+            <button type="button" class="secondary btn-segarkan" title="Ambil data terbaru tanpa mengubah pilihan ujian &amp; kelas" onclick="Guru.segarkan('tab-siswa', this)"><i class="fa-solid fa-rotate"></i> Segarkan</button><span class="segar-info" id="segar-info-tab-siswa" aria-live="polite"></span>
+            <button class="secondary" onclick="Guru.unduhTemplateSiswa()">⬇ Unduh Template (.xlsx)</button>
+            <button class="secondary" onclick="document.getElementById('input-import-siswa').click()">Impor dari file (.xlsx/.csv)</button>
+            <input type="file" id="input-import-siswa" accept=".xlsx,.csv" class="hidden" onchange="Guru.importSiswaDariFile(event)">
+          </div>
+        </div>
+        <p class="subtitle" style="margin-top:-.6rem">
+          Kolom dibaca dari <strong>judul kolom</strong> (urutan bebas), sesuai Kartu Login: <strong>Nama Peserta, NISN, Tempat Lahir, Tanggal Lahir</strong>
+          (atau satu kolom <em>Tempat, Tanggal Lahir</em>), <strong>Username, Password</strong>, plus <strong>Kelas</strong> dan <strong>Jenis Kelamin</strong> (L/P) bila ada.
+          Username/password yang sudah ada di file dipakai apa adanya (tidak diubah); bila kosong dibuatkan otomatis. Siswa dengan username yang sama
+          diperbarui datanya, bukan digandakan. File lama berformat nama, kelas, username, password tetap bisa diimpor.
+        </p>
+        <div class="field" style="max-width:320px">
+          <label>Kelas untuk file ini (opsional)</label>
+          <input type="text" id="siswa-import-kelas" list="daftar-kelas-siswa" placeholder="mis. 9A — kosongkan untuk pakai kolom 'kelas' di file">
+        </div>
+        <p class="subtitle" style="margin-top:-.6rem">
+          Isi kolom ini kalau semua siswa di file yang mau diimpor berasal dari satu kelas yang sama (mis. hanya kelas 9A) — nilainya akan dipakai untuk semua baris, menggantikan kolom "kelas" di file.
+        </p>
+
+        <div class="toolbar" style="margin-top:1rem">
+          <h3 style="margin:0">Daftar Siswa</h3>
+          <div class="toolbar-actions">
+            <label style="display:flex;align-items:center;gap:.4rem;font-size:.85rem;color:var(--c-muted)">
+              Filter Kelas:
+              <select id="filter-kelas-siswa" onchange="Guru.renderTabelSiswa()" style="width:auto;flex:1"><option value="">Semua Kelas</option></select>
+            </label>
+            <button class="accent small" onclick="Anbk.bukaKartuLogin()" title="Cetak Kartu Login peserta (logo, QR, NISN, TTL, username, password) sesuai Filter Kelas">🪪 Cetak Kartu Login</button>
+            <label class="filter-cek" style="margin:0" title="Jika aktif, token ujian yang sedang dibuka tampil di layar peserta (seperti simulasi TKA). Matikan untuk ujian sungguhan."><input type="checkbox" id="opt-tampil-token" onchange="Anbk.simpanTampilToken(this.checked)"> Tampilkan token di layar peserta</label>
+            <button class="secondary small" onclick="Guru.unduhAkunSiswa()" title="Unduh username & password siswa (.xlsx), satu sheet per kelas. Ikuti Filter Kelas: pilih satu kelas untuk mengunduh kelas itu saja.">⬇ Unduh Akun (.xlsx)</button>
+            <button class="secondary small" onclick="Guru.resetDeviceKelas('filter-kelas-siswa')" title="Lepas kunci perangkat semua siswa di kelas yang sedang dipilih pada Filter Kelas">🔓 Lepas Semua Perangkat</button>
+            <button class="danger small" onclick="Guru.hapusKelas()" title="Hapus semua siswa di kelas yang sedang dipilih pada Filter Kelas">🗑 Hapus Kelas Ini</button>
+          </div>
+        </div>
+        <div class="filter-bar"><input type="search" id="cari-siswa" placeholder="🔍 Cari nama / username..." oninput="Guru.renderTabelSiswa()" autocomplete="off"><label class="filter-cek" id="lbl-blokir-siswa" title="Tampilkan hanya yang diblokir"><input type="checkbox" id="blokir-siswa" onchange="Guru.renderTabelSiswa()"> 🚫 Akun diblokir saja <span id="blokir-siswa-jml"></span></label><span class="filter-info" id="cari-siswa-info"></span></div>
+        <div id="daftar-siswa">Memuat...</div>
+      </div>
+    </section>
+
+    <!-- ---------- TAB: STATUS LOGIN (device lock per akun) ---------- -->
+    <section id="tab-login" class="hidden">
+      <h2>🔐 Status Login</h2>
+      <p class="subtitle">
+        Setiap akun siswa hanya boleh aktif di <strong>satu perangkat (HP/komputer)</strong> dalam satu waktu,
+        ditandai lewat Device ID di bawah ini. Kalau siswa perlu login dari perangkat lain sementara akunnya masih
+        tercatat "Terkunci", buka kuncinya di sini terlebih dahulu.
+      </p>
+      <div class="panel" style="margin-bottom:1rem">
+        <div class="toolbar" style="align-items:center">
+          <div>
+            <h3 style="margin:0 0 .2rem">🔐 Kunci Perangkat (Device Lock)</h3>
+            <p class="subtitle" id="lock-device-status-text" style="margin:0">Memuat status...</p>
+          </div>
+          <div class="role-switch" style="margin:0;flex:none;width:auto;min-width:230px">
+            <button type="button" id="btn-lock-aktif" onclick="Guru.setPengaturanLockDevice(true)">🔒 Aktifkan</button>
+            <button type="button" id="btn-lock-nonaktif" onclick="Guru.setPengaturanLockDevice(false)">🔓 Nonaktifkan</button>
+          </div>
+        </div>
+        <p class="subtitle" style="margin:.6rem 0 0">
+          <strong>Aktif</strong>: satu akun siswa hanya boleh login di satu perangkat dalam satu waktu (perilaku baku).
+          <strong>Tidak Aktif</strong>: siswa boleh login dari perangkat mana pun kapan saja tanpa terkunci/ditolak —
+          berguna kalau sering ganti HP saat ujian, tapi satu akun jadi bisa dipakai di banyak perangkat sekaligus.
+        </p>
+      </div>
+
+      <div class="panel">
+        <div class="toolbar">
+          <label style="display:flex;align-items:center;gap:.4rem;font-size:.85rem;color:var(--c-muted)">
+            Filter Kelas:
+            <select id="filter-kelas-login" onchange="Guru.renderTabelStatusLogin()" style="width:auto;flex:1"><option value="">Semua Kelas</option></select>
+          </label>
+          <button class="accent small" title="Lepas perangkat semua siswa pada kelas yang dipilih di Filter Kelas (pilih 'Semua Kelas' untuk seluruh siswa)" onclick="Guru.resetDeviceKelas('filter-kelas-login')">🔓 Lepas Semua Perangkat</button>
+          <button type="button" class="secondary btn-segarkan" title="Ambil data terbaru tanpa mengubah pilihan ujian &amp; kelas" onclick="Guru.segarkan('tab-login', this)"><i class="fa-solid fa-rotate"></i> Segarkan</button><span class="segar-info" id="segar-info-tab-login" aria-live="polite"></span>
+        </div>
+        <div class="filter-bar"><input type="search" id="cari-login" placeholder="🔍 Cari nama / username..." oninput="Guru.renderTabelStatusLogin()" autocomplete="off"><span class="filter-info" id="cari-login-info"></span></div>
+        <div id="tabel-status-login">Memuat...</div>
+      </div>
+    </section>
+
+    <!-- ---------- TAB: PENGATURAN ---------- -->
+    <section id="tab-pengaturan" class="hidden">
+      <h2>Pengaturan</h2>
+      <p class="subtitle">Kelola akun, tampilan, dan koneksi data aplikasi.</p>
+
+      <div class="panel">
+        <h3>👤 Akun Saya</h3>
+        <p class="subtitle">Ubah nama, username, atau password yang dipakai untuk masuk ke Portal Guru.</p>
+        <div class="field"><label>Nama Lengkap</label><input type="text" id="akun-nama"></div>
+        <div class="field"><label>Username</label><input type="text" id="akun-username"></div>
+        <hr style="border:none;border-top:1px solid var(--c-line);margin:1.2rem 0">
+        <div class="field">
+          <label>Password Saat Ini</label>
+          <div style="display:flex;gap:.4rem">
+            <input type="password" id="akun-password-lama" autocomplete="current-password" placeholder="Wajib diisi untuk konfirmasi">
+            <button type="button" class="secondary icon" tabindex="-1" title="Lihat/sembunyikan sandi" onclick="toggleLihatSandi('akun-password-lama', this)">👁️</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Password Baru</label>
+          <div style="display:flex;gap:.4rem">
+            <input type="password" id="akun-password-baru" autocomplete="new-password" placeholder="Kosongkan jika tidak ingin ganti password">
+            <button type="button" class="secondary icon" tabindex="-1" title="Lihat/sembunyikan sandi" onclick="toggleLihatSandi('akun-password-baru', this)">👁️</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Ulangi Password Baru</label>
+          <div style="display:flex;gap:.4rem">
+            <input type="password" id="akun-password-baru2" autocomplete="new-password">
+            <button type="button" class="secondary icon" tabindex="-1" title="Lihat/sembunyikan sandi" onclick="toggleLihatSandi('akun-password-baru2', this)">👁️</button>
+          </div>
+        </div>
+        <button class="accent" onclick="Guru.simpanAkun()">Simpan Perubahan Akun</button>
+      </div>
+
+      <div class="panel">
+        <h3>🏷️ Identitas Aplikasi (Logo &amp; Nama CBT)</h3>
+        <p class="subtitle">Ganti logo dan nama aplikasi sesuai nama sekolah/instansi Anda. Begitu disimpan,
+          perubahan otomatis muncul di halaman login, sidebar, dan judul tab browser di semua perangkat —
+          termasuk HP siswa — saat mereka membuka atau memuat ulang aplikasi, tanpa perlu update apa pun di
+          perangkat masing-masing.</p>
+        <div class="field"><label>Nama Aplikasi</label>
+          <input type="text" id="branding-nama" placeholder="mis. ANBK SMP Negeri 2 Seririt">
+        </div>
+        <div class="field">
+          <label>Logo Aplikasi <span class="subtitle" style="display:inline">— opsional, kosongkan untuk pakai ikon bawaan</span></label>
+          <div class="media-upload-grid" style="grid-template-columns:minmax(180px,260px)">
+            <div class="media-upload-box">
+              <div class="media-upload-label">🖼 Logo CBT<br><span>JPG/PNG/WebP · Maks 10 MB · idealnya persegi</span></div>
+              <input type="file" id="branding-logo-file" accept="image/*" class="hidden" onchange="Guru.uploadLogoAplikasi(event)">
+              <label for="branding-logo-file" class="media-upload-dropzone">+ <span>Klik untuk upload</span></label>
+              <input type="hidden" id="branding-logo-url">
+              <img id="branding-logo-preview" class="hidden media-upload-preview-img">
+              <button type="button" class="danger small hidden" id="branding-logo-hapus-btn" style="margin-top:.5rem;width:100%" onclick="Guru.hapusLogoAplikasi()">🗑 Hapus Logo</button>
+            </div>
+          </div>
+        </div>
+        <button class="accent" style="margin-top:.6rem" onclick="Guru.simpanBranding()">Simpan Identitas Aplikasi</button>
+      </div>
+
+      <div class="panel" id="panel-tampilan">
+        <h3>🎨 Tampilan &amp; Tema</h3>
+        <p class="subtitle">Berlaku untuk portal guru dan portal siswa. Setiap perubahan langsung terlihat di seluruh aplikasi (pratinjau); klik <b>Simpan Tema</b> di bagian bawah agar tersimpan.</p>
+
+        <div class="tm-sec">
+          <h4>1. Warna</h4>
+          <div class="tm-utama">
+            <div class="swatch-field"><label for="tema-primary">Warna utama</label><input type="color" id="tema-primary" oninput="Guru.ubahWarnaUtama()"></div>
+            <div class="field"><label for="tema-harmoni">Harmoni warna lain</label><select id="tema-harmoni" onchange="Guru.ubahWarnaUtama()"></select></div>
+          </div>
+          <label class="tm-check"><input type="checkbox" id="tema-selaras" checked> Ubah juga warna sekunder, aksen, latar &amp; teks mengikuti warna utama</label>
+          <p class="tm-hint">Pilih satu warna utama — seluruh warna aplikasi (sidebar, tombol, kartu, latar, grafik, tabel) ikut berubah selaras.</p>
+          <div class="tm-seg" id="tema-mode-seg">
+            <button type="button" data-m="light" onclick="Guru.setMode('light')">☀️ Terang</button>
+            <button type="button" data-m="dark" onclick="Guru.setMode('dark')">🌙 Gelap</button>
+            <button type="button" data-m="auto" onclick="Guru.setMode('auto')">🖥️ Ikut Perangkat</button>
+          </div>
+          <div id="palet-preset-list" class="palet-preset-list"></div>
+          <div class="tm-actions"><button class="secondary" onclick="Guru.acakPalet()">🎲 Acak Palet Warna</button></div>
+          <details class="tm-det">
+            <summary>Atur warna satu per satu (lanjutan)</summary>
+            <div class="theme-swatches" style="margin-top:.8rem">
+              <div class="swatch-field"><label>Warna sekunder</label><input type="color" id="tema-secondary" oninput="Guru.pratinjauTema()"></div>
+              <div class="swatch-field"><label>Warna aksen</label><input type="color" id="tema-accent" oninput="Guru.pratinjauTema()"></div>
+              <div class="swatch-field"><label>Latar</label><input type="color" id="tema-bg" oninput="Guru.pratinjauTema()"></div>
+              <div class="swatch-field"><label>Teks</label><input type="color" id="tema-text" oninput="Guru.pratinjauTema()"></div>
+            </div>
+          </details>
+        </div>
+
+        <div class="tm-sec">
+          <h4>2. Gaya Tampilan</h4>
+          <p class="tm-hint">Pilih gaya UI supaya tidak bosan. Kartu bertanda paket (mis. Portal Navy Magenta) ikut mengganti warna; yang lain memakai warna Anda saat ini.</p>
+          <div class="tm-seg" id="gaya-filter"><button type="button" class="on" data-f="semua" onclick="Guru.filterGaya('semua')">Semua</button><button type="button" data-f="terang" onclick="Guru.filterGaya('terang')">☀️ Terang</button><button type="button" data-f="gelap" onclick="Guru.filterGaya('gelap')">🌙 Gelap</button><button type="button" data-f="paket" onclick="Guru.filterGaya('paket')">🎨 Paket + warna</button></div>
+          <div id="gaya-galeri" class="gaya-galeri"></div>
+          <div class="tm-actions">
+            <button class="violet" onclick="Guru.acakGaya()">🎲 Acak Gaya</button>
+            <button class="secondary" onclick="Guru.acakTotal()">✨ Acak Gaya + Warna</button>
+          </div>
+          <p class="tm-hint" style="margin-top:.6rem">Acak Gaya meracik kombinasi baru setiap kali diklik — jumlah kemungkinannya praktis tak terbatas.</p>
+          <details class="tm-det">
+            <summary>🛠️ Studio Gaya — racik sendiri</summary>
+            <div class="tm-studio">
+          <div class="st"><label for="st-r">Kelengkungan sudut <b id="st-r-v"></b></label><input type="range" id="st-r" min="0" max="40" oninput="Guru.studio('r', this.value)"></div>
+          <div class="st"><label for="st-elev">Kekuatan bayangan <b id="st-elev-v"></b></label><input type="range" id="st-elev" min="0" max="100" oninput="Guru.studio('elev', this.value)"></div>
+          <div class="st"><label for="st-bw">Tebal garis tepi <b id="st-bw-v"></b></label><input type="range" id="st-bw" min="0" max="4" oninput="Guru.studio('bw', this.value)"></div>
+          <div class="st"><label for="st-glass">Efek kaca (blur) <b id="st-glass-v"></b></label><input type="range" id="st-glass" min="0" max="100" oninput="Guru.studio('glass', this.value)"></div>
+          <div class="st"><label for="st-grad">Gradien warna <b id="st-grad-v"></b></label><input type="range" id="st-grad" min="0" max="100" oninput="Guru.studio('grad', this.value)"></div>
+          <div class="st"><label for="st-dens">Kerapatan / ukuran ruang <b id="st-dens-v"></b></label><input type="range" id="st-dens" min="80" max="125" oninput="Guru.studio('dens', this.value)"></div>
+          <div class="st"><label for="st-depth">Jenis bayangan</label><select id="st-depth" onchange="Guru.studio('depth', this.value)"></select></div>
+          <div class="st"><label for="st-pat">Pola latar</label><select id="st-pat" onchange="Guru.studio('pat', this.value)"></select></div>
+          <div class="st"><label for="st-side">Gaya sidebar</label><select id="st-side" onchange="Guru.studio('side', this.value)"></select></div>
+          <div class="st"><label for="st-font">Huruf</label><select id="st-font" onchange="Guru.studio('font', this.value)"></select></div>
+          <label class="tm-check" style="align-self:end"><input type="checkbox" id="st-pill" onchange="Guru.studio('pill', this.checked)"> Tombol bulat penuh</label>
+          <label class="tm-check" style="align-self:end"><input type="checkbox" id="st-float" onchange="Guru.studio('float', this.checked)"> Sidebar melayang</label>
+          <label class="tm-check" style="align-self:end"><input type="checkbox" id="st-ink" onchange="Guru.studio('ink', this.checked)"> Garis tinta (kontras)</label>
+          <label class="tm-check" style="align-self:end"><input type="checkbox" id="st-neon" onchange="Guru.studio('neon', this.checked)"> Warna neon</label>
+          <label class="tm-check" style="align-self:end"><input type="checkbox" id="st-caps" onchange="Guru.studio('caps', this.checked)"> JUDUL HURUF BESAR</label>
+            </div>
+          </details>
+        </div>
+
+        <div class="tm-sec">
+          <h4>3. Ganti Otomatis (biar tidak bosan)</h4>
+          <div class="field" style="max-width:420px">
+            <select id="tema-rot">
+              <option value="tetap">Tetap — selalu memakai tema di atas</option>
+              <option value="harian">Kejutan harian — gaya berganti otomatis tiap hari</option>
+              <option value="harian-total">Kejutan harian — gaya &amp; warna berganti tiap hari</option>
+            </select>
+          </div>
+          <p class="tm-hint">Pada mode kejutan, tampilan berubah tiap hari tetapi sama untuk semua pengguna di hari itu (tidak berubah di tengah ujian).</p>
+        </div>
+
+        <details class="tm-det" style="margin-bottom:1rem">
+          <summary>📋 Kode Gaya — bagikan / cadangkan tampilan</summary>
+          <div class="tm-kode" style="margin-top:.8rem">
+            <input type="text" id="tema-kode" placeholder="Kode gaya muncul di sini, atau tempel kode untuk memakainya">
+            <button class="secondary" onclick="Guru.salinKodeGaya()">Salin Kode</button>
+            <button class="secondary" onclick="Guru.terapkanKodeGaya()">Terapkan Kode</button>
+          </div>
+        </details>
+
+        <div class="tm-savebar">
+          <button class="accent" onclick="Guru.simpanTema()">💾 Simpan Tema</button>
+          <button class="secondary" onclick="Guru.batalTema()">↩ Batalkan Perubahan</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>☁️ Koneksi Google Sheets</h3>
+        <p class="subtitle">Hubungkan aplikasi ke Google Sheets (lewat URL Web App Google Apps Script) supaya data tersinkron ke semua perangkat, atau lepas koneksi untuk kembali ke Mode Lokal.</p>
+        <p id="pengaturan-status-server" class="subtitle" style="font-weight:600"></p>
+        <button class="accent" onclick="UI.bukaPengaturanServer()">Atur Koneksi Google Sheets</button>
+      </div>
+
+      <div class="panel hidden" id="pengaturan-sync-guru">
+        <h3>🗄️ Opsi Cadangan</h3>
+        <p class="subtitle">Paksa tulis data ujian yang sedang berlangsung (jawaban/status siswa) ke Google Sheets sekarang juga, tanpa menunggu jeda otomatis sekitar 1 menit. Pakai kalau angka di Pemantauan, Rekap, atau Analisis terasa belum update. Untuk memperbarui tampilan sebuah halaman, gunakan tombol <strong>Segarkan</strong> di halaman tersebut.</p>
+        <button type="button" class="secondary" onclick="Guru.paksaSinkronSekarang()"><i class="fa-solid fa-cloud-arrow-up"></i> Kirim ke Spreadsheet</button>
+      </div>
+
+      <div class="panel">
+        <h3>🔁 Sinkronisasi Paksa (lapisan kedua)</h3>
+        <p class="subtitle">
+          Data guru (soal/ujian/siswa) normalnya sudah langsung terkirim ke Google Sheets setiap kali disimpan, dan
+          tiap tab menarik ulang data otomatis tiap beberapa detik saat Mode Server aktif. Dua tombol ini adalah
+          <strong>lapisan cadangan manual</strong> untuk berjaga-jaga, atau untuk memindahkan data yang sempat dibuat
+          saat masih Mode Lokal ke Google Sheets begitu Mode Server diaktifkan.
+        </p>
+        <div class="row" style="align-items:flex-start">
+          <div class="field">
+            <button class="secondary" style="width:100%" onclick="Guru.tarikDataDariSheetPaksa()">⬇ Tarik Data dari Spreadsheet Sekarang</button>
+            <p class="subtitle" style="margin-top:.4rem">Menarik ulang seluruh Bank Soal, Ujian, dan Data Siswa dari
+              Google Sheets saat ini juga (tanpa menunggu 8 detik), sekaligus menyimpan salinannya sebagai cadangan
+              lokal di perangkat ini.</p>
+          </div>
+          <div class="field">
+            <button class="secondary" style="width:100%" onclick="Guru.kirimDataLokalKeSheetPaksa()">⬆ Kirim Data Lokal ke Spreadsheet Sekarang</button>
+            <p class="subtitle" style="margin-top:.4rem">Mengirim seluruh data yang ada di penyimpanan lokal (Mode
+              Lokal) perangkat ini — Bank Soal, Data Siswa, Ujian — ke Google Sheets yang sedang terhubung. Pakai
+              sekali saat pertama kali pindah dari Mode Lokal ke Mode Server; mengulanginya akan membuat data ganda.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ======================= MODAL: FORM SOAL ======================= -->
+<div id="modal-soal" class="modal-backdrop hidden">
+  <div class="modal modal-wide">
+    <h3 id="modal-soal-title">Tambah Soal</h3>
+    <input type="hidden" id="soal-id">
+
+    <div class="tipe-tabs" id="soal-tipe-tabs" style="margin:0 0 1rem"></div>
+    <select id="soal-tipe" class="hidden" onchange="UI.renderFormOpsiSoal()">
+      <option value="pilihan_ganda">PG Biasa</option>
+      <option value="checkbox">PG Kompleks</option>
+      <option value="benar_salah">Benar/Salah</option>
+      <option value="menjodohkan">Jodohkan</option>
+      <option value="uraian">Essay</option>
+    </select>
+
+    <div class="row">
+      <div class="field">
+        <label>Kategori / Nama Mapel</label>
+        <input type="text" id="soal-kategori" list="daftar-kategori-soal" placeholder="mis. Kuis, Ulangan Harian, UTS, atau nama baru seperti Tryout">
+        <datalist id="daftar-kategori-soal"></datalist>
+      </div>
+      <div class="field">
+        <label>Sub-Kategori (opsional)</label>
+        <input type="text" id="soal-subkategori" list="daftar-subkategori-soal" placeholder="mis. Bab 1">
+        <datalist id="daftar-subkategori-soal"></datalist>
+      </div>
+    </div>
+
+    <div class="row row-3">
+      <div class="field">
+        <label>Topik / Kompetensi</label>
+        <input type="text" id="soal-topik" placeholder="Contoh: Aljabar Linear">
+      </div>
+      <div class="field">
+        <label>Tingkat Kesulitan</label>
+        <select id="soal-tingkat-kesulitan">
+          <option value="mudah">Mudah</option>
+          <option value="sedang" selected>Sedang</option>
+          <option value="sulit">Sulit</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Bobot Soal</label>
+        <input type="number" id="soal-bobot" value="10" min="1">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Pertanyaan Utama <span class="subtitle" style="display:inline">— Isi Soal / Instruksi / Stimulus (boleh sisipkan rumus format $...$)</span></label>
+      <div id="soal-pertanyaan-toolbar"></div>
+      <div id="soal-pertanyaan" class="rich-editable" contenteditable="true" data-placeholder="Tulis pertanyaan di sini..."></div>
+    </div>
+
+    <div class="field">
+      <label>Media Pendukung Soal <span class="subtitle" style="display:inline">— Gambar · Audio · Video (opsional)</span></label>
+      <div class="media-upload-grid">
+        <div class="media-upload-box">
+          <div class="media-upload-label">🖼 Gambar Soal<br><span>JPG/PNG/WebP · Maks 10 MB</span></div>
+          <input type="file" id="soal-gambar-file" accept="image/*" class="hidden" onchange="Guru.uploadGambarSoal(event)">
+          <label for="soal-gambar-file" class="media-upload-dropzone">+ <span>Klik untuk upload</span></label>
+          <input type="hidden" id="soal-gambar-url">
+          <img id="soal-gambar-preview" class="hidden media-upload-preview-img">
+        </div>
+        <div class="media-upload-box">
+          <div class="media-upload-label">🎧 Audio Listening<br><span>MP3/WAV/OGG · Maks 10 MB</span></div>
+          <input type="file" id="soal-audio-file" accept="audio/*" class="hidden" onchange="Guru.uploadMediaSoal(event,'audio')">
+          <label for="soal-audio-file" class="media-upload-dropzone">+ <span>Klik untuk upload</span></label>
+          <input type="hidden" id="soal-audio-url">
+          <audio id="soal-audio-preview" controls class="hidden" style="width:100%;margin-top:.5rem"></audio>
+        </div>
+        <div class="media-upload-box">
+          <div class="media-upload-label">🎬 Video Soal<br><span>MP4/WebM · Maks 50 MB</span></div>
+          <input type="file" id="soal-video-file" accept="video/*" class="hidden" onchange="Guru.uploadMediaSoal(event,'video')">
+          <label for="soal-video-file" class="media-upload-dropzone">+ <span>Klik untuk upload</span></label>
+          <input type="hidden" id="soal-video-url">
+          <video id="soal-video-preview" controls class="hidden" style="width:100%;margin-top:.5rem"></video>
+        </div>
+      </div>
+    </div>
+
+    <div id="soal-form-opsi"></div>
+
+    <div class="field">
+      <label>Pembahasan <span class="subtitle" style="display:inline">— penjelasan jawaban yang benar (opsional; tampil ke siswa hanya bila diaktifkan di pengaturan ujian)</span></label>
+      <div id="soal-pembahasan-toolbar"></div>
+      <div id="soal-pembahasan" class="rich-editable" contenteditable="true" data-placeholder="Tulis alasan/penjelasan jawaban di sini..."></div>
+    </div>
+
+    <div class="modal-close-row">
+      <button class="secondary" onclick="UI.tutupModal('modal-soal')">Batal</button>
+      <button class="accent" id="btn-simpan-soal" onclick="Guru.simpanSoal()">Simpan Soal</button>
+
+    </div>
+  </div>
+</div>
+
+<!-- ======================= MODAL: KELOLA KATEGORI SOAL ======================= -->
+<div id="modal-kelola-kategori" class="modal-backdrop hidden">
+  <div class="modal">
+    <h3>Kelola Kategori / Nama Soal</h3>
+    <p class="subtitle">Kategori/nama soal dibuat otomatis begitu Anda mengetik nama baru (mis. "Tryout") di kolom
+      "Kategori / Nama Soal" saat menambah soal — tidak perlu didaftarkan dulu di sini. Daftar di bawah menampilkan
+      semua kategori yang sedang aktif beserta jumlah soalnya, dan tombol untuk menghapusnya.</p>
+    <div id="daftar-kelola-kategori" style="max-height:280px;overflow-y:auto;margin-bottom:1rem">Memuat...</div>
+    <div class="field">
+      <label>Buat kategori baru</label>
+      <div style="display:flex;gap:.4rem">
+        <input type="text" id="kelola-kategori-baru" placeholder="mis. Tryout">
+        <button type="button" class="accent" onclick="Guru.tambahKategoriBaruDanTambahSoal()">+ Buat &amp; tambah soal pertama</button>
+      </div>
+      <p class="subtitle" style="margin-top:.4rem">Langsung membuka form Tambah Soal dengan kategori ini terisi — kategori baru akan muncul di semua filter setelah soal pertamanya disimpan.</p>
+    </div>
+    <div class="modal-close-row">
+      <button class="secondary" onclick="UI.tutupModal('modal-kelola-kategori')">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= MODAL: PRATINJAU SOAL (tampilan sama persis dengan siswa) ======================= -->
+<div id="modal-pratinjau-soal" class="modal-backdrop hidden">
+  <div class="modal modal-wide">
+    <h3 id="pratinjau-soal-title">Pratinjau Soal</h3>
+    <p class="subtitle" id="pratinjau-soal-subtitle"></p>
+    <div id="pratinjau-soal-body" style="max-height:65vh;overflow-y:auto;padding-right:.3rem"></div>
+    <div class="modal-close-row">
+      <button class="secondary" onclick="UI.tutupModal('modal-pratinjau-soal')">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= MODAL: DETAIL JAWABAN SISWA (guru, dari Rekap Nilai) ======================= -->
+<div id="modal-detail-siswa" class="modal-backdrop hidden" onclick="if(event.target===this)Guru.tutupDetailSiswa()">
+  <div class="modal modal-wide dsw-modal">
+    <div class="dsw-head">
+      <div>
+        <p class="dsw-eyebrow">Detail Jawaban Siswa</p>
+        <h3 id="dsw-nama" style="margin:0">-</h3>
+        <p class="subtitle" id="dsw-meta" style="margin:.2rem 0 0"></p>
+      </div>
+      <div class="dsw-nilai-box"><span class="dsw-nilai" id="dsw-nilai">0</span><span id="dsw-status" class="badge"></span><span id="dsw-kategori"></span></div>
+    </div>
+    <div class="dsw-chips" id="dsw-chips"></div>
+    <p class="dsw-evaluasi" id="dsw-evaluasi"></p>
+    <div class="detail-tabs">
+      <button type="button" class="detail-tab active" id="dsw-tab-salah" onclick="Guru.gantiFilterDetailSiswa('salah')">Yang Salah</button>
+      <button type="button" class="detail-tab" id="dsw-tab-semua" onclick="Guru.gantiFilterDetailSiswa('semua')">Semua Soal</button>
+    </div>
+    <div id="dsw-list"></div>
+    <div class="modal-close-row dsw-aksi">
+      <button type="button" class="secondary" id="dsw-prev" onclick="Guru.pindahDetailSiswa(-1)"><i class="fa-solid fa-arrow-left"></i> Sebelumnya</button>
+      <span class="dsw-posisi" id="dsw-posisi"></span>
+      <button type="button" class="secondary" id="dsw-next" onclick="Guru.pindahDetailSiswa(1)">Berikutnya <i class="fa-solid fa-arrow-right"></i></button>
+      <button type="button" class="secondary" onclick="Guru.cetakDetailSiswa()" title="Cetak atau simpan sebagai PDF untuk diberikan ke siswa"><i class="fa-solid fa-print"></i> Cetak / PDF</button>
+      <button type="button" onclick="Guru.tutupDetailSiswa()">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= MODAL: UBAH SISWA ======================= -->
+<div id="modal-siswa" class="modal-backdrop hidden">
+  <div class="modal">
+    <h3>Ubah Data Siswa</h3>
+    <input type="hidden" id="siswa-edit-id">
+    <div class="row">
+      <div class="field">
+        <label>Username</label>
+        <div style="display:flex;gap:.4rem">
+          <input type="text" id="siswa-edit-username">
+          <button type="button" class="secondary icon" title="Buatkan username otomatis format TKA (TP + 13 angka)" onclick="Guru.generateUsernameEdit()">🪄</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <div style="display:flex;gap:.4rem">
+          <input type="text" id="siswa-edit-password">
+          <button type="button" class="secondary icon" title="Buatkan password otomatis format TKA (6 angka + *)" onclick="Guru.generatePasswordEdit()">🎲</button>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Nama Lengkap</label><input type="text" id="siswa-edit-nama"></div>
+      <div class="field"><label>Kelas</label><input type="text" id="siswa-edit-kelas" list="daftar-kelas-siswa"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>NISN</label><input type="text" id="siswa-edit-nisn" inputmode="numeric"></div>
+      <div class="field"><label>Jenis Kelamin</label><select id="siswa-edit-jk"><option value="">-</option><option value="L">Laki-Laki</option><option value="P">Perempuan</option></select></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Tempat Lahir</label><input type="text" id="siswa-edit-tempat"></div>
+      <div class="field"><label>Tanggal Lahir</label><input type="date" id="siswa-edit-tgl"></div>
+    </div>
+    <div class="modal-close-row">
+      <button class="secondary" onclick="UI.tutupModal('modal-siswa')">Batal</button>
+      <button class="accent" onclick="Guru.simpanSiswaEdit()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= MODAL: FORM UJIAN ======================= -->
+<div id="modal-ujian" class="modal-backdrop hidden">
+  <div class="modal">
+    <h3 id="modal-ujian-title">Buat Ujian</h3>
+    <input type="hidden" id="ujian-id">
+    <div class="row">
+      <div class="field"><label>Judul Ujian</label><input type="text" id="ujian-judul"></div>
+      <div class="field">
+        <label>Kategori Soal yang Digunakan</label>
+        <select id="ujian-kategori" onchange="Guru.muatPilihanSoalUntukUjian()">
+          <option value="">(Belum ada soal aktif)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Sub-Kategori / Kelompok (opsional)</label>
+        <input type="text" id="ujian-subkategori" list="daftar-subkategori-soal" placeholder="mis. Bab 1 — kosongkan untuk pakai semua sub-kategori" onchange="Guru.muatPilihanSoalUntukUjian()">
+      </div>
+    </div>
+    <p class="subtitle" style="margin-top:-.6rem">Daftar soal di bawah otomatis mengikuti kategori &amp; sub-kategori
+      yang dipilih di atas (semua soal yang cocok otomatis tercentang — tidak perlu dicentang satu per satu), supaya
+      soal Ulangan Harian Bab 1 tidak tercampur dengan Bab 2, UTS, UAS, dst. Kategori baru bisa dibuat lewat tombol
+      "⚙ Kelola Kategori" di tab Bank Soal.</p>
+    <div class="field">
+      <div class="row" style="justify-content:space-between;align-items:center;margin:0 0 .4rem">
+        <label style="margin:0">Pilih Soal</label>
+        <div style="display:flex;gap:.4rem">
+          <button type="button" class="secondary small" onclick="Guru.pilihSemuaSoalUjian(true)">Pilih Semua</button>
+          <button type="button" class="secondary small" onclick="Guru.pilihSemuaSoalUjian(false)">Kosongkan Semua</button>
+        </div>
+      </div>
+      <div id="pilihan-soal-ujian" style="max-height:220px;overflow-y:auto;border:1px solid var(--c-line);padding:.6rem;border-radius:3px"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Durasi (menit)</label><input type="number" id="ujian-durasi" value="60"></div>
+      <div class="field"><label>Toleransi keterlambatan (menit)</label><input type="number" id="ujian-toleransi" value="10"></div>
+      <div class="field"><label>Nilai minimal lulus (KKM)</label><input type="number" id="ujian-kkm" value="75"></div>
+      <div class="field"><label>Maksimal pelanggaran sebelum diblokir</label><input type="number" id="ujian-max-pelanggaran" value="3"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Jadwal token dibuka</label><input type="datetime-local" id="ujian-mulai"></div>
+      <div class="field"><label>Jadwal token ditutup</label><input type="datetime-local" id="ujian-selesai"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label><input type="checkbox" id="ujian-acak-soal" checked style="width:auto"> Acak urutan soal per siswa</label></div>
+      <div class="field"><label><input type="checkbox" id="ujian-acak-opsi" checked style="width:auto"> Acak urutan opsi jawaban per siswa</label></div>
+    </div>
+    <div class="field">
+      <label>Instruksi Remedial Tambahan (opsional, ditampilkan di bawah pesan, hanya untuk siswa yang belum lulus)</label>
+      <textarea id="ujian-instruksi-remedial" rows="2" placeholder="mis. Temui Bu Guru di ruang guru untuk jadwal remedial."></textarea>
+    </div>
+    <div class="field">
+      <label><input type="checkbox" id="ujian-tampil-detail" checked style="width:auto" onchange="Guru.sinkronDetailPembahasan()"> Izinkan siswa melihat detail jawaban setelah selesai (soal yang salah &amp; kunci jawaban)</label>
+    </div>
+    <div class="field">
+      <label><input type="checkbox" id="ujian-tampil-pembahasan" checked style="width:auto"> Tampilkan pembahasan soal pada detail jawaban <span class="subtitle" style="display:inline">— cocok untuk latihan; matikan untuk ulangan. Hanya berlaku bila detail jawaban diaktifkan.</span></label>
+    </div>
+    <div class="field">
+      <label for="ujian-bukti-orek">Bukti Orak-Orik Jawaban (foto kertas coretan siswa)</label>
+      <select id="ujian-bukti-orek">
+        <option value="">Nonaktif — cocok untuk latihan</option>
+        <option value="wajib">Aktif — siswa WAJIB mengunggah minimal 1 foto (disarankan untuk ujian)</option>
+        <option value="opsional">Aktif — siswa boleh melewati (tidak wajib)</option>
+      </select>
+      <p style="font-size:.8rem;color:var(--c-muted);margin:.35rem 0 0">Setelah siswa menekan Selesai, nilai dikirim ke server lebih dulu, lalu siswa mengunggah foto coretan (JPG/PNG/HEIC, boleh lebih dari 1). Nilai Lulus/Remedial baru tampil setelah foto terkirim. Foto muncul di sebelah nilai pada <strong>Rekap Nilai</strong>.</p>
+    </div>
+    <div class="field">
+      <label>Pesan untuk Siswa Berdasarkan Nilai (0 – 100)</label>
+      <p style="font-size:.8rem;color:var(--c-muted);margin:0 0 .5rem">Setiap nilai (0, 1, 2, … 100) bisa punya pesan sendiri. Tidak perlu mengisi satu per satu: <strong>unduh template Word</strong>, ubah pesannya, lalu <strong>import</strong> — semua nilai terisi sekaligus. Pesan yang dikosongkan otomatis memakai default.</p>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.6rem">
+        <button type="button" class="secondary small" onclick="Guru.unduhTemplatePesanNilaiDocx()"><i class="fa-solid fa-download"></i> Unduh Template Word</button>
+        <button type="button" class="secondary small" onclick="document.getElementById('input-import-pesan-docx').click()"><i class="fa-solid fa-file-word"></i> Import dari Word (.docx)</button>
+        <input type="file" id="input-import-pesan-docx" accept=".docx" class="hidden" onchange="Guru.importPesanNilaiDariDocx(event)">
+        <button type="button" class="secondary small" onclick="Guru.resetPesanNilai()"><i class="fa-solid fa-rotate-left"></i> Kembalikan ke Default</button>
+      </div>
+      <details class="pesan-cepat">
+        <summary>Isi cepat: satu pesan untuk beberapa nilai</summary>
+        <div class="pesan-cepat-isi">
+          <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.45rem">
+            <input type="number" id="pesan-cepat-dari" min="0" max="100" placeholder="dari" aria-label="Nilai awal"> <span>s/d</span>
+            <input type="number" id="pesan-cepat-sampai" min="0" max="100" placeholder="sampai" aria-label="Nilai akhir">
+          </div>
+          <textarea id="pesan-cepat-teks" rows="2" placeholder="Tulis pesan yang berlaku untuk semua nilai pada rentang itu"></textarea>
+          <button type="button" class="secondary small" style="margin-top:.45rem" onclick="Guru.isiCepatPesanNilai()">Terapkan</button>
+        </div>
+      </details>
+      <p id="pesan-nilai-info" style="font-size:.78rem;color:var(--c-muted);margin:.4rem 0 .3rem"></p>
+      <div id="pesan-nilai-editor" class="pesan-nilai-scroll"></div>
+    </div>
+    <div class="modal-close-row">
+      <button class="secondary" onclick="UI.tutupModal('modal-ujian')">Batal</button>
+      <button class="accent" id="btn-simpan-ujian" onclick="Guru.simpanUjian()">Simpan Ujian</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= KONFIRMASI DATA PESERTA (setelah login) ======================= -->
+<div id="siswa-portal" class="anbk-page hidden">
+  <header class="anbk-hero"><div class="anbk-hero-in"><div class="anbk-brand"><img class="anbk-logo-tw" src="icons/tutwuri.png" alt="Tut Wuri Handayani"><img class="anbk-logo-sch" src="icons/smpn2.png" alt="SMP Negeri 2 Seririt"><div class="anbk-brand-t"><b>PUSMENDIK</b><span>APLIKASI ANBK</span></div></div><div class="anbk-user" onclick="Anbk.menuUser(event)" role="button" tabindex="0"><span class="anbk-user-nama"></span><span class="anbk-user-ico"><i class="fa-solid fa-graduation-cap"></i></span><div class="anbk-usermenu hidden"><button type="button" data-aksi="kembali" onclick="Anbk.kembaliKeKonfirmasiData()"><i class="fa-solid fa-key"></i> Ganti Token</button><button type="button" onclick="Auth.logout()"><i class="fa-solid fa-right-from-bracket"></i> Keluar</button></div></div></div></header>
+  <main class="anbk-wrap anbk-konf">
+    <section class="anbk-card anbk-card-token">
+      <div class="anbk-token-row">Token : <b id="kd-token-tampil">------</b> <button type="button" class="anbk-btn anbk-btn-primary anbk-btn-xs" id="kd-refresh" onclick="Anbk.segarkanToken(true)">Refresh</button></div>
+      <div id="siswa-blokir-banner" class="anbk-blokir hidden" role="alert"><b>Akun Anda sedang diblokir</b><span>Anda belum bisa mengikuti tes selama blokir ini aktif.</span><span id="siswa-blokir-alasan"></span></div>
+    </section>
+    <section class="anbk-card anbk-card-form">
+      <h2>Konfirmasi data Peserta</h2>
+      <div class="anbk-f"><label>Username</label><div class="anbk-v" id="kd-username">-</div></div>
+      <div class="anbk-f"><label>Nama Peserta</label><div class="anbk-v" id="kd-nama1">-</div></div>
+      <div class="anbk-f"><label>Jenis Kelamin</label><div class="anbk-v anbk-v-lg" id="kd-jk">-</div></div>
+      <div class="anbk-f"><label>Mata Ujian</label><div class="anbk-v" id="kd-mata">-</div></div>
+      <div class="anbk-f"><label>Nama Peserta</label><input type="text" class="anbk-in" id="kd-nama2" placeholder="Ketikkan Nama Peserta" autocomplete="off" autocapitalize="words" spellcheck="false"></div>
+      <div class="anbk-f"><label>Tanggal Lahir</label><div class="anbk-tgl"><select id="kd-tgl" aria-label="Hari"></select><select id="kd-bln" aria-label="Bulan"></select><select id="kd-thn" aria-label="Tahun"></select></div></div>
+      <div class="anbk-f anbk-f-token"><label for="input-token-ujian">Token</label><input type="text" id="input-token-ujian" placeholder="Ketikkan token di sini" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="12" onkeydown="if(event.key==='Enter'){event.preventDefault();Siswa.cekToken()}"></div>
+      <div id="token-error" class="anbk-err" role="alert"></div>
+      <button type="button" id="btn-cari-ujian" class="anbk-btn anbk-btn-primary anbk-btn-block" onclick="Siswa.cekToken()">Submit</button>
+    </section>
+  </main>
+  <div id="konfirmasi-ujian" class="hidden"><span id="konf-judul-ujian"></span><span id="konf-info-ujian"></span></div>
+  <span id="siswa-nama-label" class="hidden"></span>
+  <footer class="anbk-foot">Aplikasi simulasi latihan TKA &middot; SMP Negeri 2 Seririt</footer>
+</div>
+
+<!-- ======================= KONFIRMASI TES (setelah token benar) ======================= -->
+<div id="tes-konfirmasi-screen" class="anbk-page hidden">
+  <header class="anbk-hero"><div class="anbk-hero-in"><div class="anbk-brand"><img class="anbk-logo-tw" src="icons/tutwuri.png" alt="Tut Wuri Handayani"><img class="anbk-logo-sch" src="icons/smpn2.png" alt="SMP Negeri 2 Seririt"><div class="anbk-brand-t"><b>PUSMENDIK</b><span>APLIKASI ANBK</span></div></div><div class="anbk-user" onclick="Anbk.menuUser(event)" role="button" tabindex="0"><span class="anbk-user-nama"></span><span class="anbk-user-ico"><i class="fa-solid fa-graduation-cap"></i></span><div class="anbk-usermenu hidden"><button type="button" data-aksi="kembali" onclick="Anbk.kembaliKeKonfirmasiData()"><i class="fa-solid fa-key"></i> Ganti Token</button><button type="button" onclick="Auth.logout()"><i class="fa-solid fa-right-from-bracket"></i> Keluar</button></div></div></div></header>
+  <main class="anbk-center">
+    <section class="anbk-card anbk-card-tes">
+      <h2>Konfirmasi Tes</h2>
+      <div class="anbk-f"><label>Nama Tes</label><div class="anbk-v anbk-v-lg" id="tk-nama">-</div></div>
+      <div class="anbk-f"><label>Status Tes</label><div class="anbk-v anbk-v-lg" id="tk-status">Tes Baru</div></div>
+      <div class="anbk-f"><label>Waktu Tes</label><div class="anbk-v anbk-v-lg" id="tk-waktu">-</div></div>
+      <div class="anbk-f"><label>Alokasi Waktu Tes</label><div class="anbk-v anbk-v-lg" id="tk-alokasi">-</div></div>
+      <button type="button" id="tk-mulai" class="anbk-btn anbk-btn-primary anbk-btn-block" onclick="Siswa.mulaiUjian()">Mulai</button>
+    </section>
+  </main>
+  <footer class="anbk-foot">Aplikasi simulasi latihan TKA &middot; SMP Negeri 2 Seririt</footer>
+</div>
+
+<!-- ======================= LAYAR UJIAN ======================= -->
+<div id="ujian-screen" class="anbk-page hidden">
+  <header class="anbk-hero"><div class="anbk-hero-in"><div class="anbk-brand"><img class="anbk-logo-tw" src="icons/tutwuri.png" alt="Tut Wuri Handayani"><img class="anbk-logo-sch" src="icons/smpn2.png" alt="SMP Negeri 2 Seririt"><div class="anbk-brand-t"><b>PUSMENDIK</b><span>APLIKASI ANBK</span></div></div><div class="anbk-user"><span class="anbk-user-nama"></span><span class="anbk-user-ico"><i class="fa-solid fa-graduation-cap"></i></span></div></div></header>
+  <main class="anbk-wrap anbk-wrap-ujian">
+    <section class="anbk-card anbk-card-ujian">
+      <div class="anbk-u-top">
+        <h2 class="anbk-u-no" id="u-nomor">Soal nomor 1</h2>
+        <div class="anbk-u-tools">
+          <span id="pelanggaran-indikator" class="pelanggaran-indikator"></span>
+          <button type="button" class="anbk-pill anbk-pill-blue" onclick="Anbk.bukaInfo()" title="Informasi Soal" aria-label="Informasi Soal"><i class="fa-solid fa-info anbk-ic"></i><span class="anbk-tx">INFORMASI SOAL</span></button>
+          <span class="anbk-pill anbk-pill-timer" title="Sisa waktu">Sisa Waktu : <b id="timer-display">--:--:--</b></span>
+          <button type="button" class="anbk-pill anbk-pill-blue" onclick="Anbk.bukaDaftar()" title="Daftar Soal" aria-label="Daftar Soal"><span class="anbk-tx">Daftar Soal</span> <i class="fa-solid fa-table-cells-large"></i></button>
+        </div>
+      </div>
+      <div class="anbk-u-sub">
+        <div class="anbk-font" role="group" aria-label="Ukuran font soal"><span>Ukuran font soal:</span>
+          <button type="button" id="skala-kecil" class="anbk-fs fs1" onclick="SkalaSoal.pilih(0)" aria-label="Kecil">A</button>
+          <button type="button" id="skala-sedang" class="anbk-fs fs2" onclick="SkalaSoal.pilih(1)" aria-label="Sedang">A</button>
+          <button type="button" id="skala-besar" class="anbk-fs fs3" onclick="SkalaSoal.pilih(2)" aria-label="Besar">A</button>
+          <span id="skala-nilai" class="hidden"></span>
+        </div>
+        <div class="anbk-u-mapel" id="ujian-judul-aktif">-</div>
+      </div>
+      <div class="anbk-hr"></div>
+      <div class="anbk-soalbox"><div class="anbk-soalbar"></div><div class="question-card" id="question-card">Memuat soal...</div></div>
+      <div class="anbk-hr anbk-hr-b"></div>
+      <div class="anbk-nav">
+        <button type="button" id="btn-soal-prev" class="anbk-btn anbk-btn-red" onclick="Siswa.soalSebelumnya()" title="Soal sebelumnya" aria-label="Soal sebelumnya"><i class="fa-solid fa-circle-chevron-left"></i> <span>Soal sebelumnya</span></button>
+        <label class="anbk-btn anbk-btn-yellow anbk-ragu" title="Ragu-ragu"><input type="checkbox" id="chk-ragu" onchange="Siswa.toggleRagu()"><span>Ragu-ragu</span></label>
+        <button type="button" id="btn-soal-next" class="anbk-btn anbk-btn-primary" onclick="Siswa.soalBerikutnya()" title="Soal berikutnya" aria-label="Soal berikutnya"><span>Soal berikutnya</span> <i class="fa-solid fa-circle-chevron-right"></i></button>
+      </div>
+    </section>
+  </main>
+  <span id="ujian-peserta" class="hidden"></span><i id="exam-progress-fill" class="hidden"></i>
+  <div class="exam-watermark" id="exam-watermark" aria-hidden="true"></div>
+
+  <!-- Daftar Soal -->
+  <div id="modal-daftar" class="anbk-modal-bg hidden" onclick="if(event.target===this)Anbk.tutupModal('modal-daftar')">
+    <div class="anbk-modal" role="dialog" aria-modal="true" aria-label="Daftar Soal">
+      <div class="anbk-modal-h"><h3>Daftar Soal</h3><button type="button" class="anbk-x" onclick="Anbk.tutupModal('modal-daftar')" aria-label="Tutup">&times;</button></div>
+      <div class="anbk-modal-b"><div class="soal-grid" id="soal-grid"></div>
+        <div class="anbk-legend"><span><i class="lg lg-now"></i>Sedang dibuka</span><span><i class="lg lg-ans"></i>Sudah dijawab</span><span><i class="lg lg-rag"></i>Ragu-ragu</span><span><i class="lg lg-no"></i>Belum dijawab</span></div>
+      </div>
+    </div>
+  </div>
+  <!-- Informasi Soal -->
+  <div id="modal-info" class="anbk-modal-bg hidden" onclick="if(event.target===this)Anbk.tutupModal('modal-info')">
+    <div class="anbk-modal" role="dialog" aria-modal="true" aria-label="Informasi Soal">
+      <div class="anbk-modal-h"><h3>Informasi Soal</h3><button type="button" class="anbk-x" onclick="Anbk.tutupModal('modal-info')" aria-label="Tutup">&times;</button></div>
+      <div class="anbk-modal-b anbk-info">
+        <table><tbody>
+          <tr><td>Nomor soal</td><td id="inf-nomor">-</td></tr>
+          <tr><td>Jenis soal</td><td id="inf-jenis">-</td></tr>
+          <tr><td>Status jawaban</td><td id="inf-status">-</td></tr>
+          <tr><td>Jumlah soal</td><td id="inf-total">-</td></tr>
+          <tr><td>Sudah dijawab</td><td><span id="lg-jawab">0</span> <small>(<span id="nav-progress-teks">0 / 0</span>)</small></td></tr>
+          <tr><td>Ragu-ragu</td><td id="lg-ragu">0</td></tr>
+          <tr><td>Belum dijawab</td><td id="lg-kosong">0</td></tr>
+        </tbody></table>
+        <button type="button" class="anbk-btn anbk-btn-primary anbk-btn-block" onclick="ExamEngine.simpanSekarang()"><i class="fa-regular fa-floppy-disk"></i> Simpan jawaban sekarang</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="anticheat-warning" class="anticheat-warning hidden">
+  <h2>Pelanggaran Terdeteksi</h2>
+  <p id="anticheat-pesan">Anda meninggalkan mode layar penuh / berpindah tab.</p>
+  <p id="anticheat-sisa" style="font-weight:700"></p>
+  <button class="accent" onclick="Siswa.kembaliKeUjian()">Kembali ke Ujian (Layar Penuh)</button>
+</div>
+
+<!-- ======================= KONFIRMASI SELESAI TES ======================= -->
+<div id="modal-kumpul" class="anbk-page anbk-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="kumpul-judul">
+  <header class="anbk-hero"><div class="anbk-hero-in"><div class="anbk-brand"><img class="anbk-logo-tw" src="icons/tutwuri.png" alt="Tut Wuri Handayani"><img class="anbk-logo-sch" src="icons/smpn2.png" alt="SMP Negeri 2 Seririt"><div class="anbk-brand-t"><b>PUSMENDIK</b><span>APLIKASI ANBK</span></div></div><div class="anbk-user"><span class="anbk-user-nama"></span><span class="anbk-user-ico"><i class="fa-solid fa-graduation-cap"></i></span></div></div></header>
+  <main class="anbk-center">
+    <section class="anbk-card anbk-card-selesai">
+      <h2 id="kumpul-judul">Konfirmasi Tes</h2>
+      <p class="anbk-p">Terimakasih telah berpartisipasi dalam tes ini. Silahkan tekan tombol <mark class="anbk-mark anbk-mark-red">SELESAI TES</mark> untuk mengakhiri tes. Atau tekan tombol <mark class="anbk-mark anbk-mark-green">KEMBALI</mark> untuk kembali ke halaman tes.</p>
+      <span id="kumpul-ikon" class="hidden"></span><span id="kumpul-sub" class="hidden"></span>
+      <div class="anbk-ringkas"><span>Terjawab <b id="kumpul-n-jawab">0</b></span><span>Belum dijawab <b id="kumpul-n-kosong">0</b></span><span>Ragu-ragu <b id="kumpul-n-ragu">0</b></span><span><i class="fa-regular fa-clock"></i> Sisa waktu <b id="kumpul-waktu">00:00</b></span></div>
+      <div id="kumpul-peringatan" class="anbk-peringatan hidden"><p id="kumpul-peringatan-teks"></p><div class="kumpul-chips" id="kumpul-chips"></div></div>
+      <label id="kumpul-cek-wrap" class="anbk-cek hidden"><input type="checkbox" id="kumpul-cek" onchange="KumpulUI.cekBerubah()"><span>Saya mengerti soal yang belum dijawab akan dinilai kosong dan jawaban tidak dapat diubah lagi.</span></label>
+      <div class="anbk-aksi">
+        <button type="button" class="anbk-btn anbk-btn-red" id="kumpul-btn-ya" onclick="KumpulUI.kirim()">SELESAI TES</button>
+        <button type="button" class="anbk-btn anbk-btn-green" onclick="KumpulUI.tutup()">KEMBALI</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ======================= LAYAR PENGIRIMAN JAWABAN ======================= -->
+<div id="overlay-kirim" class="anbk-page kumpul-backdrop kumpul-kirim hidden" role="alertdialog" aria-live="assertive">
+  <div class="kumpul-card">
+    <div class="kumpul-spinner" id="kirim-spinner"></div>
+    <h3 id="kirim-judul">Mengirim jawaban...</h3>
+    <p class="kumpul-sub" id="kirim-sub">Mohon tunggu dan jangan menutup halaman ini.</p>
+    <div class="kirim-bar"><i></i></div>
+  </div>
+</div>
+
+<!-- ======================= UNGGAH BUKTI ORAK-ORIK (setelah nilai terkirim, sebelum nilai tampil) ======================= -->
+<div id="bukti-screen" class="anbk-page anbk-legacy hidden">
+  <header class="anbk-hero"><div class="anbk-hero-in"><div class="anbk-brand"><img class="anbk-logo-tw" src="icons/tutwuri.png" alt="Tut Wuri Handayani"><img class="anbk-logo-sch" src="icons/smpn2.png" alt="SMP Negeri 2 Seririt"><div class="anbk-brand-t"><b>PUSMENDIK</b><span>APLIKASI ANBK</span></div></div><div class="anbk-user"><span class="anbk-user-nama"></span><span class="anbk-user-ico"><i class="fa-solid fa-graduation-cap"></i></span></div></div></header>
+  <div class="bukti-card">
+    <div class="bukti-terkirim"><i class="fa-solid fa-circle-check"></i><div><b>Jawaban Anda sudah terkirim</b><span id="bukti-terkirim-sub">Nilai Anda sudah tersimpan aman di server.</span></div></div>
+    <p class="hasil-eyebrow">Langkah Terakhir</p>
+    <h2 class="hasil-judul" id="bukti-judul-ujian">-</h2>
+    <h3 class="bukti-judul"><i class="fa-solid fa-camera"></i> Unggah Bukti Orak-Orik Jawaban</h3>
+    <p class="bukti-sub" id="bukti-sub"></p>
+    <div class="bukti-kunci" id="bukti-kunci" role="status"><i class="fa-solid fa-lock"></i><span id="bukti-kunci-teks"></span></div>
+    <div class="bukti-aksi" id="bukti-aksi">
+      <button type="button" class="accent" onclick="BuktiUI.pilihKamera()"><i class="fa-solid fa-camera"></i> Ambil Foto</button>
+      <button type="button" class="secondary" onclick="document.getElementById('bukti-input-galeri').click()"><i class="fa-solid fa-images"></i> Pilih dari Galeri</button>
+    </div>
+    <input type="file" id="bukti-input-kamera" class="hidden" accept="image/*" capture="environment" onchange="BuktiUI.dariInput(this)">
+    <input type="file" id="bukti-input-galeri" class="hidden" accept="image/*,.heic,.heif,.hif" multiple onchange="BuktiUI.dariInput(this)">
+    <p class="bukti-catatan">Mendukung JPG, PNG, WEBP, dan HEIC (iPhone — otomatis dikonversi). Boleh lebih dari satu foto, maksimal 10.</p>
+    <div class="bukti-grid" id="bukti-grid"></div>
+    <div class="bukti-progres hidden" id="bukti-progres"><div class="bukti-progres-bar"><i id="bukti-progres-isi"></i></div><span id="bukti-progres-teks"></span></div>
+    <p class="bukti-hint" id="bukti-hint"></p>
+    <button type="button" class="accent bukti-btn-lanjut" id="bukti-btn-lanjut" onclick="BuktiUI.lanjut()" disabled><i class="fa-solid fa-flag-checkered"></i> Selesai &amp; Lihat Nilai</button>
+    <button type="button" class="bukti-btn-lewati hidden" id="bukti-btn-lewati" onclick="BuktiUI.lewati()">Lewati, saya tidak punya coretan</button>
+  </div>
+</div>
+
+<!-- ======================= HASIL UJIAN ======================= -->
+<div id="hasil-screen" class="anbk-page anbk-legacy hidden">
+  <header class="anbk-hero"><div class="anbk-hero-in"><div class="anbk-brand"><img class="anbk-logo-tw" src="icons/tutwuri.png" alt="Tut Wuri Handayani"><img class="anbk-logo-sch" src="icons/smpn2.png" alt="SMP Negeri 2 Seririt"><div class="anbk-brand-t"><b>PUSMENDIK</b><span>APLIKASI ANBK</span></div></div><div class="anbk-user"><span class="anbk-user-nama"></span><span class="anbk-user-ico"><i class="fa-solid fa-graduation-cap"></i></span></div></div></header>
+  <div class="hasil-card" id="hasil-card">
+    <div class="hasil-icon-wrap" id="hasil-icon-wrap">
+      <i class="fa-solid fa-check" id="hasil-icon"></i>
+    </div>
+    <p class="hasil-eyebrow">Hasil Ujian</p>
+    <h2 class="hasil-judul" id="hasil-judul-ujian">-</h2>
+    <div class="status-lulus" id="hasil-status">-</div>
+    <div class="skor-ring">
+      <svg class="skor-ring-svg" viewBox="0 0 120 120">
+        <circle class="skor-ring-bg" cx="60" cy="60" r="52"></circle>
+        <circle class="skor-ring-progress" id="hasil-skor-progress" cx="60" cy="60" r="52"></circle>
+      </svg>
+      <div class="skor-ring-nilai">
+        <span class="nilai-besar" id="hasil-nilai">0</span>
+        <span class="nilai-skala">/ 100</span>
+      </div>
+    </div>
+    <p id="hasil-instruksi" class="hasil-instruksi"></p>
+    <button class="secondary hasil-btn-beranda" id="btn-detail-jawaban" style="display:none;margin-bottom:.6rem" onclick="ExamEngine.bukaDetailJawaban()"><i class="fa-solid fa-magnifying-glass"></i> Lihat Detail Jawaban</button>
+    <button class="accent hasil-btn-beranda" onclick="UI.kembaliKeBerandaSiswa()"><i class="fa-solid fa-house"></i> Kembali ke Beranda</button>
+  </div>
+</div>
+
+<!-- ======================= DETAIL JAWABAN (siswa) ======================= -->
+<div id="detail-screen" class="anbk-page anbk-legacy hidden">
+  <header class="anbk-hero"><div class="anbk-hero-in"><div class="anbk-brand"><img class="anbk-logo-tw" src="icons/tutwuri.png" alt="Tut Wuri Handayani"><img class="anbk-logo-sch" src="icons/smpn2.png" alt="SMP Negeri 2 Seririt"><div class="anbk-brand-t"><b>PUSMENDIK</b><span>APLIKASI ANBK</span></div></div><div class="anbk-user"><span class="anbk-user-nama"></span><span class="anbk-user-ico"><i class="fa-solid fa-graduation-cap"></i></span></div></div></header>
+  <div class="detail-wrap">
+    <div class="detail-top">
+      <button type="button" class="secondary" onclick="ExamEngine.tutupDetailJawaban()"><i class="fa-solid fa-arrow-left"></i> Kembali ke Hasil</button>
+    </div>
+    <p class="hasil-eyebrow">Detail Jawaban</p>
+    <h2 class="hasil-judul" id="detail-judul-ujian">-</h2>
+    <p class="detail-ringkas"><span>Nilai: <strong id="detail-nilai">0</strong></span> · <span id="detail-ringkas"></span></p>
+    <p class="detail-info">Periksa jawaban Anda. Jika menurut Anda kunci jawaban keliru, catat nomor soalnya dan sampaikan ke guru.</p>
+    <div class="detail-tabs">
+      <button type="button" class="detail-tab active" id="detail-tab-salah" onclick="ExamEngine.gantiFilterDetail('salah')">Yang Salah</button>
+      <button type="button" class="detail-tab" id="detail-tab-semua" onclick="ExamEngine.gantiFilterDetail('semua')">Semua Soal</button>
+    </div>
+    <div id="detail-list"></div>
+  </div>
+</div>
+
+<!-- ======================= LIGHTBOX PERBESAR GAMBAR SOAL (manual oleh siswa) ======================= -->
+<div id="gambar-lightbox" class="gambar-lightbox hidden" onclick="ImageLightbox.klikBackdrop(event)">
+  <div class="gambar-lightbox-toolbar">
+    <button type="button" class="gambar-lightbox-btn" title="Perkecil" onclick="ImageLightbox.zoom(-1)">−</button>
+    <span class="gambar-lightbox-persen" id="gambar-lightbox-persen">100%</span>
+    <button type="button" class="gambar-lightbox-btn" title="Perbesar" onclick="ImageLightbox.zoom(1)">+</button>
+    <button type="button" class="gambar-lightbox-btn" title="Ukuran awal" onclick="ImageLightbox.reset()">Reset</button>
+    <button type="button" class="gambar-lightbox-btn gambar-lightbox-tutup" title="Tutup" onclick="ImageLightbox.tutup()">✕</button>
+  </div>
+  <div class="gambar-lightbox-panel" id="gambar-lightbox-panel">
+    <img id="gambar-lightbox-img" alt="Gambar diperbesar" draggable="false">
+  </div>
+  <p class="gambar-lightbox-hint">Gulir / cubit dua jari untuk memperbesar &middot; klik dua kali untuk perbesar cepat &middot; geser gambar saat diperbesar</p>
+</div>
+
+<script src="config.js"></script>
+<script src="app.js?v=44"></script>
+<script src="anbk.js?v=44"></script>
+</body>
+</html>
