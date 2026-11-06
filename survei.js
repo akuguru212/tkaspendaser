@@ -75,22 +75,25 @@ const Survei = (function () {
 .sv-s4 { background: #e3f6ec; color: #1b7f4b; } .sv-s3 { background: #eaf6e3; color: #4b7f1b; } .sv-s2 { background: #fff1da; color: #b26a00; } .sv-s1 { background: #fde8e8; color: #c62828; } .sv-s0 { background: #eceff1; color: #6c757d; }
 .sv-pb-saran { background: #eaf2ff; border-radius: 8px; padding: 7px 11px; font-size: .8rem; margin: 8px 0 2px; }
 
-/* tampilan matriks (beberapa pernyataan per halaman, gaya ANBK) */
+/* tampilan matriks (beberapa pernyataan per halaman, meniru tampilan TKA/ANBK asli) */
 .sv-kode { color: #8a94a0; font-size: .62em; font-style: italic; white-space: nowrap; }
-.sv-ket-m { font-size: 13px; color: #343a40; margin-bottom: 10px; }
-.sv-mx-wrap { overflow-x: auto; border: 1px solid #dee2e6; border-radius: 4px; background: #fff; }
+.sv-ket-m { font-size: 14px; line-height: 1.6; color: #1f2933; margin: 0 0 14px; white-space: pre-line; }
+.sv-mx-wrap { overflow-x: auto; border: 1px solid #2f6db5; background: #fff; }
 .sv-mx { width: 100%; border-collapse: collapse; font-family: 'Poppins', sans-serif; font-size: 13.5px; }
-.sv-mx thead th { font-weight: 700; font-size: 12.5px; text-align: center; padding: 10px 8px; border-bottom: 1px solid #dee2e6; width: 110px; vertical-align: bottom; }
-.sv-mx thead th.sv-mx-t { text-align: left; width: auto; padding-left: 12px; }
-.sv-mx tbody tr { border-top: 1px solid #e9ecef; } .sv-mx tbody tr:nth-child(odd) { background: #f4f6f8; } .sv-mx tbody tr.done { background: #eaf2ff; }
-.sv-mx td { padding: 11px 8px; text-align: center; } .sv-mx td.sv-mx-t { text-align: left; padding-left: 12px; line-height: 1.5; color: #212529; }
-.sv-mx-c label { display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; min-width: 36px; min-height: 36px; }
+.sv-mx thead th { background: #3a86d8; color: #0b1d3a; font-weight: 700; font-size: 12px; line-height: 1.3; text-align: center; padding: 12px 8px; border: 1px solid rgba(255,255,255,.55); width: 112px; vertical-align: middle; }
+.sv-mx thead th.sv-mx-t { width: auto; }
+.sv-mx tbody tr { background: #fff; } .sv-mx tbody tr.done { background: #f3f8ff; }
+.sv-mx td { padding: 10px 8px; text-align: center; border: 1px solid #6c9bd2; } .sv-mx td.sv-mx-t { text-align: left; padding: 10px 12px; line-height: 1.5; color: #1f2933; }
+.sv-mx-c label { display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; min-width: 40px; min-height: 36px; }
 .sv-mx-c input { position: absolute; opacity: 0; pointer-events: none; }
-.sv-mx-c input:checked + .sv-r { border-color: #0d6efd; } .sv-mx-c input:checked + .sv-r::after { content: ''; width: 9px; height: 9px; border-radius: 50%; background: #0d6efd; }
+.sv-mx .sv-r { width: 18px; height: 18px; border: 2px solid #5b9bd9; background: #fff; }
+.sv-mx-c input:checked + .sv-r { border-color: #1a5fb4; background: #1a5fb4; }
+.sv-mx-c input:checked + .sv-r::after { content: ''; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; border-radius: 0; background: transparent; transform: rotate(45deg) translate(-1px, -1px); }
 .sv-mx-c input:focus-visible + .sv-r { outline: 3px solid rgba(13,110,253,.35); outline-offset: 2px; }
 .sv-mx-l { display: none; }
 @media (max-width: 700px) {
   .sv-mx thead { display: none; } .sv-mx, .sv-mx tbody, .sv-mx tr, .sv-mx td { display: block; width: 100%; }
+  .sv-mx td, .sv-mx td.sv-mx-t, .sv-mx td.sv-mx-c { border: 0; box-sizing: border-box; } .sv-mx tbody tr { border-top: 1px solid #6c9bd2; }
   .sv-mx td.sv-mx-t { padding: 12px 12px 4px; font-weight: 500; }
   .sv-mx td.sv-mx-c { text-align: left; padding: 0 12px; } .sv-mx-c label { width: 100%; justify-content: flex-start; min-height: 38px; }
   .sv-mx-l { display: inline; font-size: 13.5px; } .sv-mx tr { padding-bottom: 8px; }
@@ -122,15 +125,17 @@ const Survei = (function () {
   // ---------------- skala jawaban (4 pilihan, tanpa pilihan tengah) ----------------
   const SKALA = {
     setuju: ['Sangat tidak setuju', 'Tidak setuju', 'Setuju', 'Sangat setuju'],
-    frek: ['Tidak pernah', 'Kadang-kadang', 'Sering', 'Selalu'],
+    frek: ['Tidak pernah', 'Jarang', 'Sering', 'Selalu'],
     peng: ['Tidak pernah', 'Sekali', 'Beberapa kali', 'Sering'],
-    kurang: ['Tidak setuju', 'Kurang setuju', 'Setuju', 'Sangat setuju']
+    kurang: ['Tidak setuju', 'Kurang setuju', 'Setuju', 'Sangat setuju'],
+    diriku: ['Sangat tidak sesuai dengan diriku', 'Tidak sesuai dengan diriku', 'Sesuai dengan diriku', 'Sangat sesuai dengan diriku']
   };
   const PETUNJUK_DEF = {
     setuju: 'Pilihlah satu jawaban yang paling sesuai dengan pendapat Anda.',
     kurang: 'Pilihlah satu jawaban yang paling sesuai dengan pendapat Anda.',
     frek: 'Pilihlah satu jawaban yang paling sesuai dengan kebiasaan atau keadaan Anda.',
-    peng: 'Pilihlah satu jawaban yang paling sesuai dengan pengalaman Anda.'
+    peng: 'Pilihlah satu jawaban yang paling sesuai dengan pengalaman Anda.',
+    diriku: 'Apakah pernyataan berikut sesuai dengan dirimu?'
   };
 
   // ---------------- butir: [id, dimensi, skala, arah(+1 positif / -1 negatif), teks] ----------------
@@ -433,8 +438,8 @@ const Survei = (function () {
       const b = J.butir[i]; const id = b[0]; const terpilih = S.jawaban[id];
       return `<tr class="${terpilih ? 'done' : ''}" id="sv-row-${id}"><td class="sv-mx-t">${esc(b[4])}${b[6] ? ` <small class="sv-kode">(${esc(b[6])})</small>` : ''}</td>${sk.map((t, k) => `<td class="sv-mx-c"><label><input type="radio" name="m-${id}" value="${k + 1}" ${terpilih === k + 1 ? 'checked' : ''} onchange="Survei.pilihId('${id}',${k + 1})"><span class="sv-r"></span><span class="sv-mx-l">${esc(t)}</span></label></td>`).join('')}</tr>`;
     }).join('');
-    return `<div class="sv-pad"><p class="sv-ket sv-ket-m"><b>${esc(petunjuk)}</b></p>
-      <div class="sv-mx-wrap"><table class="sv-mx"><thead><tr><th class="sv-mx-t">Pernyataan</th>${sk.map(t => `<th>${esc(t)}</th>`).join('')}</tr></thead><tbody>${baris}</tbody></table></div></div>`;
+    return `<div class="sv-pad"><p class="sv-ket sv-ket-m">${esc(petunjuk)}</p>
+      <div class="sv-mx-wrap"><table class="sv-mx"><thead><tr><th class="sv-mx-t" aria-label="Pernyataan"></th>${sk.map(t => `<th>${esc(t)}</th>`).join('')}</tr></thead><tbody>${baris}</tbody></table></div></div>`;
   }
 
   function render() {
@@ -456,7 +461,7 @@ const Survei = (function () {
       nav.innerHTML = `<span></span><button type="button" class="anbk-btn anbk-btn-primary" onclick="Survei.mulai()"><span>MULAI SURVEI</span> <i class="fa-solid fa-circle-chevron-right"></i></button><span></span>`;
     } else if (S.tahap === 'butir') {
       const p = hl[S.idx]; const awal = p.idx[0] + 1;
-      $('sv-nomor').textContent = adaMatriks() ? 'Halaman ' + (S.idx + 1) + ' dari ' + hl.length : 'Butir nomor ' + awal;
+      $('sv-nomor').textContent = adaMatriks() ? 'Soal nomor ' + (S.idx + 1) : 'Butir nomor ' + awal;
       box.innerHTML = `<div class="sv-layout"><aside class="sv-panel"><div class="sv-panel-t">Halaman Kuesioner</div><div class="sv-panel-g">${hl.map((h, i) => {
         const lengkap = halLengkap(h); const cls = lengkap ? 'ok' : (S.dikunjungi[i] || i < S.idx ? 'kosong' : 'baru');
         return `<button type="button" class="sv-pn ${cls}${i === S.idx ? ' now' : ''}" onclick="Survei.lompat(${i})" title="Halaman ${i + 1}">${i + 1}</button>`;
@@ -825,14 +830,14 @@ const Survei = (function () {
     const dim = [], kodeDim = {}; const butir = []; const noKeId = {}; const rawPasang = []; const petunjuk = {};
     let urut = 0;
     trs.slice(1).forEach((tr, bi) => {
-      const sel = Array.from(tr.querySelectorAll('th,td')).map(c => c.textContent.trim());
+      const sel = Array.from(tr.querySelectorAll('th,td')).map(c => { const ps = Array.from(c.querySelectorAll('p')); return (ps.length > 1 ? ps.map(x => x.textContent.trim()).filter(Boolean).join('\n') : c.textContent).trim(); });
       const baris = bi + 2; const teksP = (sel[cP] || '').trim(); const nm = (sel[cDim] || '').trim();
       if (!teksP && !nm && !(sel[cSk] || '').trim()) return; // baris kosong
       if (!teksP) { galat.push('Baris ' + baris + ': kolom Pernyataan kosong.'); return; }
       if (!nm) { galat.push('Baris ' + baris + ': kolom Dimensi kosong.'); return; }
       const sk = normT(sel[cSk]); let skala = '';
-      if (/^kur/.test(sk)) skala = 'kurang'; else if (/^set/.test(sk)) skala = 'setuju'; else if (/^(fre|ser)/.test(sk)) skala = 'frek'; else if (/^pen/.test(sk)) skala = 'peng';
-      if (!skala) { galat.push('Baris ' + baris + ': Skala "' + (sel[cSk] || '') + '" tidak dikenali (isi: Setuju, Kurang, Frekuensi, atau Pengalaman).'); return; }
+      if (/^kur/.test(sk)) skala = 'kurang'; else if (/^set/.test(sk)) skala = 'setuju'; else if (/^(fre|ser)/.test(sk)) skala = 'frek'; else if (/^pen/.test(sk)) skala = 'peng'; else if (/^(ses|dir)/.test(sk)) skala = 'diriku';
+      if (!skala) { galat.push('Baris ' + baris + ': Skala "' + (sel[cSk] || '') + '" tidak dikenali (isi: Setuju, Kurang, Frekuensi, Pengalaman, atau Sesuai).'); return; }
       const ar = normT(sel[cAr]); let arah = 0;
       if (/^(\+|pos)/.test(ar)) arah = 1; else if (/^(-|−|–|neg)/.test(ar)) arah = -1;
       if (!arah) { galat.push('Baris ' + baris + ': Arah "' + (sel[cAr] || '') + '" tidak dikenali (isi: Positif atau Negatif).'); return; }
@@ -848,7 +853,7 @@ const Survei = (function () {
       }
       const hal = cHal >= 0 ? (parseInt(String(sel[cHal] || '').replace(/\D/g, ''), 10) || 0) : 0;
       const kodeTeks = cKode >= 0 ? String(sel[cKode] || '').trim().slice(0, 40) : '';
-      if (hal > 0 && cPet >= 0 && (sel[cPet] || '').trim() && !petunjuk[hal]) petunjuk[hal] = String(sel[cPet]).trim().slice(0, 300);
+      if (hal > 0 && cPet >= 0 && (sel[cPet] || '').trim() && !petunjuk[hal]) petunjuk[hal] = String(sel[cPet]).trim().slice(0, 800);
       butir.push([id, kode, skala, arah, teksP, hal, kodeTeks]);
       noKeId[String(cNo >= 0 && sel[cNo] ? sel[cNo] : urut).replace(/\D/g, '') || urut] = id;
       if (cPs >= 0 && (sel[cPs] || '').trim()) rawPasang.push([id, String(sel[cPs]).replace(/\D/g, ''), baris]);
@@ -889,9 +894,54 @@ const Survei = (function () {
   function setDraft(json) { F.json = json || ''; statusForm(); }
   function draftJson() { return F.json; }
   function pakaiBawaan() { F.json = ''; statusForm(); toast('Kembali memakai butir bawaan.'); }
+  // Template Word dibuat LANGSUNG di browser (sama seperti template soal), jadi tidak bergantung pada
+  // file statis template-survei-*.docx yang bisa saja tidak ikut ter-upload ke hosting.
+  // Isi tabel = butir bawaan, sehingga persis sesuai format yang dibaca bacaDocx().
   function unduhTemplate(jenis) {
-    const a = document.createElement('a'); a.href = 'template-survei-' + jenis + '.docx'; a.download = 'Template Survei ' + (jenis === 'karakter' ? 'Karakter' : 'Sulingjar') + '.docx';
-    document.body.appendChild(a); a.click(); a.remove();
+    const J = JENIS[jenis];
+    if (!J) { toast('Jenis survei tidak dikenali.', 'error'); return; }
+    if (typeof unduhDocx_ !== 'function') { toast('Pembuat file Word belum siap. Muat ulang halaman lalu coba lagi.', 'error'); return; }
+    const NAMA_SKALA = { setuju: 'Setuju', kurang: 'Kurang', frek: 'Frekuensi', peng: 'Pengalaman', diriku: 'Sesuai' };
+    const namaDim = {}; J.dim.forEach(d => { namaDim[d[0]] = d[1]; });
+    const noById = {}; J.butir.forEach((b, i) => { noById[b[0]] = i + 1; });
+    const pasangDari = {};
+    (J.pasangan || []).forEach(pr => { pasangDari[pr[0]] = noById[pr[1]]; pasangDari[pr[1]] = noById[pr[0]]; });
+    const halPertama = {};
+    const rows = J.butir.map((b, i) => {
+      const hal = Number(b[5]) || 0;
+      let pet = '';
+      if (hal > 0 && !halPertama[hal]) { halPertama[hal] = 1; pet = (J.petunjuk && J.petunjuk[hal]) || PETUNJUK_DEF[b[2]] || ''; }
+      return [String(i + 1), hal ? String(hal) : '', namaDim[b[1]] || b[1], NAMA_SKALA[b[2]] || b[2], Number(b[3]) < 0 ? 'Negatif' : 'Positif',
+        b[4], b[6] || '', pasangDari[b[0]] ? String(pasangDari[b[0]]) : '', pet];
+    });
+    const judul = jenis === 'karakter' ? 'TEMPLATE IMPOR SURVEI KARAKTER' : 'TEMPLATE IMPOR SURVEI LINGKUNGAN BELAJAR (SULINGJAR)';
+    const items = [
+      { text: judul, heading: true },
+      { text: 'CBT SPENDASER — SMP Negeri 2 Seririt', bold: true },
+      { text: 'Cara memakai', bold: true },
+      { text: 'Ubah isi tabel di bawah (pernyataan, dimensi, skala, arah) sesuai kebutuhan latihan. Tambah atau hapus baris sesuai jumlah butir (minimal 5, maksimal 99).' },
+      { text: 'Jangan mengubah baris judul kolom: No, Halaman, Dimensi, Skala, Arah, Pernyataan, Kode, Pasangan, Petunjuk.' },
+      { text: 'Di portal guru: Kelola Ujian → Survei Setelah Ujian → "Impor butir dari Word", lalu Simpan Ujian. Setiap latihan boleh memakai file yang berbeda.' },
+      { text: 'Tabel ini boleh diletakkan di bawah tabel soal pada file Word yang sama; impor soal akan melewati tabel survei ini.' },
+      { text: '' },
+      { text: 'Isi kolom', bold: true },
+      { text: 'Dimensi: nama kelompok butir. Indeks 0–100 dihitung per dimensi. Nama yang sama dengan dimensi bawaan memunculkan saran tindak lanjut otomatis.' },
+      { text: 'Skala (pilih salah satu kata): Setuju, Kurang, Frekuensi, Pengalaman, atau Sesuai. Pilihan jawabannya:' },
+      { text: 'Setuju: ' + SKALA.setuju.join(' · ') },
+      { text: 'Kurang: ' + SKALA.kurang.join(' · ') },
+      { text: 'Frekuensi: ' + SKALA.frek.join(' · ') },
+      { text: 'Pengalaman: ' + SKALA.peng.join(' · ') },
+      { text: 'Sesuai: ' + SKALA.diriku.join(' · ') },
+      { text: 'Arah: Positif jika jawaban tertinggi berarti kondisi baik; Negatif jika jawaban tertinggi berarti kondisi buruk (skor dibalik saat dihitung).' },
+      { text: 'Pasangan (boleh kosong): isi dengan No butir lain yang maknanya berlawanan (satu Positif, satu Negatif). Dipakai untuk mendeteksi jawaban yang saling bertentangan atau asal-asalan.' },
+      { text: 'Halaman (boleh kosong): angka yang sama pada butir yang berurutan = butir-butir itu tampil bersama dalam satu halaman berbentuk tabel (matriks) seperti ANBK. Semua butir pada satu halaman harus memakai Skala yang sama. Kosongkan jika ingin satu butir per halaman.' },
+      { text: 'Kode (boleh kosong): kode kecil yang ditampilkan di ujung pernyataan. Petunjuk (boleh kosong): teks di atas tabel, boleh berupa cerita/skenario singkat diikuti pertanyaannya, mis. "Kamu melihat ... Apakah pernyataan berikut sesuai dengan dirimu?"; isi pada baris pertama halaman tersebut.' },
+      { text: 'Survei tidak memiliki jawaban benar atau salah. Hasil berupa indeks 0–100 per dimensi.' },
+      { text: '' },
+      { table: { headers: ['No', 'Halaman', 'Dimensi', 'Skala', 'Arah', 'Pernyataan', 'Kode', 'Pasangan', 'Petunjuk'], rows, widths: [600, 900, 2400, 1200, 1100, 4800, 800, 1000, 2200] } }
+    ];
+    unduhDocx_('Template_Survei_' + (jenis === 'karakter' ? 'Karakter' : 'Sulingjar') + '.docx', items);
+    toast('Template survei (.docx) berhasil diunduh.', 'success');
   }
   async function imporDariForm(ev) {
     const file = ev.target.files[0]; if (!file) return;
