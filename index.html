@@ -29,12 +29,11 @@
      dimuat TANPA memblokir tampilan halaman login (dulu halaman kosong sampai keduanya selesai diunduh). -->
 <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 <link rel="dns-prefetch" href="https://script.google.com">
-<link rel="stylesheet" href="style.css?v=57">
+<link rel="stylesheet" href="style.css?v=61">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
-<link rel="stylesheet" href="anbk.css?v=57">
-<link rel="stylesheet" href="survei.css?v=3">
+<link rel="stylesheet" href="anbk.css?v=61">
 <!-- Font Awesome: ikon sidebar & tombol (gaya dashboard modern) -->
 <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
 <!-- KaTeX: render persamaan matematika (LaTeX) di dalam soal -->
@@ -414,7 +413,7 @@
     <!-- ---------- TAB: HASIL SURVEI (Survei Karakter & Sulingjar) ---------- -->
     <section id="tab-survei" class="hidden">
       <h2>Hasil Survei Karakter &amp; Sulingjar</h2>
-      <p class="subtitle">Latihan seperti ANBK: tidak ada jawaban benar/salah. Hasil berupa <strong>indeks 0–100</strong> per dimensi. Atur survei di <strong>Kelola Ujian &gt; Survei Setelah Ujian</strong>.</p>
+      <p class="subtitle">Nilai survei <strong>0–100</strong> per siswa, per dimensi, dan rata-rata kelas. Jawaban terbaik = skor 4 (Sangat setuju/Selalu; untuk pernyataan negatif, Tidak pernah). Atur survei di <strong>Kelola Ujian &gt; Survei Setelah Ujian</strong>.</p>
       <div class="panel">
         <div class="toolbar">
           <select id="pilih-ujian-survei" onchange="Survei.guruMuat()" style="max-width:360px"></select>
@@ -1102,7 +1101,7 @@
         <option value="karakter">Survei Karakter (setelah Numerasi)</option>
         <option value="sulingjar">Survei Lingkungan Belajar / Sulingjar (setelah Literasi)</option>
       </select>
-      <label style="margin-top:.5rem"><input type="checkbox" id="ujian-survei-tampil" style="width:auto"> Tampilkan ringkasan indeks ke siswa setelah mengisi <span class="subtitle" style="display:inline">— hanya untuk latihan; ANBK/TKA asli tidak menampilkannya.</span></label>
+      <label style="margin-top:.5rem"><input type="checkbox" id="ujian-survei-tampil" style="width:auto"> Tampilkan nilai survei (per dimensi) ke siswa setelah mengisi <span class="subtitle" style="display:inline">— hanya untuk latihan; ANBK/TKA asli tidak menampilkannya.</span></label>
       <div style="margin-top:.6rem;padding:.6rem .7rem;border:1px dashed rgba(128,128,128,.4);border-radius:10px">
         <div style="font-size:.84rem;font-weight:600">Butir survei untuk latihan ini</div>
         <div id="ujian-survei-status" style="font-size:.8rem;color:var(--c-muted);margin:.2rem 0 .5rem"></div>
@@ -1399,8 +1398,8 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=57"></script>
-<script src="anbk.js?v=57"></script>
-<script src="survei.js?v=3"></script>
+<script src="app.js?v=61"></script>
+<script src="anbk.js?v=61"></script>
+<script src="survei.js?v=7"></script>
 </body>
 </html>
