@@ -29,11 +29,12 @@
      dimuat TANPA memblokir tampilan halaman login (dulu halaman kosong sampai keduanya selesai diunduh). -->
 <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 <link rel="dns-prefetch" href="https://script.google.com">
-<link rel="stylesheet" href="style.css?v=54">
+<link rel="stylesheet" href="style.css?v=57">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
-<link rel="stylesheet" href="anbk.css?v=54">
+<link rel="stylesheet" href="anbk.css?v=57">
+<link rel="stylesheet" href="survei.css?v=3">
 <!-- Font Awesome: ikon sidebar & tombol (gaya dashboard modern) -->
 <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
 <!-- KaTeX: render persamaan matematika (LaTeX) di dalam soal -->
@@ -154,6 +155,7 @@
       <button class="nav-tab" data-tab="tab-bank-soal" onclick="UI.gantiTabGuru('tab-bank-soal')"><i class="fa-solid fa-layer-group nav-ico"></i><span>Bank Soal</span></button>
       <button class="nav-tab" data-tab="tab-ujian" onclick="UI.gantiTabGuru('tab-ujian')"><i class="fa-solid fa-calendar-days nav-ico"></i><span>Kelola Ujian</span></button>
       <button class="nav-tab" data-tab="tab-rekap" onclick="UI.gantiTabGuru('tab-rekap')"><i class="fa-solid fa-clipboard-check nav-ico"></i><span>Rekap Nilai</span></button>
+      <button class="nav-tab" data-tab="tab-survei" onclick="UI.gantiTabGuru('tab-survei')"><i class="fa-solid fa-square-poll-vertical nav-ico"></i><span>Hasil Survei</span></button>
       <button class="nav-tab" data-tab="tab-analisis" onclick="UI.gantiTabGuru('tab-analisis')"><i class="fa-solid fa-chart-pie nav-ico"></i><span>Analisis Soal</span></button>
       <button class="nav-tab" data-tab="tab-pelanggaran" onclick="UI.gantiTabGuru('tab-pelanggaran')"><i class="fa-solid fa-triangle-exclamation nav-ico"></i><span>Log Pelanggaran</span></button>
       <button class="nav-tab" data-tab="tab-pemantauan" onclick="UI.gantiTabGuru('tab-pemantauan')"><i class="fa-solid fa-eye nav-ico"></i><span>Pemantauan Ujian</span></button>
@@ -406,6 +408,25 @@
           <span class="filter-info" id="kelas-rekap-info"></span>
         </div>
         <div id="tabel-rekap">Pilih ujian terlebih dahulu.</div>
+      </div>
+    </section>
+
+    <!-- ---------- TAB: HASIL SURVEI (Survei Karakter & Sulingjar) ---------- -->
+    <section id="tab-survei" class="hidden">
+      <h2>Hasil Survei Karakter &amp; Sulingjar</h2>
+      <p class="subtitle">Latihan seperti ANBK: tidak ada jawaban benar/salah. Hasil berupa <strong>indeks 0–100</strong> per dimensi. Atur survei di <strong>Kelola Ujian &gt; Survei Setelah Ujian</strong>.</p>
+      <div class="panel">
+        <div class="toolbar">
+          <select id="pilih-ujian-survei" onchange="Survei.guruMuat()" style="max-width:360px"></select>
+          <button type="button" class="secondary btn-segarkan" onclick="Survei.guruMuat()"><i class="fa-solid fa-rotate"></i> Segarkan</button>
+          <button class="secondary" onclick="Survei.guruUnduh()" title="Unduh Excel: indeks per dimensi, kualitas pengisian, dan jawaban per butir (sesuai filter)">⬇ Unduh (sesuai filter)</button>
+        </div>
+        <div class="filter-bar">
+          <input type="search" id="cari-survei" placeholder="🔍 Cari nama siswa..." oninput="Survei.guruRender()" autocomplete="off">
+          <select id="kelas-survei" onchange="Survei.guruRender()" title="Filter per kelas"><option value="">Semua Kelas</option></select>
+        </div>
+        <div id="ringkas-survei"></div>
+        <div id="tabel-survei">Pilih ujian terlebih dahulu.</div>
       </div>
     </section>
 
@@ -946,13 +967,18 @@
       </div>
       <div class="dsw-nilai-box"><span class="dsw-nilai" id="dsw-nilai">0</span><span id="dsw-status" class="badge"></span><span id="dsw-kategori"></span></div>
     </div>
+    <div class="detail-tabs hidden" id="dsw-mode" style="margin-bottom:.6rem">
+      <button type="button" class="detail-tab active" id="dsw-mode-soal" onclick="Survei.modeDetail('guru','soal')">Pembahasan Soal</button>
+      <button type="button" class="detail-tab" id="dsw-mode-survei" onclick="Survei.modeDetail('guru','survei')">Pembahasan Survei</button>
+    </div>
     <div class="dsw-chips" id="dsw-chips"></div>
     <p class="dsw-evaluasi" id="dsw-evaluasi"></p>
-    <div class="detail-tabs">
+    <div class="detail-tabs" id="dsw-tabs-soal">
       <button type="button" class="detail-tab active" id="dsw-tab-salah" onclick="Guru.gantiFilterDetailSiswa('salah')">Yang Salah</button>
       <button type="button" class="detail-tab" id="dsw-tab-semua" onclick="Guru.gantiFilterDetailSiswa('semua')">Semua Soal</button>
     </div>
     <div id="dsw-list"></div>
+    <div id="dsw-survei" class="hidden"></div>
     <div class="modal-close-row dsw-aksi">
       <button type="button" class="secondary" id="dsw-prev" onclick="Guru.pindahDetailSiswa(-1)"><i class="fa-solid fa-arrow-left"></i> Sebelumnya</button>
       <span class="dsw-posisi" id="dsw-posisi"></span>
@@ -1067,6 +1093,29 @@
         <option value="opsional">Aktif — siswa boleh melewati (tidak wajib)</option>
       </select>
       <p style="font-size:.8rem;color:var(--c-muted);margin:.35rem 0 0">Setelah siswa menekan Selesai, nilai dikirim ke server lebih dulu, lalu siswa mengunggah foto coretan (JPG/PNG/HEIC, boleh lebih dari 1). Nilai Lulus/Remedial baru tampil setelah foto terkirim. Foto muncul di sebelah nilai pada <strong>Rekap Nilai</strong>.</p>
+    </div>
+    <div class="field">
+      <label for="ujian-survei">Survei Setelah Ujian (Survei Karakter / Sulingjar)</label>
+      <select id="ujian-survei" onchange="Survei.statusForm()">
+        <option value="">Nonaktif</option>
+        <option value="auto">Otomatis — judul/kategori memuat "Numerasi" → Survei Karakter; "Literasi" → Sulingjar</option>
+        <option value="karakter">Survei Karakter (setelah Numerasi)</option>
+        <option value="sulingjar">Survei Lingkungan Belajar / Sulingjar (setelah Literasi)</option>
+      </select>
+      <label style="margin-top:.5rem"><input type="checkbox" id="ujian-survei-tampil" style="width:auto"> Tampilkan ringkasan indeks ke siswa setelah mengisi <span class="subtitle" style="display:inline">— hanya untuk latihan; ANBK/TKA asli tidak menampilkannya.</span></label>
+      <div style="margin-top:.6rem;padding:.6rem .7rem;border:1px dashed rgba(128,128,128,.4);border-radius:10px">
+        <div style="font-size:.84rem;font-weight:600">Butir survei untuk latihan ini</div>
+        <div id="ujian-survei-status" style="font-size:.8rem;color:var(--c-muted);margin:.2rem 0 .5rem"></div>
+        <div style="display:flex;flex-wrap:wrap;gap:.4rem">
+          <button type="button" class="secondary small" onclick="Survei.unduhTemplate('karakter')">⬇ Template Survei Karakter</button>
+          <button type="button" class="secondary small" onclick="Survei.unduhTemplate('sulingjar')">⬇ Template Sulingjar</button>
+          <button type="button" class="secondary small" onclick="document.getElementById('ujian-survei-file').click()">⬆ Impor butir dari Word</button>
+          <button type="button" class="secondary small" onclick="Survei.pakaiBawaan()">Pakai butir bawaan</button>
+          <input type="file" id="ujian-survei-file" accept=".docx" class="hidden" onchange="Survei.imporDariForm(event)">
+        </div>
+        <div style="font-size:.76rem;color:var(--c-muted);margin-top:.4rem">Ganti isi tabel template (pernyataan, dimensi, skala, arah) lalu impor, sehingga butir survei bisa berbeda di setiap latihan. Tabel survei juga boleh diletakkan di bawah tabel soal pada file Word yang sama.</div>
+      </div>
+      <p style="font-size:.8rem;color:var(--c-muted);margin:.35rem 0 0">Urutan siswa: tes → (unggah bukti orak-orik bila aktif) → survei → nilai. Semua butir wajib dijawab; jawaban terlalu cepat, seragam, atau saling bertentangan akan diingatkan sekali dan ditandai di <strong>Hasil Survei</strong>.</p>
     </div>
     <div class="field">
       <label>Pesan untuk Siswa Berdasarkan Nilai (0 – 100)</label>
@@ -1241,6 +1290,24 @@
   </div>
 </div>
 
+<!-- ======================= SURVEI KARAKTER / SULINGJAR (setelah tes) ======================= -->
+<div id="survei-screen" class="anbk-page hidden">
+  <header class="anbk-hero"><div class="anbk-hero-in"><div class="anbk-brand"><img class="anbk-logo-tw" src="icons/tutwuri.png" alt="Tut Wuri Handayani"><img class="anbk-logo-sch" src="icons/smpn2.png" alt="SMP Negeri 2 Seririt"><div class="anbk-brand-t"><b>PUSMENDIK</b><span>APLIKASI ANBK</span></div></div><div class="anbk-user"><span class="anbk-user-nama"></span><span class="anbk-user-ico"><i class="fa-solid fa-graduation-cap"></i></span></div></div></header>
+  <main class="anbk-wrap anbk-wrap-ujian">
+    <section class="anbk-card anbk-card-ujian">
+      <div class="anbk-u-top">
+        <h2 class="anbk-u-no" id="sv-nomor">Petunjuk Pengerjaan</h2>
+        <div class="anbk-u-tools"><span class="anbk-pill anbk-pill-timer" id="sv-progres">0 / 0 terjawab</span></div>
+      </div>
+      <div class="anbk-u-sub"><span></span><div class="anbk-u-mapel" id="sv-judul">Survei</div></div>
+      <div class="anbk-hr"></div>
+      <div class="anbk-soalbox"><div class="anbk-soalbar"></div><div id="sv-body"></div></div>
+      <div class="anbk-hr anbk-hr-b"></div>
+      <div class="anbk-nav" id="sv-nav"></div>
+    </section>
+  </main>
+</div>
+
 <!-- ======================= UNGGAH BUKTI ORAK-ORIK (setelah nilai terkirim, sebelum nilai tampil) ======================= -->
 <div id="bukti-screen" class="anbk-page anbk-legacy hidden">
   <header class="anbk-hero"><div class="anbk-hero-in"><div class="anbk-brand"><img class="anbk-logo-tw" src="icons/tutwuri.png" alt="Tut Wuri Handayani"><img class="anbk-logo-sch" src="icons/smpn2.png" alt="SMP Negeri 2 Seririt"><div class="anbk-brand-t"><b>PUSMENDIK</b><span>APLIKASI ANBK</span></div></div><div class="anbk-user"><span class="anbk-user-nama"></span><span class="anbk-user-ico"><i class="fa-solid fa-graduation-cap"></i></span></div></div></header>
@@ -1301,13 +1368,18 @@
     </div>
     <p class="hasil-eyebrow">Detail Jawaban</p>
     <h2 class="hasil-judul" id="detail-judul-ujian">-</h2>
-    <p class="detail-ringkas"><span>Nilai: <strong id="detail-nilai">0</strong></span> · <span id="detail-ringkas"></span></p>
-    <p class="detail-info">Periksa jawaban Anda. Jika menurut Anda kunci jawaban keliru, catat nomor soalnya dan sampaikan ke guru.</p>
-    <div class="detail-tabs">
+    <div class="detail-tabs hidden" id="detail-mode" style="margin-bottom:.6rem">
+      <button type="button" class="detail-tab active" id="detail-mode-soal" onclick="Survei.modeDetail('siswa','soal')">Pembahasan Soal</button>
+      <button type="button" class="detail-tab" id="detail-mode-survei" onclick="Survei.modeDetail('siswa','survei')">Pembahasan Survei</button>
+    </div>
+    <p class="detail-ringkas" id="detail-ringkas-p"><span>Nilai: <strong id="detail-nilai">0</strong></span> · <span id="detail-ringkas"></span></p>
+    <p class="detail-info" id="detail-info-p">Periksa jawaban Anda. Jika menurut Anda kunci jawaban keliru, catat nomor soalnya dan sampaikan ke guru.</p>
+    <div class="detail-tabs" id="detail-tabs-soal">
       <button type="button" class="detail-tab active" id="detail-tab-salah" onclick="ExamEngine.gantiFilterDetail('salah')">Yang Salah</button>
       <button type="button" class="detail-tab" id="detail-tab-semua" onclick="ExamEngine.gantiFilterDetail('semua')">Semua Soal</button>
     </div>
     <div id="detail-list"></div>
+    <div id="detail-survei" class="hidden"></div>
   </div>
 </div>
 
@@ -1327,7 +1399,8 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=54"></script>
-<script src="anbk.js?v=54"></script>
+<script src="app.js?v=57"></script>
+<script src="anbk.js?v=57"></script>
+<script src="survei.js?v=3"></script>
 </body>
 </html>
