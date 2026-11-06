@@ -3957,7 +3957,7 @@ const UI = {
     document.getElementById('ujian-tampil-pembahasan').checked = ujian ? (String(ujian.tampil_pembahasan).toLowerCase() !== 'false') : true;
     document.getElementById('ujian-bukti-orek').value = ujian && ujian.bukti_orek ? ujian.bukti_orek : '';
     document.getElementById('ujian-survei').value = ujian ? (ujian.survei || '') : 'auto'; // ujian baru: otomatis (Numerasi -> Survei Karakter, Literasi -> Sulingjar)
-    document.getElementById('ujian-survei-tampil').checked = ujian ? (String(ujian.survei_tampil) === 'true') : false;
+    document.getElementById('ujian-survei-tampil').checked = ujian ? (String(ujian.survei_tampil) === 'true') : true; // ujian baru: nilai survei tampil ke siswa (latihan)
     Survei.setDraft(ujian ? (ujian.survei_butir || '') : '');
     Guru.sinkronDetailPembahasan();
     Guru.muatEditorPesanNilai(ujian && ujian.pesan_nilai);
@@ -5314,7 +5314,7 @@ const Guru = {
     if (data.length === 0) { cont.innerHTML = '<p class="subtitle">Tidak ada siswa yang cocok dengan kelas/pencarian ini.</p>'; return; }
     const adaSurvei = !!state.guru._rekapSurveiJenis;
     const adaKolomBukti = !!state.guru._rekapBuktiMode || semua.some(r => Array.isArray(r.bukti) && r.bukti.length);
-    cont.innerHTML = `<table class="ledger"><thead><tr><th style="width:2rem"><input type="checkbox" id="rekap-pilih-semua" title="Pilih semua yang tampil" onchange="Guru.pilihSemuaRekap(this.checked)"></th><th>Nama</th><th>Kelas</th><th>Nilai</th><th>Kategori</th>${adaSurvei ? `<th title="Hasil survei (indeks 0-100) — klik Detail Jawaban untuk pembahasan">${state.guru._rekapSurveiJenis === 'karakter' ? 'Survei Karakter' : 'Sulingjar'}</th>` : ''}${adaKolomBukti ? '<th>Bukti Orak-Orik</th>' : ''}<th>Status</th><th>Pelanggaran</th><th>Selesai</th><th>Durasi</th><th></th></tr></thead><tbody>` +
+    cont.innerHTML = `<table class="ledger"><thead><tr><th style="width:2rem"><input type="checkbox" id="rekap-pilih-semua" title="Pilih semua yang tampil" onchange="Guru.pilihSemuaRekap(this.checked)"></th><th>Nama</th><th>Kelas</th><th>Nilai</th><th>Kategori</th>${adaSurvei ? `<th title="Nilai survei 0-100 (jawaban terbaik = skor 4) — klik Detail Jawaban untuk pembahasan">${state.guru._rekapSurveiJenis === 'karakter' ? 'Nilai Survei Karakter' : 'Nilai Sulingjar'}</th>` : ''}${adaKolomBukti ? '<th>Bukti Orak-Orik</th>' : ''}<th>Status</th><th>Pelanggaran</th><th>Selesai</th><th>Durasi</th><th></th></tr></thead><tbody>` +
       data.map(r => `<tr>
         <td><input type="checkbox" class="rekap-cek" value="${escapeHtml_(r.sesiId || '')}" ${r.sesiId ? '' : 'disabled'} ${r.sesiId && tercentang.has(String(r.sesiId)) ? 'checked' : ''}></td>
         <td>${escapeHtml_(r.nama)}</td><td>${escapeHtml_(r.kelas)}</td><td><strong>${r.nilai}</strong></td><td>${badgeKategori_(r.nilai)}</td>
@@ -5774,7 +5774,7 @@ const Guru = {
       // Hasil survei (Survei Karakter / Sulingjar) di samping nilai tes — hanya untuk ekspor satu ujian yang memakai survei
       const svSet = !denganUjian ? state.guru._rekapSurveiSet : null;
       const adaSv = !!svSet && arr.some(r => r.survei);
-      if (adaSv) svSet.dim.forEach(d => headers.push('Indeks ' + d[1])), headers.push(svSet.jenis === 'karakter' ? 'Indeks Karakter' : 'Rata-rata Indeks Survei', 'Kategori Survei', 'Kualitas Pengisian Survei');
+      if (adaSv) svSet.dim.forEach(d => headers.push('Nilai ' + d[1])), headers.push(svSet.jenis === 'karakter' ? 'Nilai Survei Karakter' : 'Nilai Sulingjar (rata-rata)', 'Kategori Survei', 'Nilai Kesungguhan Survei', 'Kualitas Pengisian Survei');
       const rows = urut(arr, denganUjian).map((r, i) => {
         const lulus = r.lulus === true || String(r.lulus).toLowerCase() === 'true';
         const lulusSalah = r.lulus === false || String(r.lulus).toLowerCase() === 'false';
@@ -5792,12 +5792,12 @@ const Guru = {
           Array.isArray(r.bukti) ? r.bukti.length : 0
         ], adaSv ? (() => {
           const x = Survei.ringkasSurvei(r);
-          if (!x) return svSet.dim.map(() => '').concat(['', 'Belum mengisi', '']);
-          return svSet.dim.map(d => x.h.dim[d[0]].indeks).concat([x.nilai, x.kat.label, x.baik ? 'Baik' : 'Perlu dicek']);
+          if (!x) return svSet.dim.map(() => '').concat(['', 'Belum mengisi', '', '']);
+          return svSet.dim.map(d => x.h.dim[d[0]].indeks).concat([x.nilai, x.kat.label, x.kes === null ? '' : x.kes, x.baik ? 'Baik' : 'Perlu dicek']);
         })() : []);
       });
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      ws['!cols'] = (denganUjian ? [5, 28] : [5]).concat([30, 10, 8, 12, 12, 12, 18, 18, 20, 14, 14], adaSv ? svSet.dim.map(() => 16).concat([16, 16, 18]) : []).map(w => ({ wch: w }));
+      ws['!cols'] = (denganUjian ? [5, 28] : [5]).concat([30, 10, 8, 12, 12, 12, 18, 18, 20, 14, 14], adaSv ? svSet.dim.map(() => 16).concat([16, 16, 20, 18]) : []).map(w => ({ wch: w }));
       ws['!freeze'] = { xSplit: 0, ySplit: 1 };
       ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(rows.length, 1), c: headers.length - 1 } }) };
       return ws;
