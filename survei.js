@@ -16,6 +16,109 @@ const Survei = (function () {
   const $ = (id) => document.getElementById(id);
   const esc = (s) => escapeHtml_(String(s == null ? '' : s));
 
+  // Gaya survei disisipkan langsung dari sini agar tetap tampil walau survei.css tidak ikut terunggah / tersimpan di cache.
+  (function () { if (document.getElementById('survei-css-inline')) return; const st = document.createElement('style'); st.id = 'survei-css-inline'; st.textContent = `/* Survei Karakter & Sulingjar — layar siswa (gaya ANBK) + halaman hasil guru */
+#survei-screen .anbk-soalbox { min-height: 300px; }
+#survei-screen .anbk-nav .anbk-btn[disabled] { opacity: .45; cursor: not-allowed; filter: grayscale(.4); }
+#survei-screen .anbk-nav .anbk-btn { width: auto; min-width: 170px; }
+.sv-pad { padding: 20px 26px 24px; }
+.sv-dim { display: inline-block; font: 600 11.5px 'Poppins', sans-serif; letter-spacing: .3px; text-transform: uppercase; color: #0d6efd; background: #e7f0ff; padding: 3px 10px; border-radius: 20px; margin-bottom: 14px; }
+.sv-q { font: 400 19px/1.55 'Poppins', sans-serif; margin: 0 0 6px; color: #212529; }
+.sv-ket { font-size: 12.5px; color: #6c757d; margin: 0 0 16px; }
+.sv-opsi { display: flex; flex-direction: column; gap: 9px; max-width: 520px; }
+.sv-o { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border: 1.5px solid #ced4da; border-radius: 8px; background: #fff; cursor: pointer; font: 400 15px 'Poppins', sans-serif; color: #212529; transition: border-color .12s, background .12s; -webkit-tap-highlight-color: transparent; }
+.sv-o:hover { border-color: #0d6efd; }
+.sv-o input { position: absolute; opacity: 0; pointer-events: none; }
+.sv-r { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #8a94a0; flex: none; display: grid; place-items: center; }
+.sv-o.on { border-color: #0d6efd; background: #eaf2ff; }
+.sv-o.on .sv-r { border-color: #0d6efd; } .sv-o.on .sv-r::after { content: ''; width: 9px; height: 9px; border-radius: 50%; background: #0d6efd; }
+.sv-o:focus-within { outline: 3px solid rgba(13,110,253,.3); outline-offset: 2px; }
+.sv-intro { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+.sv-intro i { font-size: 34px; color: #0d6efd; } .sv-intro h3 { margin: 0; font: 600 20px 'Poppins', sans-serif; }
+.sv-p { font-size: 15.5px; line-height: 1.6; margin: 0 0 14px; color: #212529; }
+.sv-ul { font-size: 14.5px; line-height: 1.6; padding-left: 20px; margin: 0; color: #212529; } .sv-ul li { margin-bottom: 7px; }
+.sv-bars { display: grid; gap: 12px; max-width: 560px; margin-top: 10px; }
+.sv-bar-t { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; } .sv-bar small { font-size: 11.5px; font-weight: 600; }
+.sv-bar-b { height: 8px; border-radius: 6px; background: #e9ecef; overflow: hidden; margin: 5px 0 3px; } .sv-bar-b i { display: block; height: 100%; border-radius: 6px; }
+.sv-total { font-size: 16px; margin: 6px 0 10px; } .sv-total b { font-size: 22px; color: #0d6efd; }
+.sv-modal-bg { position: fixed; inset: 0; z-index: 900; background: rgba(15,30,55,.55); display: grid; place-items: center; padding: 16px; }
+.sv-modal { --a-blue: #0d6efd; --a-red: #dc3545; --a-yellow: #ffc107; --a-green: #198754; background: #fff; border-radius: 12px; max-width: 460px; width: 100%; padding: 22px 22px 18px; font-family: 'Poppins', sans-serif; box-shadow: 0 18px 50px rgba(0,0,0,.3); }
+.sv-modal h3 { margin: 6px 0 8px; font-size: 18px; } .sv-modal p, .sv-modal li { font-size: 13.5px; line-height: 1.55; color: #343a40; } .sv-modal ul { margin: 0 0 10px; padding-left: 20px; }
+.sv-modal-ico { width: 44px; height: 44px; border-radius: 50%; background: #fff3cd; color: #b26a00; display: grid; place-items: center; font-size: 20px; }
+.sv-modal-aksi { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; } .sv-modal-aksi .anbk-btn { height: 34px; padding: 0 16px; font-size: 12.5px; flex: 1 1 140px; }
+@media (max-width: 640px) { .sv-pad { padding: 14px 12px 18px; } .sv-q { font-size: 16.5px; } .sv-o { font-size: 14px; padding: 10px 12px; } #survei-screen .anbk-nav .anbk-btn { min-width: 0; } }
+
+/* guru */
+.sv-info { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: .85rem; margin: .2rem 0 .8rem; color: var(--c-muted); } .sv-info b { color: var(--c-text); }
+.sv-warn { color: #c62828; }
+.sv-kartu-wrap { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.sv-kartu { border: 1px solid rgba(128,128,128,.25); border-radius: 12px; padding: 12px 14px; background: var(--c-surface, rgba(255,255,255,.6)); }
+.sv-kartu-t { font-size: .78rem; color: var(--c-muted); min-height: 2.4em; } .sv-kartu-n { font-size: 1.7rem; font-weight: 700; line-height: 1.2; margin: 2px 0; }
+.sv-lencana { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: .75rem; font-weight: 600; white-space: nowrap; }
+.sv-lemah { border: 1px dashed rgba(128,128,128,.4); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; font-size: .84rem; }
+.sv-lemah ol { margin: .4rem 0 0; padding-left: 20px; } .sv-lemah li { margin-bottom: .3rem; } .sv-lemah em { color: var(--c-muted); font-style: normal; font-size: .76rem; margin-left: 4px; }
+
+/* pembahasan survei (detail jawaban) */
+.sv-pb { font-family: inherit; }
+.sv-pb-top { display: flex; flex-wrap: wrap; gap: 10px 18px; justify-content: space-between; align-items: flex-start; margin: .2rem 0 .8rem; }
+.sv-pb-judul { font-weight: 700; font-size: 1.02rem; } .sv-pb-sub { font-size: .78rem; color: #6c757d; max-width: 420px; margin-top: 2px; }
+.sv-pb-total { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .8rem; color: #6c757d; } .sv-pb-total b { font-size: 1.7rem; line-height: 1; }
+.sv-pb-kualitas { background: #fff3cd; color: #7a5500; border-radius: 8px; padding: 8px 12px; font-size: .82rem; margin-bottom: .7rem; }
+.sv-pb-dim { border: 1px solid rgba(128,128,128,.28); border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; background: rgba(255,255,255,.55); }
+.sv-pb-dim > summary { cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-weight: 600; font-size: .9rem; list-style: none; }
+.sv-pb-dim > summary::-webkit-details-marker { display: none; }
+.sv-pb-tafsir { font-size: .84rem; margin: .1rem 0 .4rem; }
+.sv-pb-list { list-style: none; padding: 0; margin: 0; }
+.sv-pb-list li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 7px 0; border-top: 1px solid rgba(128,128,128,.18); font-size: .82rem; align-items: start; }
+.sv-pb-list li em { color: #8a94a0; font-size: .72rem; font-style: normal; }
+.sv-pb-j { grid-column: 1; color: #495057; } .sv-skor { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-weight: 700; font-size: .75rem; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+.sv-s4 { background: #e3f6ec; color: #1b7f4b; } .sv-s3 { background: #eaf6e3; color: #4b7f1b; } .sv-s2 { background: #fff1da; color: #b26a00; } .sv-s1 { background: #fde8e8; color: #c62828; } .sv-s0 { background: #eceff1; color: #6c757d; }
+.sv-pb-saran { background: #eaf2ff; border-radius: 8px; padding: 7px 11px; font-size: .8rem; margin: 8px 0 2px; }
+
+/* tampilan matriks (beberapa pernyataan per halaman, gaya ANBK) */
+.sv-kode { color: #8a94a0; font-size: .62em; font-style: italic; white-space: nowrap; }
+.sv-ket-m { font-size: 13px; color: #343a40; margin-bottom: 10px; }
+.sv-mx-wrap { overflow-x: auto; border: 1px solid #dee2e6; border-radius: 4px; background: #fff; }
+.sv-mx { width: 100%; border-collapse: collapse; font-family: 'Poppins', sans-serif; font-size: 13.5px; }
+.sv-mx thead th { font-weight: 700; font-size: 12.5px; text-align: center; padding: 10px 8px; border-bottom: 1px solid #dee2e6; width: 110px; vertical-align: bottom; }
+.sv-mx thead th.sv-mx-t { text-align: left; width: auto; padding-left: 12px; }
+.sv-mx tbody tr { border-top: 1px solid #e9ecef; } .sv-mx tbody tr:nth-child(odd) { background: #f4f6f8; } .sv-mx tbody tr.done { background: #eaf2ff; }
+.sv-mx td { padding: 11px 8px; text-align: center; } .sv-mx td.sv-mx-t { text-align: left; padding-left: 12px; line-height: 1.5; color: #212529; }
+.sv-mx-c label { display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; min-width: 36px; min-height: 36px; }
+.sv-mx-c input { position: absolute; opacity: 0; pointer-events: none; }
+.sv-mx-c input:checked + .sv-r { border-color: #0d6efd; } .sv-mx-c input:checked + .sv-r::after { content: ''; width: 9px; height: 9px; border-radius: 50%; background: #0d6efd; }
+.sv-mx-c input:focus-visible + .sv-r { outline: 3px solid rgba(13,110,253,.35); outline-offset: 2px; }
+.sv-mx-l { display: none; }
+@media (max-width: 700px) {
+  .sv-mx thead { display: none; } .sv-mx, .sv-mx tbody, .sv-mx tr, .sv-mx td { display: block; width: 100%; }
+  .sv-mx td.sv-mx-t { padding: 12px 12px 4px; font-weight: 500; }
+  .sv-mx td.sv-mx-c { text-align: left; padding: 0 12px; } .sv-mx-c label { width: 100%; justify-content: flex-start; min-height: 38px; }
+  .sv-mx-l { display: inline; font-size: 13.5px; } .sv-mx tr { padding-bottom: 8px; }
+}
+
+/* panel Halaman Kuesioner */
+.sv-layout { display: grid; grid-template-columns: 260px 1fr; gap: 0; align-items: start; }
+.sv-panel { padding: 14px 12px 14px 14px; }
+.sv-panel-t { background: #1e88e5; color: #fff; font: 600 14px 'Poppins', sans-serif; padding: 10px 12px; border-radius: 4px; text-align: center; margin-bottom: 12px; }
+.sv-panel-g { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 8px; max-height: 420px; overflow-y: auto; padding: 2px; }
+.sv-pn { border: 0; border-radius: 4px; color: #fff; font: 600 13px 'Poppins', sans-serif; min-height: 32px; cursor: pointer; background: #8a94a0; }
+.sv-pn.ok { background: #28a745; } .sv-pn.kosong { background: #dc3545; } .sv-pn.baru { background: #8a94a0; }
+.sv-pn.now { outline: 3px solid #0d6efd; outline-offset: 1px; }
+.sv-kes { display: flex; gap: 14px; align-items: center; border: 2px solid; border-radius: 12px; padding: 12px 16px; margin: 6px 0 14px; background: #fff; max-width: 640px; }
+.sv-kes-n { font: 700 40px/1 'Poppins', sans-serif; min-width: 66px; text-align: center; }
+.sv-kes-t { font-weight: 600; font-size: 14px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.sv-kes-k { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: #495057; margin: 5px 0 3px; }
+.sv-ev { border: 1px solid #f0c36d; background: #fff8e8; border-radius: 10px; padding: 10px 14px; margin: 8px 0; font-size: .86rem; }
+.sv-ev-ok { border-color: #8fd0aa; background: #effaf3; }
+.sv-ev ol { margin: .5rem 0 0; padding-left: 20px; } .sv-ev li { margin-bottom: .7rem; }
+.sv-ev-h { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sv-ev-b { font-size: .8rem; color: #6c757d; margin: 3px 0; } .sv-ev-s { font-size: .82rem; background: #fff; border-radius: 8px; padding: 6px 10px; }
+.sv-kelas { margin: 10px 0; } .sv-kelas tr.sv-semua td { background: rgba(128,128,128,.1); }
+.sv-kes-mini { font-size: 11.5px; color: #6c757d; margin-top: 3px; white-space: nowrap; }
+.sv-kes-p { font-size: 12px; color: #6c757d; } .sv-kes-a { font-size: 12px; color: #b26a00; margin-top: 3px; }
+@media (max-width: 760px) { .sv-layout { grid-template-columns: 1fr; } .sv-panel { padding: 10px 12px 0; } .sv-panel-g { max-height: 120px; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); } .sv-panel-t { padding: 7px; font-size: 13px; margin-bottom: 8px; } }
+`; document.head.appendChild(st); })();
+
   // ---------------- skala jawaban (4 pilihan, tanpa pilihan tengah) ----------------
   const SKALA = {
     setuju: ['Sangat tidak setuju', 'Tidak setuju', 'Setuju', 'Sangat setuju'],
@@ -44,41 +147,41 @@ const Survei = (function () {
         ['kr', 'Kreatif']
       ],
       butir: [
-        ['K01', 'bt', 'frek', 1, 'Saya melaksanakan ibadah sesuai agama atau kepercayaan saya.'],
+        ['K01', 'bt', 'setuju', 1, 'Saya melaksanakan ibadah sesuai agama atau kepercayaan saya.'],
         ['K02', 'bt', 'setuju', 1, 'Saya meminta maaf ketika berbuat salah kepada orang lain.'],
         ['K03', 'bt', 'setuju', 1, 'Saya tetap jujur walaupun tidak ada yang mengawasi.'],
         ['K04', 'bt', 'setuju', -1, 'Mengambil barang teman tanpa izin tidak apa-apa jika barang itu tidak penting.'],
-        ['K05', 'bt', 'frek', 1, 'Saya menjaga kebersihan dan kelestarian lingkungan di sekitar saya.'],
+        ['K05', 'bt', 'setuju', 1, 'Saya menjaga kebersihan dan kelestarian lingkungan di sekitar saya.'],
         ['K06', 'bt', 'setuju', -1, 'Menyontek saat ulangan tidak masalah asalkan tidak ketahuan.'],
         ['K07', 'bk', 'setuju', 1, 'Saya senang berteman dengan teman yang berbeda agama, suku, atau budaya.'],
         ['K08', 'bk', 'setuju', 1, 'Saya menghormati teman yang cara beribadah atau adatnya berbeda dari saya.'],
         ['K09', 'bk', 'setuju', -1, 'Budaya daerah saya paling baik, sehingga budaya lain tidak perlu dipelajari.'],
         ['K10', 'bk', 'setuju', 1, 'Saya tertarik mempelajari budaya daerah lain atau bangsa lain.'],
-        ['K11', 'bk', 'frek', 1, 'Saya membela teman yang diejek karena perbedaannya.'],
+        ['K11', 'bk', 'setuju', 1, 'Saya membela teman yang diejek karena perbedaannya.'],
         ['K12', 'bk', 'setuju', -1, 'Saya lebih nyaman bergaul hanya dengan teman yang sama dengan saya.'],
-        ['K13', 'gr', 'frek', 1, 'Saya ikut piket atau kerja bakti tanpa harus disuruh.'],
+        ['K13', 'gr', 'setuju', 1, 'Saya ikut piket atau kerja bakti tanpa harus disuruh.'],
         ['K14', 'gr', 'setuju', 1, 'Saya bersedia membantu teman yang kesulitan memahami pelajaran.'],
         ['K15', 'gr', 'setuju', -1, 'Dalam kerja kelompok, lebih baik saya mengerjakan sendiri tanpa melibatkan anggota lain.'],
         ['K16', 'gr', 'setuju', 1, 'Saya mau menerima keputusan kelompok walaupun berbeda dengan pendapat saya.'],
-        ['K17', 'gr', 'frek', 1, 'Saya berbagi alat atau bahan belajar dengan teman yang membutuhkan.'],
-        ['K18', 'gr', 'frek', -1, 'Saya membiarkan teman sekelompok mengerjakan semua tugas.'],
-        ['K19', 'md', 'frek', 1, 'Saya mengerjakan tugas dan PR dengan usaha sendiri.'],
+        ['K17', 'gr', 'setuju', 1, 'Saya berbagi alat atau bahan belajar dengan teman yang membutuhkan.'],
+        ['K18', 'gr', 'setuju', -1, 'Saya membiarkan teman sekelompok mengerjakan semua tugas.'],
+        ['K19', 'md', 'setuju', 1, 'Saya mengerjakan tugas dan PR dengan usaha sendiri.'],
         ['K20', 'md', 'setuju', 1, 'Ketika gagal, saya mencoba lagi dengan cara lain.'],
         ['K21', 'md', 'setuju', -1, 'Saya mudah menyerah jika soal terasa sulit.'],
-        ['K22', 'md', 'frek', 1, 'Saya mengatur sendiri waktu belajar dan waktu istirahat saya.'],
+        ['K22', 'md', 'setuju', 1, 'Saya mengatur sendiri waktu belajar dan waktu istirahat saya.'],
         ['K23', 'md', 'setuju', 1, 'Saya berani bertanya kepada guru ketika belum paham.'],
         ['K24', 'md', 'setuju', -1, 'Saya baru belajar kalau disuruh orang lain.'],
-        ['K25', 'bn', 'frek', 1, 'Saya mencari informasi dari sumber lain sebelum mempercayai suatu berita.'],
+        ['K25', 'bn', 'setuju', 1, 'Saya mencari informasi dari sumber lain sebelum mempercayai suatu berita.'],
         ['K26', 'bn', 'setuju', 1, 'Saya meminta alasan atau bukti sebelum menyetujui pendapat orang lain.'],
         ['K27', 'bn', 'setuju', -1, 'Kalau banyak orang berkata sama, pasti benar dan tidak perlu diperiksa lagi.'],
         ['K28', 'bn', 'setuju', 1, 'Saya memikirkan akibatnya sebelum mengambil keputusan.'],
-        ['K29', 'bn', 'frek', 1, 'Saya memeriksa kebenaran pesan atau berita sebelum membagikannya.'],
-        ['K30', 'bn', 'frek', -1, 'Saya langsung membagikan berita yang menarik tanpa membaca isinya.'],
+        ['K29', 'bn', 'setuju', 1, 'Saya memeriksa kebenaran pesan atau berita sebelum membagikannya.'],
+        ['K30', 'bn', 'setuju', -1, 'Saya langsung membagikan berita yang menarik tanpa membaca isinya.'],
         ['K31', 'kr', 'setuju', 1, 'Saya suka mencari cara baru untuk menyelesaikan masalah.'],
-        ['K32', 'kr', 'frek', 1, 'Saya membuat karya (tulisan, gambar, alat, musik, dan lainnya) dari ide saya sendiri.'],
+        ['K32', 'kr', 'setuju', 1, 'Saya membuat karya (tulisan, gambar, alat, musik, dan lainnya) dari ide saya sendiri.'],
         ['K33', 'kr', 'setuju', -1, 'Saya lebih suka memakai cara yang sudah ada tanpa mencoba cara lain.'],
         ['K34', 'kr', 'setuju', 1, 'Saya tidak takut ide saya ditertawakan ketika saya menyampaikannya.'],
-        ['K35', 'kr', 'frek', 1, 'Saya mengembangkan ide dari hal-hal sederhana di sekitar saya.'],
+        ['K35', 'kr', 'setuju', 1, 'Saya mengembangkan ide dari hal-hal sederhana di sekitar saya.'],
         ['K36', 'kr', 'setuju', -1, 'Saya merasa tidak punya ide apa pun yang layak dicoba.']
       ],
       // pasangan butir yang maknanya berlawanan (positif, negatif) -> dipakai cek konsistensi jawaban
@@ -157,11 +260,11 @@ const Survei = (function () {
     bangunHalaman(j);
     return j;
   }
-  // Pengelompokan otomatis bawaan Sulingjar: 6 butir berurutan (skala sama) per halaman, seperti tampilan ANBK
-  (function () {
-    const j = JENIS.sulingjar; let hal = 0, n = 0, skala = '';
-    j.butir.forEach(b => { if (b[2] !== skala || n >= 6) { hal++; n = 0; skala = b[2]; } n++; b[5] = hal; });
-  })();
+  // Pengelompokan otomatis butir bawaan: satu halaman = satu dimensi (indikator), skala sama, maksimal 6 pernyataan (gaya ANBK)
+  Object.keys(JENIS).forEach(k => {
+    const j = JENIS[k]; let hal = 0, n = 0, skala = '', dim = '';
+    j.butir.forEach(b => { if (b[2] !== skala || b[1] !== dim || n >= 6) { hal++; n = 0; skala = b[2]; dim = b[1]; } n++; b[5] = hal; });
+  });
   Object.keys(JENIS).forEach(k => { JENIS[k].jenis = k; indeksSet(JENIS[k]); });
 
   // Saran tindak lanjut per dimensi bawaan (dipakai di Pembahasan Survei bila indeks belum Baik)
@@ -177,6 +280,16 @@ const Survei = (function () {
     kb: 'Perbanyak kegiatan lintas agama dan budaya, perlakukan siswa secara adil, dan tindak tegas ujaran yang merendahkan suku, agama, atau budaya.',
     'in': 'Pastikan akses fisik dan pendampingan bagi siswa berkebutuhan khusus, serta bangun sikap saling menerima antarsiswa.',
     kg: 'Beri kesempatan setara berpendapat dan memimpin bagi siswa laki-laki dan perempuan, dan tangani ejekan berbasis stereotip gender.'
+  };
+
+  // Saran PEMBIASAAN DI KELAS untuk guru (Survei Karakter); Sulingjar memakai SARAN di atas (berorientasi sekolah)
+  const SARAN_KELAS = {
+    bt: 'Biasakan doa bersama di awal dan akhir pelajaran, budaya jujur (ulangan tanpa menyontek dan memberi apresiasi pada kejujuran, kotak barang temuan), serta kebiasaan meminta maaf, mengucap terima kasih, dan 5S (senyum, salam, sapa, sopan, santun).',
+    bk: 'Susun kelompok belajar lintas latar belakang secara bergilir, beri ruang siswa memperkenalkan tradisi daerah atau agama masing-masing lewat presentasi singkat, dan tegaskan aturan kelas: tidak mengejek perbedaan.',
+    gr: 'Terapkan piket kelas bergilir dengan pembagian tugas tertulis, kerja kelompok dengan peran yang jelas dan penilaian kontribusi tiap anggota, serta program tutor sebaya.',
+    md: 'Biasakan siswa menulis target belajar mingguan dan jurnal belajar singkat, mengerjakan tugas tanpa pengingat berulang, dan mencoba sendiri dulu sebelum dibantu.',
+    bn: 'Latih pertanyaan "apa buktinya?" dan "apa akibatnya?" pada setiap materi, sediakan 5 menit cek hoaks tiap pekan, dan minta siswa menyebut alasan serta sumber saat berpendapat.',
+    kr: 'Beri tugas terbuka dengan banyak kemungkinan jawaban, proyek karya sederhana secara rutin, dan apresiasi ide baru walau belum sempurna.'
   };
 
   // Bangun set butir aktif: butir khusus (JSON dari ujian.survei_butir) bila valid & sejenis, jika tidak pakai bawaan.
@@ -223,7 +336,7 @@ const Survei = (function () {
     const hasil = {}; let jml = 0, n = 0;
     Object.keys(dim).forEach(k => {
       const d = dim[k];
-      hasil[k] = { nama: d.nama, n: d.n, indeks: d.n ? bulat2(((d.jumlah / d.n) - 1) / 3 * 100) : null };
+      hasil[k] = { nama: d.nama, n: d.n, rata: d.n ? bulat2(d.jumlah / d.n) : null, indeks: d.n ? bulat2(((d.jumlah / d.n) - 1) / 3 * 100) : null };
       if (hasil[k].indeks !== null) { jml += hasil[k].indeks; n++; }
     });
     return { dim: hasil, butir, total: n ? bulat2(jml / n) : null };
@@ -260,13 +373,39 @@ const Survei = (function () {
     });
     const tidakKonsisten = bertentangan.length >= 2;
     if (tidakKonsisten) alasan.push(bertentangan.length + ' pasang pernyataan berlawanan dijawab saling bertentangan');
-    return { baik: alasan.length === 0, alasan, terlaluCepat, seragam, tidakKonsisten, bertentangan, rataDetik: bulat2(total / n) };
+    // ---- NILAI KESUNGGUHAN (0-100): mengukur ketelitian mengisi, BUKAN seberapa "baik" jawabannya.
+    // Siswa yang jujur namun hasil indeksnya rendah tetap bisa bernilai kesungguhan tinggi.
+    const klamp = (x) => Math.max(0, Math.min(1, x));
+    const adaPasangan = (J.pasangan || []).length > 0;
+    const bW = adaPasangan ? 45 : 60, bV = adaPasangan ? 25 : 40, bK = adaPasangan ? 30 : 0;
+    const rata = total / n, bagi = maks / n;
+    const pW = bW * klamp((rata - 1) / 3);                       // rata-rata <= 1 dtk/butir = 0; >= 4 dtk = penuh
+    const pV = bV * klamp((0.90 - bagi) / (0.90 - 0.55));        // >= 90% pilihan sama = 0; <= 55% = penuh
+    const pK = adaPasangan ? bK * klamp(1 - bertentangan.length / Math.max(1, Math.min(3, J.pasangan.length))) : 0; // 3 pasang bertentangan = 0
+    const nilai = Math.round(pW + pV + pK);
+    if (nilai < 60 && alasan.length === 0) alasan.push('Nilai kesungguhan rendah');
+    return { baik: alasan.length === 0, alasan, terlaluCepat, seragam, tidakKonsisten, bertentangan, rataDetik: bulat2(total / n), nilai,
+      komponen: { waktu: [Math.round(pW), bW], variasi: [Math.round(pV), bV], konsistensi: adaPasangan ? [Math.round(pK), bK] : null } };
+  }
+
+  function kategoriKesungguhan(x) {
+    if (x === null || x === undefined || isNaN(x)) return { label: '-', warna: '#6c757d', latar: '#eceff1', kode: 'na' };
+    if (x >= 80) return { label: 'Sangat teliti', warna: '#1b7f4b', latar: '#e3f6ec', kode: 'baik' };
+    if (x >= 60) return { label: 'Cukup teliti', warna: '#b26a00', latar: '#fff1da', kode: 'sedang' };
+    return { label: 'Asal-asalan', warna: '#c62828', latar: '#fde8e8', kode: 'kurang' };
+  }
+  function htmlKesungguhan(q, guru) {
+    if (!q || q.nilai === undefined || q.nilai === null) return '';
+    const k = kategoriKesungguhan(q.nilai); const c = q.komponen || {};
+    const baris = [['Waktu membaca', c.waktu], ['Variasi jawaban', c.variasi], ['Konsistensi jawaban', c.konsistensi]].filter(x => x[1]).map(x => `<span>${x[0]}: <b>${x[1][0]}</b>/${x[1][1]}</span>`).join('');
+    return `<div class="sv-kes" style="border-color:${k.warna}"><div class="sv-kes-n" style="color:${k.warna}">${q.nilai}</div><div class="sv-kes-i"><div class="sv-kes-t">Nilai Kesungguhan Mengisi Survei <span class="sv-lencana" style="background:${k.latar};color:${k.warna}">${k.label}</span></div><div class="sv-kes-k">${baris}</div>
+      <div class="sv-kes-p">${guru ? 'Mengukur ketelitian mengisi (waktu baca, variasi, konsistensi), bukan benar/salah. Nilai rendah berarti nilai survei siswa ini kurang dapat dipercaya.' : 'Nilai ini mengukur ketelitian Anda mengisi, bukan benar/salah. Jawab jujur dan teliti agar hasil survei sekolah mencerminkan keadaan sebenarnya.'}</div>${q.alasan && q.alasan.length ? `<div class="sv-kes-a">${esc(q.alasan.join('; '))}</div>` : ''}</div></div>`;
   }
 
   // =====================================================================================
   //  SISWA — layar survei (satu butir per halaman, gaya ANBK)
   // =====================================================================================
-  const S = { jenis: '', set: null, sesiId: '', jawaban: {}, detik: {}, idx: 0, tahap: 'intro', mulai: 0, tMasuk: 0, selesai: null, tampilHasil: false, diingatkan: false };
+  const S = { jenis: '', set: null, sesiId: '', jawaban: {}, detik: {}, idx: 0, tahap: 'intro', mulai: 0, tMasuk: 0, selesai: null, tampilHasil: false, diingatkan: false, dikunjungi: {} };
   // S.idx = nomor HALAMAN (bukan butir). Satu halaman bisa memuat beberapa butir (tampilan matriks seperti ANBK).
   const hlm = () => S.set.halamanList;
   const halLengkap = (p) => p.idx.every(i => S.jawaban[S.set.butir[i][0]]);
@@ -311,13 +450,18 @@ const Survei = (function () {
         <p class="sv-p">Terima kasih telah menyelesaikan tes. Selanjutnya Anda diminta mengisi <b>${esc(J.nama)}</b> sebanyak <b>${total} butir</b>${adaMatriks() ? ' dalam <b>' + hl.length + ' halaman</b>' : ''}.</p>
         <ul class="sv-ul"><li><b>Tidak ada jawaban yang benar atau salah.</b> Pilihlah jawaban yang paling menggambarkan keadaan Anda yang sebenarnya, bukan jawaban yang menurut Anda &quot;paling baik&quot;.</li>
         <li>Semua butir <b>wajib dijawab</b>. Bacalah setiap pernyataan dengan teliti.</li>
+        <li>Anda akan mendapat <b>Nilai Kesungguhan</b> (0–100). Mengisi terlalu cepat, memilih pola jawaban yang sama terus-menerus, atau menjawab pernyataan yang berlawanan secara bertentangan <b>menurunkan nilai</b> dan membuat hasil survei Anda tidak dapat dipercaya.</li>
         <li>Anda dapat kembali ke ${adaMatriks() ? 'halaman' : 'butir'} sebelumnya untuk mengubah jawaban sebelum menekan <b>Selesai</b>.</li>
         <li>Jawaban Anda dipakai untuk memperbaiki lingkungan dan pembelajaran di sekolah.</li></ul></div>`;
       nav.innerHTML = `<span></span><button type="button" class="anbk-btn anbk-btn-primary" onclick="Survei.mulai()"><span>MULAI SURVEI</span> <i class="fa-solid fa-circle-chevron-right"></i></button><span></span>`;
     } else if (S.tahap === 'butir') {
       const p = hl[S.idx]; const awal = p.idx[0] + 1;
       $('sv-nomor').textContent = adaMatriks() ? 'Halaman ' + (S.idx + 1) + ' dari ' + hl.length : 'Butir nomor ' + awal;
-      box.innerHTML = htmlHalaman(p);
+      box.innerHTML = `<div class="sv-layout"><aside class="sv-panel"><div class="sv-panel-t">Halaman Kuesioner</div><div class="sv-panel-g">${hl.map((h, i) => {
+        const lengkap = halLengkap(h); const cls = lengkap ? 'ok' : (S.dikunjungi[i] || i < S.idx ? 'kosong' : 'baru');
+        return `<button type="button" class="sv-pn ${cls}${i === S.idx ? ' now' : ''}" onclick="Survei.lompat(${i})" title="Halaman ${i + 1}">${i + 1}</button>`;
+      }).join('')}</div></aside><div class="sv-main">${htmlHalaman(p)}</div></div>`;
+      S.dikunjungi[S.idx] = true;
       const akhir = S.idx === hl.length - 1;
       nav.innerHTML = `<button type="button" class="anbk-btn anbk-btn-red" ${S.idx === 0 ? 'disabled' : ''} onclick="Survei.geser(-1)"><i class="fa-solid fa-circle-chevron-left"></i> <span>${adaMatriks() ? 'Halaman' : 'Butir'} sebelumnya</span></button>
         <button type="button" class="anbk-btn anbk-btn-primary" id="sv-btn-next" ${halLengkap(p) ? '' : 'disabled'} onclick="Survei.geser(1)"><span>${akhir ? 'Selesai' : (adaMatriks() ? 'Halaman' : 'Butir') + ' berikutnya'}</span> <i class="fa-solid ${akhir ? 'fa-flag-checkered' : 'fa-circle-chevron-right'}"></i></button>`;
@@ -364,7 +508,7 @@ const Survei = (function () {
       el.className = 'sv-modal-bg';
       el.innerHTML = `<div class="sv-modal" role="alertdialog" aria-modal="true"><div class="sv-modal-ico"><i class="fa-solid fa-triangle-exclamation"></i></div>
         <h3>Periksa kembali jawaban Anda</h3>
-        <p>Jawaban Anda terlihat kurang teliti:</p><ul>${q.alasan.map(a => `<li>${esc(a)}</li>`).join('')}</ul>
+        <p>Jawaban Anda terlihat kurang teliti. Perkiraan <b>Nilai Kesungguhan</b> Anda saat ini: <b style="color:${kategoriKesungguhan(q.nilai).warna}">${q.nilai}</b> (${kategoriKesungguhan(q.nilai).label}).</p><ul>${q.alasan.map(a => `<li>${esc(a)}</li>`).join('')}</ul>
         <p>Ingat: <b>tidak ada jawaban benar atau salah</b>. Bacalah tiap pernyataan, lalu pilih yang paling menggambarkan keadaan Anda sebenarnya.</p>
         <div class="sv-modal-aksi"><button type="button" class="anbk-btn anbk-btn-green" data-a="ulang">PERIKSA KEMBALI</button><button type="button" class="anbk-btn anbk-btn-red" data-a="kirim">TETAP KIRIM</button></div></div>`;
       el.addEventListener('click', ev => { const a = ev.target.closest('[data-a]'); if (!a) return; el.remove(); res(a.dataset.a); });
@@ -386,12 +530,13 @@ const Survei = (function () {
       const btn = $('sv-btn-kirim'); if (btn) { btn.disabled = true; btn.textContent = 'Mengirim...'; }
       let res = null;
       for (let k = 1; k <= 4; k++) {
-        try { res = await api('simpanSurvei', { sesiId: S.sesiId, siswaId: state.user.id, jenis: S.jenis, jawaban: JSON.stringify(S.jawaban), durasiDetik: durasi, kualitas: JSON.stringify({ baik: kualitas.baik, alasan: kualitas.alasan, rataDetik: kualitas.rataDetik }) }); } catch (e) { res = null; }
+        try { res = await api('simpanSurvei', { sesiId: S.sesiId, siswaId: state.user.id, jenis: S.jenis, jawaban: JSON.stringify(S.jawaban), durasiDetik: durasi, kualitas: JSON.stringify({ baik: kualitas.baik, alasan: kualitas.alasan, rataDetik: kualitas.rataDetik, nilai: kualitas.nilai, komponen: kualitas.komponen }) }); } catch (e) { res = null; }
         if (res && res.ok) break;
         await new Promise(r => setTimeout(r, 900 * k));
       }
       if (!res || !res.ok) { toast((res && res.error) || 'Survei belum terkirim. Periksa koneksi lalu coba lagi.', 'error'); if (btn) { btn.disabled = false; btn.textContent = 'SELESAI SURVEI'; } return; }
       try { sessionStorage.removeItem('cbt_survei_' + S.sesiId); } catch (e) { }
+      S.kualitasAkhir = { baik: kualitas.baik, alasan: kualitas.alasan, rataDetik: kualitas.rataDetik, nilai: kualitas.nilai, komponen: kualitas.komponen };
       S.selesai && S.selesai(res);
     } finally { S.kirimBusy = false; }
   }
@@ -403,7 +548,7 @@ const Survei = (function () {
     try { info = await api('getSurveiSesi', { sesiId: state.sesiId, siswaId: state.user.id }); } catch (e) { info = null; }
     if (!info || !info.ok || !info.jenis || info.sudah || !JENIS[info.jenis]) return;
     let simpan = null; try { simpan = JSON.parse(sessionStorage.getItem('cbt_survei_' + state.sesiId) || 'null'); } catch (e) { }
-    Object.assign(S, { jenis: info.jenis, set: bangunSet(info.jenis, info.set), sesiId: state.sesiId, jawaban: (simpan && simpan.j) || {}, detik: (simpan && simpan.d) || {}, idx: 0, tahap: 'intro', mulai: Date.now(), tMasuk: 0, diingatkan: false, kirimBusy: false, tampilHasil: !!info.tampilHasil });
+    Object.assign(S, { jenis: info.jenis, set: bangunSet(info.jenis, info.set), sesiId: state.sesiId, jawaban: (simpan && simpan.j) || {}, detik: (simpan && simpan.d) || {}, idx: 0, tahap: 'intro', mulai: Date.now(), tMasuk: 0, diingatkan: false, kirimBusy: false, dikunjungi: {}, tampilHasil: !!info.tampilHasil });
     const sc = $('survei-screen'); if (!sc) return;
     try { KumpulUI.sembunyikanSemua(); } catch (e) { }
     UI.tampilkan('survei-screen');
@@ -412,7 +557,7 @@ const Survei = (function () {
     await new Promise(resolve => {
       S.selesai = async (res) => {
         S.selesai = null;
-        if (S.tampilHasil) await tampilRingkasanSiswa(); // ringkasan indeks (opsional, atur di Kelola Ujian)
+        await tampilRingkasanSiswa(); // Nilai Kesungguhan selalu tampil; indeks per dimensi hanya bila diaktifkan di Kelola Ujian
         resolve();
       };
     });
@@ -421,12 +566,15 @@ const Survei = (function () {
   function tampilRingkasanSiswa() {
     return new Promise(resolve => {
       const h = hitung(S.jenis, S.jawaban, S.set); const J = S.set;
-      const baris = J.dim.map(d => { const x = h.dim[d[0]]; const k = kategoriIndeks(x.indeks); return `<div class="sv-bar"><div class="sv-bar-t"><span>${esc(d[1])}</span><b style="color:${k.warna}">${x.indeks === null ? '-' : String(x.indeks).replace('.', ',')}</b></div><div class="sv-bar-b"><i style="width:${x.indeks || 0}%;background:${k.warna}"></i></div><small style="color:${k.warna}">${k.label}</small></div>`; }).join('');
-      const total = S.jenis === 'karakter' ? `<div class="sv-total">Indeks Karakter: <b>${String(h.total).replace('.', ',')}</b></div>` : '';
+      let indeks = '';
+      if (S.tampilHasil) {
+        const baris = J.dim.map(d => { const x = h.dim[d[0]]; const k = kategoriIndeks(x.indeks); return `<div class="sv-bar"><div class="sv-bar-t"><span>${esc(d[1])}</span><b style="color:${k.warna}">${x.indeks === null ? '-' : String(x.indeks).replace('.', ',')}</b></div><div class="sv-bar-b"><i style="width:${x.indeks || 0}%;background:${k.warna}"></i></div><small style="color:${k.warna}">${k.label}</small></div>`; }).join('');
+        const total = S.jenis === 'karakter' ? `<div class="sv-total">Nilai Survei Karakter: <b>${String(h.total).replace('.', ',')}</b></div>` : '';
+        indeks = `<p class="sv-ket">Nilai survei (0–100) ini untuk latihan agar siswa menjawab jujur dan teliti. Pada ANBK/TKA sesungguhnya, siswa tidak melihat hasil survei.</p>${total}<div class="sv-bars">${baris}</div>`;
+      }
       $('sv-nomor').textContent = 'Survei Terkirim';
       $('sv-progres').textContent = 'Selesai';
-      $('sv-body').innerHTML = `<div class="sv-pad"><p class="sv-p"><i class="fa-solid fa-circle-check" style="color:#1b7f4b"></i> Survei Anda sudah terkirim. Terima kasih sudah menjawab dengan jujur.</p>
-        <p class="sv-ket">Ringkasan ini hanya untuk latihan. Pada ANBK/TKA sesungguhnya, siswa tidak melihat hasil survei.</p>${total}<div class="sv-bars">${baris}</div></div>`;
+      $('sv-body').innerHTML = `<div class="sv-pad"><p class="sv-p"><i class="fa-solid fa-circle-check" style="color:#1b7f4b"></i> Survei Anda sudah terkirim. Terima kasih.</p>${htmlKesungguhan(S.kualitasAkhir, false)}${indeks}</div>`;
       $('sv-nav').innerHTML = `<span></span><button type="button" class="anbk-btn anbk-btn-primary" id="sv-btn-lanjut"><span>LIHAT HASIL TES</span> <i class="fa-solid fa-circle-chevron-right"></i></button><span></span>`;
       $('sv-btn-lanjut').onclick = () => resolve();
       window.scrollTo(0, 0);
@@ -481,26 +629,65 @@ const Survei = (function () {
     if (!rows.length) { ring.innerHTML = ''; cont.innerHTML = '<p class="subtitle">Belum ada siswa yang mengisi survei' + (G.belum ? ' (' + G.belum + ' siswa selesai tes tetapi belum mengisi survei)' : '') + '.</p>'; return; }
     // rata-rata per dimensi
     const rata = {}; J.dim.forEach(d => { const v = rows.map(r => r._h.dim[d[0]].indeks).filter(x => x !== null); rata[d[0]] = v.length ? bulat2(v.reduce((a, b) => a + b, 0) / v.length) : null; });
-    const totalKelas = J.dim.length && G.jenis === 'karakter' ? bulat2(rows.map(r => r._h.total).reduce((a, b) => a + b, 0) / rows.length) : null;
+    const totalKelas = bulat2(rows.map(r => r._h.total).reduce((a, b) => a + b, 0) / rows.length);
     const kartu = J.dim.map(d => { const k = kategoriIndeks(rata[d[0]]); return `<div class="sv-kartu"><div class="sv-kartu-t">${esc(d[1])}</div><div class="sv-kartu-n" style="color:${k.warna}">${fmt(rata[d[0]])}</div><div class="sv-bar-b"><i style="width:${rata[d[0]] || 0}%;background:${k.warna}"></i></div><span class="sv-lencana" style="background:${k.latar};color:${k.warna}">${k.label}</span></div>`; }).join('');
     // butir terendah (rata-rata skor 1-4 -> indeks)
     const butir = J.butir.map(b => { const v = rows.map(r => r._h.butir[b[0]]).filter(x => x !== undefined); return { b, m: v.length ? bulat2(((v.reduce((a, c) => a + c, 0) / v.length) - 1) / 3 * 100) : null }; }).filter(x => x.m !== null).sort((a, c) => a.m - c.m).slice(0, 5);
-    const lemah = `<div class="sv-lemah"><b>5 butir dengan indeks terendah (bahan perbaikan)</b><ol>${butir.map(x => `<li><span>${esc(x.b[4])}</span> <em>${esc(J.dimNama[x.b[1]])}</em> <b style="color:${kategoriIndeks(x.m).warna}">${fmt(x.m)}</b></li>`).join('')}</ol></div>`;
+    const lemah = `<div class="sv-lemah"><b>5 butir dengan nilai terendah (bahan perbaikan)</b><ol>${butir.map(x => `<li><span>${esc(x.b[4])}</span> <em>${esc(J.dimNama[x.b[1]])}</em> <b style="color:${kategoriIndeks(x.m).warna}">${fmt(x.m)}</b></li>`).join('')}</ol></div>`;
     const perhatian = G.jenis === 'sulingjar' ? rows.filter(r => BUTIR_PERHATIAN.some(id => Number(r.jawaban[id]) >= 3)).length : 0;
-    ring.innerHTML = `<div class="sv-info"><span><b>${rows.length}</b> siswa mengisi</span>${G.belum ? `<span><b>${G.belum}</b> belum mengisi</span>` : ''}<span><b>${rows.filter(r => !r._q.baik).length}</b> pengisian perlu dicek</span>${totalKelas !== null ? `<span>Indeks Karakter rata-rata <b>${fmt(totalKelas)}</b></span>` : ''}${perhatian ? `<span class="sv-warn"><i class="fa-solid fa-circle-exclamation"></i> <b>${perhatian}</b> siswa melaporkan pengalaman tidak aman (beberapa kali/sering)</span>` : ''}</div><div class="sv-kartu-wrap">${kartu}</div>${lemah}<p class="subtitle" style="margin:.4rem 0">Skala indeks 0–100 (makin tinggi makin baik). Kategori Baik ≥ 75, Sedang 50–74,99, Perlu perhatian &lt; 50 hanyalah acuan latihan.</p>`;
+    ring.innerHTML = `<div class="sv-info"><span><b>${rows.length}</b> siswa mengisi</span>${G.belum ? `<span><b>${G.belum}</b> belum mengisi</span>` : ''}<span><b>${rows.filter(r => !r._q.baik).length}</b> pengisian perlu dicek</span>${(() => { const v = rows.map(r => r.kualitas && r.kualitas.nilai).filter(x => x !== undefined && x !== null); return v.length ? `<span>Rata-rata Nilai Kesungguhan <b>${fmt(bulat2(v.reduce((a, c) => a + c, 0) / v.length))}</b></span>` : ''; })()}<span>Rata-rata nilai survei <b>${fmt(totalKelas)}</b></span>${perhatian ? `<span class="sv-warn"><i class="fa-solid fa-circle-exclamation"></i> <b>${perhatian}</b> siswa melaporkan pengalaman tidak aman (beberapa kali/sering)</span>` : ''}</div><div class="sv-kartu-wrap">${kartu}</div>${htmlEvaluasi(rows, J, rata)}${htmlPerKelas(rows, J)}${lemah}<p class="subtitle" style="margin:.4rem 0">Nilai survei skala 0–100 (makin tinggi makin baik; jawaban terbaik = skor 4). Kategori Baik ≥ 75, Sedang 50–74,99, Perlu perhatian &lt; 50 hanyalah acuan latihan.</p>`;
     const th = J.dim.map(d => `<th title="${esc(d[1])}">${esc(d[1].length > 22 ? d[1].slice(0, 20) + '…' : d[1])}</th>`).join('');
-    cont.innerHTML = `<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>Nama</th><th>Kelas</th>${th}${G.jenis === 'karakter' ? '<th>Indeks Karakter</th>' : ''}<th>Waktu</th><th>Kualitas Pengisian</th>${G.jenis === 'sulingjar' ? '<th>Catatan</th>' : ''}</tr></thead><tbody>${rows.map((r, i) => {
+    cont.innerHTML = `<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>Nama</th><th>Kelas</th>${th}<th>${G.jenis === 'karakter' ? 'Nilai Survei Karakter' : 'Nilai Sulingjar'}</th><th>Waktu</th><th>Nilai Kesungguhan</th><th>Kualitas Pengisian</th>${G.jenis === 'sulingjar' ? '<th>Catatan</th>' : ''}</tr></thead><tbody>${rows.map((r, i) => {
       const sel = J.dim.map(d => { const x = r._h.dim[d[0]].indeks; const k = kategoriIndeks(x); return `<td><span class="sv-lencana" style="background:${k.latar};color:${k.warna}">${fmt(x)}</span></td>`; }).join('');
       const cat = G.jenis === 'sulingjar' ? `<td>${BUTIR_PERHATIAN.filter(id => Number(r.jawaban[id]) >= 3).length ? '<span class="badge no" title="Menjawab Beberapa kali/Sering pada butir pengalaman tidak aman. Tindak lanjuti secara rahasia.">Perlu tindak lanjut</span>' : '-'}</td>` : '';
-      return `<tr><td>${i + 1}</td><td>${esc(r.nama)}</td><td>${esc(r.kelas)}</td>${sel}${G.jenis === 'karakter' ? `<td><b>${fmt(r._h.total)}</b></td>` : ''}<td>${r.durasi ? Math.floor(r.durasi / 60) + ' mnt ' + (r.durasi % 60) + ' dtk' : '-'}</td><td>${r._q.baik ? '<span class="badge ok">Baik</span>' : `<span class="badge no" title="${esc(r._q.alasan.join('; '))}">Perlu dicek</span>`}</td>${cat}</tr>`;
+      return `<tr><td>${i + 1}</td><td>${esc(r.nama)}</td><td>${esc(r.kelas)}</td>${sel}<td><b>${fmt(r._h.total)}</b></td><td>${r.durasi ? Math.floor(r.durasi / 60) + ' mnt ' + (r.durasi % 60) + ' dtk' : '-'}</td><td>${r.kualitas && r.kualitas.nilai !== undefined ? `<span class="sv-lencana" style="background:${kategoriKesungguhan(r.kualitas.nilai).latar};color:${kategoriKesungguhan(r.kualitas.nilai).warna}" title="${kategoriKesungguhan(r.kualitas.nilai).label}">${r.kualitas.nilai}</span>` : '-'}</td><td>${r._q.baik ? '<span class="badge ok">Baik</span>' : `<span class="badge no" title="${esc(r._q.alasan.join('; '))}">Perlu dicek</span>`}</td>${cat}</tr>`;
     }).join('')}</tbody></table></div>`;
+  }
+
+  function rataDim(rows, J) {
+    const o = {}; J.dim.forEach(d => { const v = rows.map(r => r._h.dim[d[0]].indeks).filter(x => x !== null); o[d[0]] = v.length ? bulat2(v.reduce((a, b) => a + b, 0) / v.length) : null; });
+    const t = rows.map(r => r._h.total).filter(x => x !== null);
+    o._total = t.length ? bulat2(t.reduce((a, b) => a + b, 0) / t.length) : null;
+    return o;
+  }
+  // Panel evaluasi: dimensi di bawah 75 diurutkan dari yang paling rendah + saran pembiasaan
+  function htmlEvaluasi(rows, J, rata) {
+    const kurang = J.dim.filter(d => rata[d[0]] !== null && rata[d[0]] < 75).sort((a, b) => rata[a[0]] - rata[b[0]]);
+    if (!kurang.length) return '<div class="sv-ev sv-ev-ok"><b>Evaluasi:</b> semua dimensi sudah berkategori Baik (nilai ≥ 75). Pertahankan pembiasaan yang sudah berjalan.</div>';
+    const items = kurang.map(d => {
+      const k = kategoriIndeks(rata[d[0]]);
+      const low = J.butir.filter(b => b[1] === d[0]).map(b => { const v = rows.map(r => r._h.butir[b[0]]).filter(x => x !== undefined); return { b, m: v.length ? bulat2(((v.reduce((a, c) => a + c, 0) / v.length) - 1) / 3 * 100) : null }; }).filter(x => x.m !== null).sort((a, c) => a.m - c.m).slice(0, 2);
+      const saran = (G.jenis === 'karakter' ? SARAN_KELAS[d[0]] : SARAN[d[0]]) || '';
+      return `<li><div class="sv-ev-h"><b>${esc(d[1])}</b><span class="sv-lencana" style="background:${k.latar};color:${k.warna}">${fmt(rata[d[0]])} · ${k.label}</span></div>
+        <div class="sv-ev-b">Butir paling rendah: ${low.map(x => `“${esc(x.b[4])}” (${fmt(x.m)})`).join('; ')}</div>
+        ${saran ? `<div class="sv-ev-s"><b>${G.jenis === 'karakter' ? 'Pembiasaan di kelas' : 'Tindak lanjut sekolah'}:</b> ${esc(saran)}</div>` : ''}</li>`;
+    }).join('');
+    return `<div class="sv-ev"><b>Evaluasi: ${kurang.length} dimensi perlu ditingkatkan</b> (urut dari nilai terendah)<ol>${items}</ol></div>`;
+  }
+  function htmlPerKelas(rows, J) {
+    const kelas = Array.from(new Set(rows.map(r => r.kelas))).sort();
+    if (kelas.length < 2) return '';
+    const th = J.dim.map(d => `<th title="${esc(d[1])}">${esc(d[1].length > 20 ? d[1].slice(0, 18) + '…' : d[1])}</th>`).join('');
+    const baris = kelas.concat(['__semua']).map(kl => {
+      const sub = kl === '__semua' ? rows : rows.filter(r => r.kelas === kl); const m = rataDim(sub, J);
+      const sel = J.dim.map(d => { const k = kategoriIndeks(m[d[0]]); return `<td><span class="sv-lencana" style="background:${k.latar};color:${k.warna}">${fmt(m[d[0]])}</span></td>`; }).join('');
+      const kt = kategoriIndeks(m._total);
+      return `<tr${kl === '__semua' ? ' class="sv-semua"' : ''}><td>${kl === '__semua' ? '<b>Semua kelas</b>' : esc(kl)}</td><td>${sub.length}</td>${sel}<td><b style="color:${kt.warna}">${fmt(m._total)}</b></td></tr>`;
+    }).join('');
+    return `<div class="sv-kelas"><b>Rata-rata nilai survei per kelas</b><div class="table-wrap"><table class="data-table"><thead><tr><th>Kelas</th><th>Siswa</th>${th}<th>Nilai Survei</th></tr></thead><tbody>${baris}</tbody></table></div></div>`;
   }
 
   async function guruUnduh() {
     const J = G.set; if (!J) { toast('Pilih ujian dulu.', 'error'); return; }
     const rows = guruSaring().map(hitungBaris); if (!rows.length) { toast('Belum ada data untuk diunduh.', 'error'); return; }
-    const head = ['No', 'Nama', 'Kelas'].concat(J.dim.map(d => 'Indeks ' + d[1])).concat(G.jenis === 'karakter' ? ['Indeks Karakter'] : []).concat(['Durasi (detik)', 'Kualitas Pengisian', 'Keterangan']).concat(J.butir.map(b => b[0]));
-    const data = rows.map((r, i) => [i + 1, r.nama, r.kelas].concat(J.dim.map(d => r._h.dim[d[0]].indeks)).concat(G.jenis === 'karakter' ? [r._h.total] : []).concat([r.durasi || '', r._q.baik ? 'Baik' : 'Perlu dicek', r._q.alasan.join('; ')]).concat(J.butir.map(b => r.jawaban[b[0]] || '')));
+    const head = ['No', 'Nama', 'Kelas'].concat(J.dim.map(d => 'Nilai ' + d[1])).concat(G.jenis === 'karakter' ? ['Nilai Survei Karakter'] : ['Nilai Sulingjar (rata-rata)']).concat(['Durasi (detik)', 'Nilai Kesungguhan', 'Kualitas Pengisian', 'Keterangan']).concat(J.butir.map(b => b[0]));
+    const data = rows.map((r, i) => [i + 1, r.nama, r.kelas].concat(J.dim.map(d => r._h.dim[d[0]].indeks)).concat([r._h.total]).concat([r.durasi || '', (r.kualitas && r.kualitas.nilai !== undefined) ? r.kualitas.nilai : '', r._q.baik ? 'Baik' : 'Perlu dicek', r._q.alasan.join('; ')]).concat(J.butir.map(b => r.jawaban[b[0]] || '')));
+    // baris rata-rata (semua & per kelas) di bagian bawah lembar
+    const kolKosong = (n) => new Array(Math.max(0, n)).fill('');
+    const barisRata = (label, sub) => { const m = rataDim(sub, J); return ['', label, ''].concat(J.dim.map(d => m[d[0]])).concat([m._total]).concat(kolKosong(head.length - 3 - J.dim.length - 1)); };
+    data.push(kolKosong(head.length));
+    data.push(barisRata('RATA-RATA SEMUA SISWA (' + rows.length + ')', rows));
+    Array.from(new Set(rows.map(r => r.kelas))).sort().forEach(kl => data.push(barisRata('Rata-rata kelas ' + kl, rows.filter(r => r.kelas === kl))));
     const sel = $('pilih-ujian-survei'); const nama = (sel.options[sel.selectedIndex] || {}).text || 'survei';
     await unduhXlsxRapi_('Hasil ' + (G.jenis === 'karakter' ? 'Survei Karakter' : 'Sulingjar') + ' - ' + nama.split(' — ')[0].slice(0, 40) + '.xlsx', 'Hasil Survei', head, data, head.map((h, i) => i === 1 ? 28 : (i < 3 ? 10 : 14)));
   }
@@ -513,7 +700,7 @@ const Survei = (function () {
     sedang: 'cukup baik, tetapi masih ada butir yang perlu ditingkatkan.',
     kurang: 'masih rendah dan perlu mendapat perhatian.'
   };
-  function headlineSurvei(jenis, h) { return { label: jenis === 'karakter' ? 'Indeks Karakter' : 'Rata-rata indeks', nilai: h.total }; }
+  function headlineSurvei(jenis, h) { return { label: jenis === 'karakter' ? 'Nilai Survei Karakter' : 'Nilai Sulingjar', nilai: h.total }; }
 
   function htmlPembahasan(set, jenis, jawaban, kualitas, opsi) {
     const guru = !!(opsi && opsi.guru);
@@ -521,9 +708,10 @@ const Survei = (function () {
     const h = hitung(jenis, jawaban, set); const subjek = guru ? 'siswa' : 'Anda';
     const hl = headlineSurvei(jenis, h); const kHl = kategoriIndeks(hl.nilai);
     const q = kualitas || {};
-    let out = `<div class="sv-pb"><div class="sv-pb-top"><div><div class="sv-pb-judul">${esc(set.nama)}</div><div class="sv-pb-sub">Tidak ada jawaban benar atau salah. Indeks 0–100; skor butir 4 = kondisi paling baik (butir bernada negatif dibalik).</div></div>
+    let out = `<div class="sv-pb"><div class="sv-pb-top"><div><div class="sv-pb-judul">${esc(set.nama)}</div><div class="sv-pb-sub">Tidak ada jawaban benar atau salah. Jawaban terbaik = skor 4 (Sangat setuju/Selalu untuk pernyataan positif; Tidak pernah untuk pernyataan negatif). Nilai = skor rata-rata diubah ke skala 0–100.</div></div>
       <div class="sv-pb-total"><span>${esc(hl.label)}</span><b style="color:${kHl.warna}">${fmt(hl.nilai)}</b><span class="sv-lencana" style="background:${kHl.latar};color:${kHl.warna}">${kHl.label}</span></div></div>`;
-    if (q.baik === false) out += `<div class="sv-pb-kualitas"><i class="fa-solid fa-triangle-exclamation"></i> ${guru ? 'Kualitas pengisian perlu dicek' : 'Pengisian survei Anda terlihat kurang teliti'}${q.alasan && q.alasan.length ? ': ' + esc(q.alasan.join('; ')) : ''}. ${guru ? 'Hasil indeks siswa ini sebaiknya dibaca dengan hati-hati.' : 'Lain kali baca tiap pernyataan dan jawab sesuai keadaan sebenarnya.'}</div>`;
+    out += htmlKesungguhan(q, guru);
+    if (q.baik === false && !(q.alasan && q.alasan.length)) out += `<div class="sv-pb-kualitas"><i class="fa-solid fa-triangle-exclamation"></i> ${guru ? 'Kualitas pengisian perlu dicek' : 'Pengisian survei Anda terlihat kurang teliti'}${q.alasan && q.alasan.length ? ': ' + esc(q.alasan.join('; ')) : ''}. ${guru ? 'Hasil indeks siswa ini sebaiknya dibaca dengan hati-hati.' : 'Lain kali baca tiap pernyataan dan jawab sesuai keadaan sebenarnya.'}</div>`;
     set.dim.forEach(d => {
       const x = h.dim[d[0]]; if (!x || x.indeks === null) return;
       const k = kategoriIndeks(x.indeks);
@@ -535,7 +723,7 @@ const Survei = (function () {
       }
       out += `<details class="sv-pb-dim" ${k.kode !== 'baik' ? 'open' : ''}><summary><span class="sv-pb-dn">${esc(d[1])}</span><span class="sv-lencana" style="background:${k.latar};color:${k.warna}">${fmt(x.indeks)} · ${k.label}</span></summary>
         <div class="sv-bar-b"><i style="width:${x.indeks}%;background:${k.warna}"></i></div>
-        <p class="sv-pb-tafsir">Indeks ${esc(d[1])} ${subjek} <b>${fmt(x.indeks)}</b> — ${TAFSIR[k.kode]}</p>
+        <p class="sv-pb-tafsir">Nilai ${esc(d[1])} ${subjek} <b>${fmt(x.indeks)}</b> (rata-rata skor ${fmt(x.rata)} dari 4) — ${TAFSIR[k.kode]}</p>
         <ul class="sv-pb-list">${butir.map(b => {
           const sk = h.butir[b[0]]; const p = jawaban[b[0]];
           const jw = p ? SKALA[b[2]][p - 1] : '-';
@@ -591,13 +779,15 @@ const Survei = (function () {
   function ringkasSurvei(r) {
     if (!r || !r.survei) return null;
     const h = hitung(r.survei.jenis, r.survei.jawaban, r.survei.set);
-    return { h, nilai: h.total, kat: kategoriIndeks(h.total), baik: !(r.survei.kualitas && r.survei.kualitas.baik === false), set: r.survei.set };
+    return { h, kes: (r.survei.kualitas && r.survei.kualitas.nilai !== undefined) ? r.survei.kualitas.nilai : null, nilai: h.total, kat: kategoriIndeks(h.total), baik: !(r.survei.kualitas && r.survei.kualitas.baik === false), set: r.survei.set };
   }
   function selRekap(r) {
     const x = ringkasSurvei(r);
     if (!x) return '<span class="badge warn">Belum mengisi</span>';
     const tip = x.set.dim.map(d => d[1] + ': ' + fmt(x.h.dim[d[0]].indeks)).join('\n');
-    return `<span class="sv-lencana" style="background:${x.kat.latar};color:${x.kat.warna}" title="${esc(tip)}">${fmt(x.nilai)} · ${x.kat.label}</span>${x.baik ? '' : ' <span class="badge no" title="Kualitas pengisian perlu dicek">⚠ dicek</span>'}`;
+    const q = r.survei.kualitas || {}; const kk = kategoriKesungguhan(q.nilai);
+    const kes = (q.nilai === undefined || q.nilai === null) ? '' : `<div class="sv-kes-mini" title="Nilai Kesungguhan mengisi survei (0-100)">Kesungguhan <b style="color:${kk.warna}">${q.nilai}</b> · ${kk.label}</div>`;
+    return `<span class="sv-lencana" style="background:${x.kat.latar};color:${x.kat.warna}" title="${esc(tip)}">${fmt(x.nilai)} · ${x.kat.label}</span>${x.baik ? '' : ' <span class="badge no" title="Kualitas pengisian perlu dicek">⚠ dicek</span>'}${kes}`;
   }
 
   // =====================================================================================
@@ -742,6 +932,6 @@ const Survei = (function () {
   const _bukaDetailSiswa = ExamEngine.bukaDetailJawaban;
   ExamEngine.bukaDetailJawaban = async function () { await _bukaDetailSiswa.call(ExamEngine); try { await siapkanDetailSiswa(); } catch (e) { } };
 
-  return { mulai, pilih, pilihId, geser, lompat, lompatButir, kirim, jenisUntukUjian, bangunSet, hitung, periksaKualitas, kategoriIndeks, JENIS, guruMuat, guruRender, guruUnduh,
+  return { mulai, pilih, pilihId, geser, lompat, lompatButir, kirim, jenisUntukUjian, bangunSet, hitung, periksaKualitas, kategoriIndeks, kategoriKesungguhan, JENIS, guruMuat, guruRender, guruUnduh,
     modeDetail, gabungKeRekap, selRekap, ringkasSurvei, setDraft, draftJson, statusForm, pakaiBawaan, unduhTemplate, imporDariForm, htmlPembahasan };
 })();
