@@ -2408,6 +2408,7 @@ const LocalBackend = (function () {
     db.sesi = db.sesi || [];
     db.log = db.log || [];
     db.buktiOrek = db.buktiOrek || [];
+    db.survei = db.survei || [];
     db.config = db.config || {};
     if (db.guru.length === 0) {
       db.guru.push({ id: 'G001', username: 'admin', password: 'admin123', nama: 'Administrator', tema_json: JSON.stringify(defaultTemaLocal()) });
@@ -2939,6 +2940,7 @@ const LocalBackend = (function () {
         const ids = new Set(JSON.parse(data.sesiIds || '[]').map(String));
         D.sesi = D.sesi.filter(x => !ids.has(String(x.id)));
         D.buktiOrek = (D.buktiOrek || []).filter(b => !ids.has(String(b.sesi_id))); // foto bukti ikut dibersihkan
+        D.survei = (D.survei || []).filter(x => !ids.has(String(x.sesi_id))); // hasil survei ikut dibersihkan
         if (Array.isArray(D.log)) D.log = D.log.filter(l => !ids.has(String(l.sesi_id)));
         simpan();
         return { ok: true, count: ids.size };
@@ -2946,6 +2948,7 @@ const LocalBackend = (function () {
       case 'pemantauanReset': {
         const idx = cariIdx(D.sesi, data.sesiId);
         if (idx > -1) D.sesi.splice(idx, 1);
+        D.survei = (D.survei || []).filter(x => String(x.sesi_id) !== String(data.sesiId));
         simpan();
         return { ok: true };
       }
@@ -3091,8 +3094,10 @@ const LocalBackend = (function () {
         let existing = D.sesi.find(s => s.ujian_id === data.ujianId && s.siswa_id === data.siswaId);
         if (existing && existing.status === 'selesai') {
           // Pemulihan: bukti WAJIB tapi belum ada foto sama sekali -> arahkan ke halaman unggah
-          if (modeBuktiLokal(ujian) === 'wajib' && !(D.buktiOrek || []).some(b => b.sesi_id === existing.id)) {
-            return { ok: true, perluBukti: true, sesiId: existing.id, nilai: existing.nilai, lulus: existing.lulus, buktiOrek: 'wajib', judul: ujian.judul };
+          const perluBuktiL = modeBuktiLokal(ujian) === 'wajib' && !(D.buktiOrek || []).some(b => b.sesi_id === existing.id);
+          const perluSurveiL = !!Survei.jenisUntukUjian(ujian) && !(D.survei || []).some(x => x.sesi_id === existing.id);
+          if (perluBuktiL || perluSurveiL) {
+            return { ok: true, perluBukti: perluBuktiL, perluSurvei: perluSurveiL, sesiId: existing.id, nilai: existing.nilai, lulus: existing.lulus, buktiOrek: perluBuktiL ? 'wajib' : '', judul: ujian.judul };
           }
           return { ok: false, error: 'Anda sudah menyelesaikan ujian ini.' };
         }
@@ -3211,6 +3216,46 @@ const LocalBackend = (function () {
         const tampilPembahasan = !(ujian && String(ujian.tampil_pembahasan).toLowerCase() === 'false');
         if (!tampilPembahasan && data.siswaId) items.forEach(it => { it.pembahasan = ''; });
         return { ok: true, judulUjian: ujian ? ujian.judul : '-', nilai: sesi.nilai, lulus: sesi.lulus, items, tampilPembahasan };
+      }
+      case 'getSurveiSesi': {
+        const sesi = D.sesi.find(s => s.id === data.sesiId);
+        if (!sesi) return { ok: false, error: 'Sesi tidak ditemukan.' };
+        if (data.siswaId && String(sesi.siswa_id) !== String(data.siswaId)) return { ok: false, error: 'Sesi ini bukan milik Anda.' };
+        const ujS = D.ujian.find(u => u.id === sesi.ujian_id);
+        const jenisG = Survei.jenisUntukUjian(ujS);
+        const rowSv = (D.survei || []).filter(x => x.sesi_id === sesi.id)[0];
+        const tampilG = !!ujS && String(ujS.survei_tampil) === 'true';
+        const out = { ok: true, jenis: jenisG, set: (ujS && ujS.survei_butir) || '', sudah: !!rowSv, tampilHasil: tampilG };
+        if (rowSv && tampilG) { try { out.jawaban = JSON.parse(rowSv.jawaban_json || '{}'); out.kualitas = JSON.parse(rowSv.kualitas_json || '{}'); } catch (e) { } }
+        return out;
+      }
+      case 'simpanSurvei': {
+        const sesi = D.sesi.find(s => s.id === data.sesiId);
+        if (!sesi) return { ok: false, error: 'Sesi tidak ditemukan.' };
+        if (String(sesi.siswa_id) !== String(data.siswaId)) return { ok: false, error: 'Sesi ini bukan milik Anda.' };
+        if (sesi.status === 'berlangsung') return { ok: false, error: 'Selesaikan ujian dulu sebelum mengisi survei.' };
+        const ujS = D.ujian.find(u => u.id === sesi.ujian_id);
+        const jenisS = Survei.jenisUntukUjian(ujS);
+        if (!jenisS) return { ok: false, error: 'Survei tidak diaktifkan untuk ujian ini.' };
+        if ((D.survei || []).some(x => x.sesi_id === sesi.id)) return { ok: true, sudah: true };
+        D.survei = D.survei || [];
+        D.survei.push({ id: genId('SV'), sesi_id: sesi.id, siswa_id: sesi.siswa_id, ujian_id: sesi.ujian_id, jenis: jenisS, jawaban_json: String(data.jawaban || '{}'), durasi_detik: Number(data.durasiDetik) || 0, kualitas_json: String(data.kualitas || '{}'), waktu: new Date().toISOString() });
+        simpan();
+        return { ok: true };
+      }
+      case 'getRekapSurvei': {
+        const ujS = D.ujian.find(u => u.id === data.ujianId);
+        if (!ujS) return { ok: false, error: 'Ujian tidak ditemukan.' };
+        const jenisS = Survei.jenisUntukUjian(ujS);
+        const smap = {}; D.siswa.forEach(x => { smap[x.id] = x; });
+        const baris = (D.survei || []).filter(x => x.ujian_id === ujS.id).map(x => {
+          const sw = smap[x.siswa_id] || {};
+          let jw = {}, kq = {}; try { jw = JSON.parse(x.jawaban_json || '{}'); } catch (e) { } try { kq = JSON.parse(x.kualitas_json || '{}'); } catch (e) { }
+          return { sesiId: x.sesi_id, siswaId: x.siswa_id, nama: sw.nama || '(tidak dikenal)', kelas: sw.kelas || '-', waktu: x.waktu, durasi: Number(x.durasi_detik) || 0, jawaban: jw, kualitas: kq };
+        }).sort((a, b) => String(a.kelas).localeCompare(String(b.kelas)) || String(a.nama).localeCompare(String(b.nama)));
+        const sudahSet = new Set((D.survei || []).filter(x => x.ujian_id === ujS.id).map(x => x.sesi_id));
+        const belum = D.sesi.filter(x => x.ujian_id === ujS.id && x.status !== 'berlangsung' && !sudahSet.has(x.id)).length;
+        return { ok: true, jenis: jenisS, set: ujS.survei_butir || '', data: baris, belum };
       }
       case 'getHasil': {
         const sesi = D.sesi.find(s => s.id === data.sesiId);
@@ -3544,7 +3589,7 @@ const UI = {
   },
 
   tampilkan(idLayar) {
-    ['login-screen', 'guru-portal', 'siswa-portal', 'tes-konfirmasi-screen', 'ujian-screen', 'bukti-screen', 'hasil-screen', 'detail-screen'].forEach(id => {
+    ['login-screen', 'guru-portal', 'siswa-portal', 'tes-konfirmasi-screen', 'ujian-screen', 'bukti-screen', 'survei-screen', 'hasil-screen', 'detail-screen'].forEach(id => {
       document.getElementById(id).classList.toggle('hidden', id !== idLayar);
     });
   },
@@ -3911,6 +3956,9 @@ const UI = {
     document.getElementById('ujian-tampil-detail').checked = ujian ? (String(ujian.tampil_detail) !== 'false') : true;
     document.getElementById('ujian-tampil-pembahasan').checked = ujian ? (String(ujian.tampil_pembahasan).toLowerCase() !== 'false') : true;
     document.getElementById('ujian-bukti-orek').value = ujian && ujian.bukti_orek ? ujian.bukti_orek : '';
+    document.getElementById('ujian-survei').value = ujian ? (ujian.survei || '') : 'auto'; // ujian baru: otomatis (Numerasi -> Survei Karakter, Literasi -> Sulingjar)
+    document.getElementById('ujian-survei-tampil').checked = ujian ? (String(ujian.survei_tampil) === 'true') : false;
+    Survei.setDraft(ujian ? (ujian.survei_butir || '') : '');
     Guru.sinkronDetailPembahasan();
     Guru.muatEditorPesanNilai(ujian && ujian.pesan_nilai);
     // null (bukan array kosong) khusus menandai "ujian baru, belum ada
@@ -5016,6 +5064,7 @@ const Guru = {
           const trList = Array.from(tbl.querySelectorAll('tr'));
           if (!trList.length) continue;
           const headerKey = Array.from(trList[0].querySelectorAll('th,td')).map(td => kunciHeader_(td.textContent));
+          if (headerKey.indexOf('pernyataan') >= 0) continue; // tabel butir survei (diimpor lewat Kelola Ujian), bukan soal
           const rows = [];
           for (let rIdx = 0; rIdx < trList.length; rIdx++) {
             const selList = Array.from(trList[rIdx].querySelectorAll('th,td'));
@@ -5190,6 +5239,9 @@ const Guru = {
       ujian.tampil_detail = document.getElementById('ujian-tampil-detail').checked;
       ujian.tampil_pembahasan = document.getElementById('ujian-tampil-pembahasan').checked;
       ujian.bukti_orek = document.getElementById('ujian-bukti-orek').value; // '' | 'wajib' | 'opsional'
+      ujian.survei = document.getElementById('ujian-survei').value; // '' | 'auto' | 'karakter' | 'sulingjar'
+      ujian.survei_tampil = document.getElementById('ujian-survei-tampil').checked;
+      ujian.survei_butir = Survei.draftJson(); // '' = pakai butir bawaan; selain itu JSON butir khusus hasil impor Word
       const hasilPesan = Guru.ambilPesanNilaiUntukSimpan();
       if (hasilPesan.error) { toast(hasilPesan.error, 'error'); return; }
       ujian.pesan_nilai = hasilPesan.json;
@@ -5207,7 +5259,7 @@ const Guru = {
     const res = await api('getDaftarUjian', { guruId: state.user.id });
     const sel = document.getElementById(selectId);
     if (!res.ok) return;
-    sel.innerHTML = '<option value="">Pilih ujian...</option>' + res.data.map(u => `<option value="${u.id}">${escapeHtml_(u.judul)}</option>`).join('');
+    sel.innerHTML = '<option value="">Pilih ujian...</option>' + res.data.map(u => `<option value="${u.id}" data-survei="${Survei.jenisUntukUjian(u)}">${escapeHtml_(u.judul)}</option>`).join('');
   },
 
   async muatRekap() {
@@ -5218,6 +5270,9 @@ const Guru = {
     if (!res.ok) return gagalMuat_(cont, 'Gagal memuat.');
     state.guru._rekapAktif = res.data;
     state.guru._rekapBuktiMode = res.buktiMode || '';
+    const optRekap = document.getElementById('pilih-ujian-rekap').selectedOptions[0];
+    if (optRekap && optRekap.dataset.survei) await Survei.gabungKeRekap(ujianId, res.data); // hasil survei di samping nilai tes
+    else { state.guru._rekapSurveiJenis = ''; state.guru._rekapSurveiSet = null; }
     isiOpsiKelas_('kelas-rekap', kelasUnikDari_(res.data));
     Guru.renderTabelRekap_();
     return true;
@@ -5257,11 +5312,13 @@ const Guru = {
     data.forEach(r => { hitungKat[kategoriNilai_(r.nilai).kode]++; });
     tampilkanInfoFilter_('kelas-rekap-info', data.length, semua.length, (rata === null ? '' : 'rata-rata nilai ' + (Math.round(rata * 10) / 10) + ' • ') + jmlLulus + ' lulus, ' + (data.length - jmlLulus) + ' remedial • Istimewa ' + hitungKat.istimewa + ', Baik ' + hitungKat.baik + ', Memadai ' + hitungKat.memadai + ', Kurang ' + hitungKat.kurang);
     if (data.length === 0) { cont.innerHTML = '<p class="subtitle">Tidak ada siswa yang cocok dengan kelas/pencarian ini.</p>'; return; }
+    const adaSurvei = !!state.guru._rekapSurveiJenis;
     const adaKolomBukti = !!state.guru._rekapBuktiMode || semua.some(r => Array.isArray(r.bukti) && r.bukti.length);
-    cont.innerHTML = `<table class="ledger"><thead><tr><th style="width:2rem"><input type="checkbox" id="rekap-pilih-semua" title="Pilih semua yang tampil" onchange="Guru.pilihSemuaRekap(this.checked)"></th><th>Nama</th><th>Kelas</th><th>Nilai</th><th>Kategori</th>${adaKolomBukti ? '<th>Bukti Orak-Orik</th>' : ''}<th>Status</th><th>Pelanggaran</th><th>Selesai</th><th>Durasi</th><th></th></tr></thead><tbody>` +
+    cont.innerHTML = `<table class="ledger"><thead><tr><th style="width:2rem"><input type="checkbox" id="rekap-pilih-semua" title="Pilih semua yang tampil" onchange="Guru.pilihSemuaRekap(this.checked)"></th><th>Nama</th><th>Kelas</th><th>Nilai</th><th>Kategori</th>${adaSurvei ? `<th title="Hasil survei (indeks 0-100) — klik Detail Jawaban untuk pembahasan">${state.guru._rekapSurveiJenis === 'karakter' ? 'Survei Karakter' : 'Sulingjar'}</th>` : ''}${adaKolomBukti ? '<th>Bukti Orak-Orik</th>' : ''}<th>Status</th><th>Pelanggaran</th><th>Selesai</th><th>Durasi</th><th></th></tr></thead><tbody>` +
       data.map(r => `<tr>
         <td><input type="checkbox" class="rekap-cek" value="${escapeHtml_(r.sesiId || '')}" ${r.sesiId ? '' : 'disabled'} ${r.sesiId && tercentang.has(String(r.sesiId)) ? 'checked' : ''}></td>
         <td>${escapeHtml_(r.nama)}</td><td>${escapeHtml_(r.kelas)}</td><td><strong>${r.nilai}</strong></td><td>${badgeKategori_(r.nilai)}</td>
+        ${adaSurvei ? `<td>${Survei.selRekap(r)}</td>` : ''}
         ${adaKolomBukti ? `<td>${Guru.selBuktiRekap_(r)}</td>` : ''}
         <td><span class="badge ${String(r.lulus) === 'true' ? 'ok' : 'no'}">${String(r.lulus) === 'true' ? 'Lulus' : 'Remedial'}</span></td>
         <td>${r.pelanggaran || 0} ${r.status === 'diblokir' ? '<span class="badge warn">Diblokir</span>' : ''}</td>
@@ -5714,6 +5771,10 @@ const Guru = {
     };
     const buatSheet = (arr, denganUjian) => {
       const headers = ['No'].concat(denganUjian ? ['Ujian'] : [], ['Nama', 'Kelas', 'Nilai', 'Keterangan', 'Kategori', 'Pelanggaran', 'Mulai', 'Selesai', 'Durasi Pengerjaan', 'Durasi (menit)', 'Foto Bukti Orak-Orik']);
+      // Hasil survei (Survei Karakter / Sulingjar) di samping nilai tes — hanya untuk ekspor satu ujian yang memakai survei
+      const svSet = !denganUjian ? state.guru._rekapSurveiSet : null;
+      const adaSv = !!svSet && arr.some(r => r.survei);
+      if (adaSv) svSet.dim.forEach(d => headers.push('Indeks ' + d[1])), headers.push(svSet.jenis === 'karakter' ? 'Indeks Karakter' : 'Rata-rata Indeks Survei', 'Kategori Survei', 'Kualitas Pengisian Survei');
       const rows = urut(arr, denganUjian).map((r, i) => {
         const lulus = r.lulus === true || String(r.lulus).toLowerCase() === 'true';
         const lulusSalah = r.lulus === false || String(r.lulus).toLowerCase() === 'false';
@@ -5729,10 +5790,14 @@ const Guru = {
           detik === null ? '-' : formatDurasi_(detik),
           detik === null ? '' : Math.round(detik / 6) / 10,
           Array.isArray(r.bukti) ? r.bukti.length : 0
-        ]);
+        ], adaSv ? (() => {
+          const x = Survei.ringkasSurvei(r);
+          if (!x) return svSet.dim.map(() => '').concat(['', 'Belum mengisi', '']);
+          return svSet.dim.map(d => x.h.dim[d[0]].indeks).concat([x.nilai, x.kat.label, x.baik ? 'Baik' : 'Perlu dicek']);
+        })() : []);
       });
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      ws['!cols'] = (denganUjian ? [5, 28] : [5]).concat([30, 10, 8, 12, 12, 12, 18, 18, 20, 14, 14]).map(w => ({ wch: w }));
+      ws['!cols'] = (denganUjian ? [5, 28] : [5]).concat([30, 10, 8, 12, 12, 12, 18, 18, 20, 14, 14], adaSv ? svSet.dim.map(() => 16).concat([16, 16, 18]) : []).map(w => ({ wch: w }));
       ws['!freeze'] = { xSplit: 0, ySplit: 1 };
       ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(rows.length, 1), c: headers.length - 1 } }) };
       return ws;
@@ -7058,10 +7123,10 @@ const Siswa = {
     if (!res.ok) { toast(res.error, 'error'); return; }
 
     // Pemulihan: siswa sudah selesai tapi bukti orak-orik WAJIB belum terunggah (halaman sempat tertutup).
-    if (res.perluBukti) {
+    if (res.perluBukti || res.perluSurvei) {
       state.sesiId = res.sesiId;
       state.submitting = true;
-      await BuktiUI.buka({ mode: res.buktiOrek, sesiId: res.sesiId, judul: res.judul || state.ujian.judul, pemulihan: true, nilai: res.nilai, lulus: res.lulus, ujianId: state.ujian.id });
+      if (res.perluBukti) await BuktiUI.buka({ mode: res.buktiOrek, sesiId: res.sesiId, judul: res.judul || state.ujian.judul, pemulihan: true, nilai: res.nilai, lulus: res.lulus, ujianId: state.ujian.id });
       state.submitting = false;
       ExamEngine.tampilkanHasil(res.nilai, res.lulus, res.judul || state.ujian.judul);
       return;
