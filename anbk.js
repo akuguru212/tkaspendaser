@@ -72,7 +72,7 @@ const Anbk = (function () {
   async function segarkanToken(manual) {
     const btn = $('kd-refresh'); if (btn) btn.classList.add('is-disabled');
     try {
-      const res = await api('getTokenAktif', {});
+      const res = await api('getTokenAktif', { siswaId: (state.user && state.user.id) || '' });
       const l = res && res.ok && res.ujian && res.ujian.length ? res.ujian[0] : null;
       $('kd-token-tampil').textContent = (l && l.token) ? l.token : '------';
       $('kd-mata').textContent = l ? l.judul : '-';
@@ -164,7 +164,9 @@ const Anbk = (function () {
         `<label class="anbk-opsi${jwb[soal.id] === i ? ' selected' : ''}" data-opsi="${i}" onclick="ExamEngine.pilihJawabanTunggal('${id}', ${i})"><span class="anbk-cb radio"></span><span class="anbk-opsi-t">${isiOpsi(opsiObj(o))}</span></label>`).join('') + '</div>';
     } else if (soal.tipe === 'checkbox') {
       const dip = jwb[soal.id] || [];
-      kanan += '<div class="petunjuk">Pilih semua jawaban yang benar! Jawaban benar lebih dari satu.</div>';
+      // Petunjuk otomatis disembunyikan bila teks soal sudah memuatnya (hindari instruksi ganda).
+      const sudahAdaPetunjuk = /jawaban\s+benar\s+lebih\s+dari\s+satu|pilih\s+semua/i.test(String(soal.pertanyaan || '').replace(/<[^>]*>/g, ' '));
+      if (!sudahAdaPetunjuk) kanan += '<div class="petunjuk">Pilih semua jawaban yang benar! Jawaban benar lebih dari satu.</div>';
       kanan += '<div class="anbk-opsi-list">' + (soal.opsi || []).map((o, i) =>
         `<label class="anbk-opsi${dip.includes(i) ? ' selected' : ''}" data-opsi="${i}" onclick="ExamEngine.toggleJawabanGanda('${id}', ${i})"><span class="anbk-cb"></span><span class="anbk-opsi-t">${isiOpsi(opsiObj(o))}</span></label>`).join('') + '</div>';
     } else if (soal.tipe === 'menjodohkan') {
