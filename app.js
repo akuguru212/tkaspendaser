@@ -187,6 +187,22 @@ function namaUjianUntukFile_(selectId) {
 function normCari_(s) { return String(s === null || s === undefined ? '' : s).toLowerCase().trim(); }
 
 // Daftar kelas unik (urut natural: 7A, 7B, 8A, ... 10A).
+// ---- Token per kelas (lihat Code.gs): '' = semua kelas; JSON array = hanya kelas tercantum ----
+function normKelas_(k) { const t = String(k == null ? '' : k).trim().toLowerCase().replace(/\s+/g, ' '); return (t === '' || t === '-') ? 'tanpa kelas' : t; }
+function kelasAktifUjian_(u) {
+  const raw = String((u && u.token_kelas) == null ? '' : u.token_kelas).trim();
+  if (raw === '') return null; // semua kelas
+  try { const arr = JSON.parse(raw); if (Array.isArray(arr)) return arr.map(normKelas_); } catch (e) { }
+  return null;
+}
+function ringkasTokenKelas_(u) {
+  const raw = String((u && u.token_kelas) == null ? '' : u.token_kelas).trim();
+  if (raw === '') return '<span class="badge ok">Semua kelas</span>';
+  let arr = []; try { arr = JSON.parse(raw); } catch (e) { arr = []; }
+  if (!Array.isArray(arr) || !arr.length) return '<span class="badge no">Terkunci (tidak ada kelas)</span>';
+  const tampil = arr.slice(0, 4).map(k => escapeHtml_(k)).join(', ');
+  return '<span class="badge ok">' + tampil + (arr.length > 4 ? ' +' + (arr.length - 4) : '') + '</span>';
+}
 function kelasUnikDari_(list) {
   return [...new Set((list || []).map(x => String(x.kelas || '').trim()).filter(k => k && k !== '-'))]
     .sort((a, b) => a.localeCompare(b, 'id', { numeric: true }));
@@ -2409,6 +2425,7 @@ const LocalBackend = (function () {
     db.log = db.log || [];
     db.buktiOrek = db.buktiOrek || [];
     db.survei = db.survei || [];
+    db.paketSurvei = db.paketSurvei || [];
     db.config = db.config || {};
     if (db.guru.length === 0) {
       db.guru.push({ id: 'G001', username: 'admin', password: 'admin123', nama: 'Administrator', tema_json: JSON.stringify(defaultTemaLocal()) });
@@ -2616,6 +2633,12 @@ const LocalBackend = (function () {
     return (m === 'wajib' || m === 'opsional') ? m : '';
   }
   function fotoBuktiLokal(b) { return { id: b.id, nama: b.nama, bytes: b.bytes, waktu: b.waktu, url: b.url, urlAsli: b.url }; }
+    function izinKelasLokal_(ujian, siswaId) {
+      const aktif = kelasAktifUjian_(ujian); if (aktif === null) return { ok: true };
+      const sw = D.siswa.find(x => x.id === siswaId); const kelas = sw ? String(sw.kelas || '') : '';
+      if (aktif.indexOf(normKelas_(kelas)) >= 0) return { ok: true };
+      return { ok: false, error: 'Token ujian ini belum diaktifkan untuk kelas ' + (kelas.trim() || 'Anda') + '. Tunggu jadwal dari guru/pengawas.' };
+    }
   function infoBlokirLokal(s) {
     return { aktif: !!s && String(s.blokir || '').toLowerCase() === 'ya', alasan: (s && s.blokir_alasan) || '', sejak: (s && s.blokir_sejak) || '' };
   }
@@ -2686,7 +2709,7 @@ const LocalBackend = (function () {
           if (u.mulai && now < new Date(u.mulai)) return false;
           const batas = u.selesai ? new Date(new Date(u.selesai).getTime() + (Number(u.toleransi_menit) || 0) * 60000) : null;
           return !(batas && now > batas);
-        }).map(u => ({ judul: u.judul, token: tampil ? u.token : '' }));
+        }).filter(u => !data.siswaId || izinKelasLokal_(u, data.siswaId).ok).map(u => ({ judul: u.judul, token: tampil ? u.token : '' }));
         return { ok: true, tampil, ujian: list };
       }
       case 'getPengaturanLock': {
@@ -2762,6 +2785,20 @@ const LocalBackend = (function () {
         D.ujian.push(ujian);
         simpan();
         return { ok: true, id: ujian.id, token: ujian.token };
+      }
+      case 'setTokenKelas': {
+        const ix = cariIdx(D.ujian, data.ujianId);
+        if (ix < 0) return { ok: false, error: 'Ujian tidak ditemukan.' };
+        let nilai = String(data.kelas == null ? '' : data.kelas).trim();
+        if (nilai !== '') {
+          let arr = null; try { arr = JSON.parse(nilai); } catch (e) { arr = null; }
+          if (!Array.isArray(arr) || arr.length > 300) return { ok: false, error: 'Daftar kelas tidak valid.' };
+          const lihat = {}; const unik = [];
+          arr.forEach(k => { const t = String(k == null ? '' : k).trim().slice(0, 60); const n = normKelas_(t); if (t && !lihat[n]) { lihat[n] = 1; unik.push(t); } });
+          nilai = JSON.stringify(unik);
+        }
+        D.ujian[ix].token_kelas = nilai; simpan();
+        return { ok: true, kelas: nilai };
       }
       case 'hapusUjian': {
         const idx = cariIdx(D.ujian, data.id);
@@ -3084,6 +3121,7 @@ const LocalBackend = (function () {
         if (batasTelat && now > batasTelat) return { ok: false, error: 'Waktu akses ujian sudah berakhir.' };
         if (ujian.status !== 'aktif') return { ok: false, error: 'Ujian ini sedang tidak aktif.' };
         const lanjutan = !!D.sesi.find(s => s.ujian_id === ujian.id && s.siswa_id === data.siswaId && s.status !== 'selesai' && s.status !== 'diblokir');
+        if (!lanjutan) { const iz = izinKelasLokal_(ujian, data.siswaId); if (!iz.ok) return { ok: false, error: iz.error }; }
         return { ok: true, ujian: { id: ujian.id, judul: ujian.judul, durasiMenit: ujian.durasi_menit, kategori: ujian.kategori, lanjutan } };
       }
       case 'mulaiUjian': {
@@ -3095,13 +3133,14 @@ const LocalBackend = (function () {
         if (existing && existing.status === 'selesai') {
           // Pemulihan: bukti WAJIB tapi belum ada foto sama sekali -> arahkan ke halaman unggah
           const perluBuktiL = modeBuktiLokal(ujian) === 'wajib' && !(D.buktiOrek || []).some(b => b.sesi_id === existing.id);
-          const perluSurveiL = !!Survei.jenisUntukUjian(ujian) && !(D.survei || []).some(x => x.sesi_id === existing.id);
+          const perluSurveiL = !!Survei.jenisUntukUjian(ujian, D.paketSurvei) && !(D.survei || []).some(x => x.sesi_id === existing.id);
           if (perluBuktiL || perluSurveiL) {
             return { ok: true, perluBukti: perluBuktiL, perluSurvei: perluSurveiL, sesiId: existing.id, nilai: existing.nilai, lulus: existing.lulus, buktiOrek: perluBuktiL ? 'wajib' : '', judul: ujian.judul };
           }
           return { ok: false, error: 'Anda sudah menyelesaikan ujian ini.' };
         }
         if (existing && existing.status === 'diblokir') return { ok: false, error: 'Sesi ujian Anda telah diblokir karena pelanggaran. Hubungi guru.' };
+        if (!existing) { const izK = izinKelasLokal_(ujian, data.siswaId); if (!izK.ok) return { ok: false, error: izK.error }; }
 
         const soalIds = String(ujian.soal_ids || '').split(',').filter(Boolean);
         const soalMap = {}; D.bankSoal.forEach(s => soalMap[s.id] = s);
@@ -3217,15 +3256,40 @@ const LocalBackend = (function () {
         if (!tampilPembahasan && data.siswaId) items.forEach(it => { it.pembahasan = ''; });
         return { ok: true, judulUjian: ujian ? ujian.judul : '-', nilai: sesi.nilai, lulus: sesi.lulus, items, tampilPembahasan };
       }
+      case 'getPaketSurvei': {
+        let l = clone(D.paketSurvei || []);
+        if (data.guruId) l = l.filter(p => String(p.guru_id) === String(data.guruId));
+        return { ok: true, data: l };
+      }
+      case 'simpanPaketSurvei': {
+        const jn = String(data.jenis || ''); const kt = String(data.kategori || '').trim();
+        if (jn !== 'karakter' && jn !== 'sulingjar') return { ok: false, error: 'Jenis survei tidak dikenali.' };
+        if (!kt) return { ok: false, error: 'Kategori kosong.' };
+        const teksB = String(data.butir || ''); let cB = null;
+        if (teksB.length > 45000) return { ok: false, error: 'Paket survei terlalu besar (maks. 99 butir).' };
+        try { cB = JSON.parse(teksB); } catch (e) { cB = null; }
+        if (!cB || cB.jenis !== jn || !Array.isArray(cB.butir) || cB.butir.length < 5 || cB.butir.length > 99 || !Array.isArray(cB.dim)) return { ok: false, error: 'Isi paket survei tidak valid.' };
+        D.paketSurvei = D.paketSurvei || [];
+        const ix = D.paketSurvei.findIndex(p => String(p.guru_id) === String(data.guruId) && p.jenis === jn && samaTeks_(p.kategori, kt));
+        const baris = { id: ix >= 0 ? D.paketSurvei[ix].id : genId('PS'), guru_id: data.guruId, kategori: kt, jenis: jn, butir_json: teksB, diubah: new Date().toISOString() };
+        if (ix >= 0) D.paketSurvei[ix] = baris; else D.paketSurvei.push(baris);
+        simpan();
+        return { ok: true, id: baris.id };
+      }
+      case 'hapusPaketSurvei': {
+        D.paketSurvei = (D.paketSurvei || []).filter(p => !(String(p.guru_id) === String(data.guruId) && samaTeks_(p.kategori, data.kategori) && (!data.jenis || p.jenis === data.jenis)));
+        simpan();
+        return { ok: true };
+      }
       case 'getSurveiSesi': {
         const sesi = D.sesi.find(s => s.id === data.sesiId);
         if (!sesi) return { ok: false, error: 'Sesi tidak ditemukan.' };
         if (data.siswaId && String(sesi.siswa_id) !== String(data.siswaId)) return { ok: false, error: 'Sesi ini bukan milik Anda.' };
         const ujS = D.ujian.find(u => u.id === sesi.ujian_id);
-        const jenisG = Survei.jenisUntukUjian(ujS);
+        const rsG = Survei.setUntukUjian(ujS, D.paketSurvei); const jenisG = rsG.jenis;
         const rowSv = (D.survei || []).filter(x => x.sesi_id === sesi.id)[0];
         const tampilG = !!ujS && String(ujS.survei_tampil) === 'true';
-        const out = { ok: true, jenis: jenisG, set: (ujS && ujS.survei_butir) || '', sudah: !!rowSv, tampilHasil: tampilG };
+        const out = { ok: true, jenis: jenisG, set: rsG.set, sudah: !!rowSv, tampilHasil: tampilG };
         if (rowSv && tampilG) { try { out.jawaban = JSON.parse(rowSv.jawaban_json || '{}'); out.kualitas = JSON.parse(rowSv.kualitas_json || '{}'); } catch (e) { } }
         return out;
       }
@@ -3235,7 +3299,7 @@ const LocalBackend = (function () {
         if (String(sesi.siswa_id) !== String(data.siswaId)) return { ok: false, error: 'Sesi ini bukan milik Anda.' };
         if (sesi.status === 'berlangsung') return { ok: false, error: 'Selesaikan ujian dulu sebelum mengisi survei.' };
         const ujS = D.ujian.find(u => u.id === sesi.ujian_id);
-        const jenisS = Survei.jenisUntukUjian(ujS);
+        const jenisS = Survei.jenisUntukUjian(ujS, D.paketSurvei);
         if (!jenisS) return { ok: false, error: 'Survei tidak diaktifkan untuk ujian ini.' };
         if ((D.survei || []).some(x => x.sesi_id === sesi.id)) return { ok: true, sudah: true };
         D.survei = D.survei || [];
@@ -3246,7 +3310,7 @@ const LocalBackend = (function () {
       case 'getRekapSurvei': {
         const ujS = D.ujian.find(u => u.id === data.ujianId);
         if (!ujS) return { ok: false, error: 'Ujian tidak ditemukan.' };
-        const jenisS = Survei.jenisUntukUjian(ujS);
+        const rsS = Survei.setUntukUjian(ujS, D.paketSurvei); const jenisS = rsS.jenis;
         const smap = {}; D.siswa.forEach(x => { smap[x.id] = x; });
         const baris = (D.survei || []).filter(x => x.ujian_id === ujS.id).map(x => {
           const sw = smap[x.siswa_id] || {};
@@ -3255,7 +3319,7 @@ const LocalBackend = (function () {
         }).sort((a, b) => String(a.kelas).localeCompare(String(b.kelas)) || String(a.nama).localeCompare(String(b.nama)));
         const sudahSet = new Set((D.survei || []).filter(x => x.ujian_id === ujS.id).map(x => x.sesi_id));
         const belum = D.sesi.filter(x => x.ujian_id === ujS.id && x.status !== 'berlangsung' && !sudahSet.has(x.id)).length;
-        return { ok: true, jenis: jenisS, set: ujS.survei_butir || '', data: baris, belum };
+        return { ok: true, jenis: jenisS, set: rsS.set, data: baris, belum };
       }
       case 'getHasil': {
         const sesi = D.sesi.find(s => s.id === data.sesiId);
@@ -3958,7 +4022,9 @@ const UI = {
     document.getElementById('ujian-bukti-orek').value = ujian && ujian.bukti_orek ? ujian.bukti_orek : '';
     document.getElementById('ujian-survei').value = ujian ? (ujian.survei || '') : 'auto'; // ujian baru: otomatis (Numerasi -> Survei Karakter, Literasi -> Sulingjar)
     document.getElementById('ujian-survei-tampil').checked = ujian ? (String(ujian.survei_tampil) === 'true') : true; // ujian baru: nilai survei tampil ke siswa (latihan)
+    { const fa = document.getElementById('field-token-awal'); if (fa) fa.style.display = ujian ? 'none' : ''; const ta = document.getElementById('ujian-token-awal'); if (ta) ta.value = ''; }
     Survei.setDraft(ujian ? (ujian.survei_butir || '') : '');
+    Survei.muatPaket().then(() => Survei.statusForm());
     Guru.sinkronDetailPembahasan();
     Guru.muatEditorPesanNilai(ujian && ujian.pesan_nilai);
     // null (bukan array kosong) khusus menandai "ujian baru, belum ada
@@ -4285,7 +4351,8 @@ const Guru = {
   async muatBankSoal() {
     const [res, resUjian] = await Promise.all([
       api('getBankSoal', { guruId: state.user.id }),
-      api('getDaftarUjian', { guruId: state.user.id })
+      api('getDaftarUjian', { guruId: state.user.id }),
+      (typeof Survei !== 'undefined') ? Survei.muatPaket(true) : null
     ]);
     const cont = document.getElementById('daftar-bank-soal');
     if (!res.ok) return gagalMuat_(cont, 'Gagal memuat: ' + res.error);
@@ -4351,6 +4418,7 @@ const Guru = {
         <div class="mapel-card-badges">
           <span class="badge token">TOKEN: ${meta.token}</span>
           <span class="badge umum">UMUM</span>
+          ${(typeof Survei !== 'undefined') ? Survei.badgePaket(k) : ''}
         </div>
         <div class="mapel-card-judul">${escapeHtml_(labelKategori(k))}</div>
         <div class="mapel-card-jumlah">Total Soal: <strong>${jumlahAktif}</strong>${peta[k].arsip ? ` <span class="subtitle" style="display:inline">(+${peta[k].arsip} arsip)</span>` : ''}</div>
@@ -4399,6 +4467,7 @@ const Guru = {
     if (filterSel) filterSel.value = kategori;
     UI.renderTipeTabs();
     Guru.renderDaftarSoal();
+    if (typeof Survei !== 'undefined') Survei.bukaKategoriKelola();
   },
 
   kembaliKeGridMapel() {
@@ -4539,7 +4608,13 @@ const Guru = {
     const idList = cocok.map(s => s.id);
     const res = await api('hapusSoalBanyak', { ids: JSON.stringify(idList) });
     const gagal = res.ok ? 0 : cocok.length;
-    if (res.ok) Guru.hapusDariStateLokal_(idList);
+    if (res.ok) {
+      Guru.hapusDariStateLokal_(idList);
+      // paket survei kategori ini ikut dihapus bila tak ada lagi soal (aktif maupun arsip) yang memakainya
+      if (!(state.guru.bankSoal || []).some(x => samaTeks_(x.kategori, kategori))) {
+        try { await api('hapusPaketSurvei', { guruId: state.user.id, kategori, jenis: '' }); if (typeof Survei !== 'undefined') await Survei.muatPaket(true); } catch (e) { }
+      }
+    }
     toast(gagal ? `Gagal menghapus: ${res.error}` : `Kategori "${labelKategori(kategori)}" dihapus permanen dari Arsip (${cocok.length} soal).`, gagal ? 'error' : 'success');
     Guru.renderUlangBankSoal_();
     if (document.getElementById('arsip-kategori-view').classList.contains('hidden')) Guru.renderGridArsipKategori();
@@ -5153,22 +5228,72 @@ const Guru = {
     state.guru.ujianList = res.data;
     if (res.data.length === 0) { cont.innerHTML = '<p class="subtitle">Belum ada ujian.</p>'; return; }
     cont.innerHTML = `<table class="ledger"><thead><tr>
-        <th>Judul</th><th>Token</th><th>Durasi</th><th>Jadwal</th><th>Maks. Pelanggaran</th><th>Status</th><th></th>
+        <th>Judul</th><th>Token</th><th>Token Aktif untuk</th><th>Durasi</th><th>Jadwal</th><th>Maks. Pelanggaran</th><th>Status</th><th></th>
 
       </tr></thead><tbody>` + res.data.map(u => `
         <tr>
           <td><strong>${escapeHtml_(u.judul)}</strong><br><span style="color:var(--c-muted);font-size:.78rem">${labelKategori(u.kategori)}${u.subkategori ? ' • ' + escapeHtml_(u.subkategori) : ''}</span></td>
           <td><code style="font-size:1rem;font-weight:700">${u.token}</code></td>
+          <td id="tk-ringkas-${u.id}" style="font-size:.8rem;max-width:170px">${ringkasTokenKelas_(u)}</td>
           <td>${u.durasi_menit} menit</td>
           <td style="font-size:.8rem">${formatTanggal(u.mulai)}<br>s/d ${formatTanggal(u.selesai)}</td>
           <td>${u.max_pelanggaran}</td>
           <td><span class="badge ${u.status === 'aktif' ? 'ok' : 'no'}">${u.status}</span></td>
           <td>
+            <button class="accent small" onclick="Guru.bukaTokenKelas('${u.id}')" title="Aktifkan / nonaktifkan token per kelas">🔑 Token Kelas</button>
             <button class="secondary small" onclick='Guru.bukaEditUjian("${u.id}")'>Ubah</button>
             <button class="danger small" onclick="Guru.hapusUjian('${u.id}')">Hapus</button>
           </td>
         </tr>`).join('') + `</tbody></table>`;
   },
+
+  // ---------------- TOKEN PER KELAS (modal) ----------------
+  async bukaTokenKelas(id) {
+    const u = (state.guru.ujianList || []).find(x => x.id === id); if (!u) return;
+    Guru._tk = { id, judul: u.judul, token: u.token, aktif: kelasAktifUjian_(u), kelas: [] };
+    document.getElementById('tk-judul').textContent = u.judul + ' — token ' + u.token;
+    document.getElementById('tk-daftar').innerHTML = '<p class="subtitle">Memuat daftar kelas...</p>';
+    document.getElementById('modal-token-kelas').classList.remove('hidden');
+    let siswa = state.guru.daftarSiswa;
+    if (!siswa || !siswa.length) { const rs = await api('getDaftarSiswa', { guruId: state.user.id }); if (rs.ok) { state.guru.daftarSiswa = rs.data; siswa = rs.data; } }
+    const peta = {};
+    (siswa || []).forEach(s => { const nm = String(s.kelas || '').trim() || 'Tanpa Kelas'; const k = normKelas_(nm); (peta[k] = peta[k] || { nama: nm, jumlah: 0 }).jumlah++; });
+    // kelas yang tercantum di daftar aktif tetapi sudah tak punya siswa tetap ditampilkan
+    try { const raw = JSON.parse(u.token_kelas || '[]'); (Array.isArray(raw) ? raw : []).forEach(n => { const k = normKelas_(n); if (!peta[k]) peta[k] = { nama: String(n), jumlah: 0 }; }); } catch (e) { }
+    Guru._tk.kelas = Object.keys(peta).map(k => ({ key: k, nama: peta[k].nama, jumlah: peta[k].jumlah })).sort((x, y) => x.nama.localeCompare(y.nama, 'id', { numeric: true }));
+    Guru.renderTokenKelas_();
+  },
+  renderTokenKelas_() {
+    const T = Guru._tk; if (!T) return;
+    const box = document.getElementById('tk-daftar');
+    if (!T.kelas.length) { box.innerHTML = '<p class="subtitle">Belum ada data siswa/kelas. Impor siswa terlebih dulu di menu Data Siswa.</p>'; return; }
+    const hidup = (k) => T.aktif === null || T.aktif.indexOf(k) >= 0;
+    const n = T.kelas.filter(k => hidup(k.key)).length;
+    document.getElementById('tk-ringkas').textContent = T.aktif === null ? 'Token aktif untuk SEMUA kelas.' : `Token aktif untuk ${n} dari ${T.kelas.length} kelas.`;
+    box.innerHTML = T.kelas.map(k => `<label class="tk-row ${hidup(k.key) ? 'on' : ''}">
+        <input type="checkbox" ${hidup(k.key) ? 'checked' : ''} onchange="Guru.ubahTokenKelas('${escapeHtml_(k.key).replace(/'/g, '&#39;')}', this.checked)">
+        <span class="tk-nama">${escapeHtml_(k.nama)}</span>
+        <span class="tk-jml">${k.jumlah} siswa</span>
+        <span class="tk-status">${hidup(k.key) ? '✔ Aktif — bisa mengerjakan' : '✖ Nonaktif — ditolak walau tahu token'}</span>
+      </label>`).join('');
+  },
+  async simpanTokenKelas_(aktifBaru) {
+    const T = Guru._tk; const lama = T.aktif; T.aktif = aktifBaru;
+    const kirim = aktifBaru === null ? '' : JSON.stringify(T.kelas.filter(k => aktifBaru.indexOf(k.key) >= 0).map(k => k.nama));
+    Guru.renderTokenKelas_();
+    const res = await api('setTokenKelas', { ujianId: T.id, kelas: kirim });
+    if (!res || !res.ok) { T.aktif = lama; Guru.renderTokenKelas_(); toast((res && res.error) || 'Gagal menyimpan pengaturan token kelas.', 'error'); return; }
+    const u = (state.guru.ujianList || []).find(x => x.id === T.id); if (u) u.token_kelas = res.kelas !== undefined ? res.kelas : kirim;
+    const el = document.getElementById('tk-ringkas-' + T.id); if (el && u) el.innerHTML = ringkasTokenKelas_(u);
+  },
+  ubahTokenKelas(key, nyala) {
+    const T = Guru._tk; if (!T) return;
+    let set = T.aktif === null ? T.kelas.map(k => k.key) : T.aktif.slice();
+    set = set.filter(x => x !== key); if (nyala) set.push(key);
+    Guru.simpanTokenKelas_(set);
+  },
+  tokenKelasSemua(nyala) { Guru.simpanTokenKelas_(nyala ? null : []); },
+  tutupTokenKelas() { document.getElementById('modal-token-kelas').classList.add('hidden'); Guru._tk = null; },
 
   bukaEditUjian(id) {
     const u = state.guru.ujianList.find(x => x.id === id);
@@ -5238,6 +5363,7 @@ const Guru = {
       };
       ujian.tampil_detail = document.getElementById('ujian-tampil-detail').checked;
       ujian.tampil_pembahasan = document.getElementById('ujian-tampil-pembahasan').checked;
+      if (!ujian.id) ujian.token_kelas = (document.getElementById('ujian-token-awal') || {}).value === 'kunci' ? '[]' : ''; // ujian baru: semua kelas, atau dikunci dulu
       ujian.bukti_orek = document.getElementById('ujian-bukti-orek').value; // '' | 'wajib' | 'opsional'
       ujian.survei = document.getElementById('ujian-survei').value; // '' | 'auto' | 'karakter' | 'sulingjar'
       ujian.survei_tampil = document.getElementById('ujian-survei-tampil').checked;
@@ -5259,7 +5385,7 @@ const Guru = {
     const res = await api('getDaftarUjian', { guruId: state.user.id });
     const sel = document.getElementById(selectId);
     if (!res.ok) return;
-    sel.innerHTML = '<option value="">Pilih ujian...</option>' + res.data.map(u => `<option value="${u.id}" data-survei="${Survei.jenisUntukUjian(u)}">${escapeHtml_(u.judul)}</option>`).join('');
+    sel.innerHTML = '<option value="">Pilih ujian...</option>' + res.data.map(u => `<option value="${u.id}" data-survei="${Survei.jenisUntukUjian(u, state.guru.paketSurvei)}">${escapeHtml_(u.judul)}</option>`).join('');
   },
 
   async muatRekap() {
