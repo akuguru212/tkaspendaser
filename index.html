@@ -29,11 +29,11 @@
      dimuat TANPA memblokir tampilan halaman login (dulu halaman kosong sampai keduanya selesai diunduh). -->
 <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 <link rel="dns-prefetch" href="https://script.google.com">
-<link rel="stylesheet" href="style.css?v=61">
+<link rel="stylesheet" href="style.css?v=63">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
-<link rel="stylesheet" href="anbk.css?v=61">
+<link rel="stylesheet" href="anbk.css?v=62">
 <!-- Font Awesome: ikon sidebar & tombol (gaya dashboard modern) -->
 <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
 <!-- KaTeX: render persamaan matematika (LaTeX) di dalam soal -->
@@ -318,7 +318,15 @@
               </div>
               <input type="file" id="input-import-soal-docx" accept=".docx" class="hidden" onchange="Guru.importSoalDariDocx(event)">
             </div>
+            <!-- Paket survei (Survei Karakter / Sulingjar) menyatu dengan soal kategori ini -->
+            <div id="paket-survei-cards" style="display:contents"></div>
           </div>
+          <p class="subtitle" style="margin-top:.8rem">
+            <strong>Paket survei:</strong> Survei Karakter (untuk paket <em>Numerasi</em>) dan Survei Lingkungan Belajar / Sulingjar
+            (untuk paket <em>Literasi</em>) disimpan di Bank Soal bersama soal kategori ini, jadi tidak perlu diunggah ulang
+            setiap membuat ujian. Pakai <strong>Unduh Template</strong> → isi → <strong>Upload</strong>, atau langsung
+            <strong>Edit Butir</strong> di sini. Ujian dengan pilihan survei <em>Otomatis</em> memakainya sendiri.
+          </p>
           <p class="subtitle" style="margin-top:.8rem">
             <strong>Kategori:</strong> semua soal yang diimpor dari halaman ini otomatis masuk ke mapel yang sedang dibuka — isi kolom "Kategori" di file tidak perlu diisi (diabaikan).
           </p>
@@ -943,6 +951,50 @@
   </div>
 </div>
 
+
+
+<!-- ======================= MODAL: TOKEN PER KELAS ======================= -->
+<div id="modal-token-kelas" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:560px">
+    <h3>🔑 Token per Kelas</h3>
+    <p class="subtitle" id="tk-judul" style="margin:0"></p>
+    <p class="subtitle" style="margin:.4rem 0">Centang kelas yang <strong>sudah dijadwalkan</strong>. Kelas yang tidak dicentang ditolak saat memasukkan token atau memulai ujian, walau tahu tokennya. Perubahan tersimpan langsung. Siswa yang sudah mulai mengerjakan tetap bisa melanjutkan.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin:.4rem 0">
+      <button type="button" class="accent small" onclick="Guru.tokenKelasSemua(true)">Aktifkan Semua Kelas</button>
+      <button type="button" class="secondary small" onclick="Guru.tokenKelasSemua(false)">Nonaktifkan Semua</button>
+      <span class="subtitle" id="tk-ringkas" style="margin:0 0 0 auto"></span>
+    </div>
+    <div id="tk-daftar" style="max-height:52vh;overflow:auto"></div>
+    <div class="modal-close-row"><button class="secondary" onclick="Guru.tutupTokenKelas()">Selesai</button></div>
+  </div>
+</div>
+
+<!-- ======================= MODAL: EDITOR BUTIR SURVEI (Kelola Soal) ======================= -->
+<div id="modal-survei-edit" class="modal-backdrop hidden">
+  <div class="modal">
+    <h3 id="sv-ed-judul">Edit Butir Survei</h3>
+    <p class="subtitle" id="sv-ed-info" style="margin:0"></p>
+    <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem;align-items:center">
+      <button type="button" class="accent small" onclick="Survei.edTambah()">+ Tambah Butir</button>
+      <button type="button" class="secondary small" onclick="Survei.edAturHalaman()">Atur Halaman Otomatis</button>
+      <button type="button" class="secondary small" onclick="Survei.edBawaan()">Muat Butir Bawaan</button>
+      <span class="subtitle" id="sv-ed-n" style="margin:0 0 0 auto"></span>
+    </div>
+    <div id="sv-ed-scroll">
+      <table id="sv-ed-table">
+        <thead><tr><th>No</th><th>Hal.</th><th>Dimensi</th><th>Skala</th><th>Arah</th><th>Pernyataan</th><th>Kode</th><th>Pasangan (No)</th><th>Petunjuk halaman</th><th></th></tr></thead>
+        <tbody id="sv-ed-body"></tbody>
+      </table>
+      <datalist id="sv-ed-dim"></datalist>
+    </div>
+    <p class="subtitle" style="margin:0 0 .4rem">Halaman yang sama (angka sama, berurutan, skala sama) tampil bersama sebagai tabel matriks. Pasangan = No butir lain yang maknanya berlawanan (satu Positif, satu Negatif). Minimal 5, maksimal 99 butir.</p>
+    <div class="modal-close-row">
+      <button class="secondary" onclick="Survei.tutupEditor()">Batal</button>
+      <button class="accent" onclick="Survei.edSimpan()">Simpan Paket Survei</button>
+    </div>
+  </div>
+</div>
+
 <!-- ======================= MODAL: PRATINJAU SOAL (tampilan sama persis dengan siswa) ======================= -->
 <div id="modal-pratinjau-soal" class="modal-backdrop hidden">
   <div class="modal modal-wide">
@@ -1034,10 +1086,10 @@
     <h3 id="modal-ujian-title">Buat Ujian</h3>
     <input type="hidden" id="ujian-id">
     <div class="row">
-      <div class="field"><label>Judul Ujian</label><input type="text" id="ujian-judul"></div>
+      <div class="field"><label>Judul Ujian</label><input type="text" id="ujian-judul" oninput="Survei.statusForm()"></div>
       <div class="field">
         <label>Kategori Soal yang Digunakan</label>
-        <select id="ujian-kategori" onchange="Guru.muatPilihanSoalUntukUjian()">
+        <select id="ujian-kategori" onchange="Guru.muatPilihanSoalUntukUjian();Survei.statusForm()">
           <option value="">(Belum ada soal aktif)</option>
         </select>
       </div>
@@ -1084,6 +1136,14 @@
     <div class="field">
       <label><input type="checkbox" id="ujian-tampil-pembahasan" checked style="width:auto"> Tampilkan pembahasan soal pada detail jawaban <span class="subtitle" style="display:inline">— cocok untuk latihan; matikan untuk ulangan. Hanya berlaku bila detail jawaban diaktifkan.</span></label>
     </div>
+    <div class="field" id="field-token-awal">
+      <label for="ujian-token-awal">Token berlaku untuk (ujian baru)</label>
+      <select id="ujian-token-awal">
+        <option value="">Semua kelas — aktif untuk semua kelas begitu ujian dibuka</option>
+        <option value="kunci">Kunci semua kelas dulu — aktifkan per kelas lewat tombol 🔑 Token Kelas</option>
+      </select>
+      <p style="font-size:.8rem;color:var(--c-muted);margin:.35rem 0 0">Kelas yang token-nya belum diaktifkan tidak bisa memulai ujian walau tahu tokennya. Pengaturan per kelas bisa diubah kapan saja dari daftar ujian (tombol <strong>🔑 Token Kelas</strong>).</p>
+    </div>
     <div class="field">
       <label for="ujian-bukti-orek">Bukti Orak-Orik Jawaban (foto kertas coretan siswa)</label>
       <select id="ujian-bukti-orek">
@@ -1097,7 +1157,7 @@
       <label for="ujian-survei">Survei Setelah Ujian (Survei Karakter / Sulingjar)</label>
       <select id="ujian-survei" onchange="Survei.statusForm()">
         <option value="">Nonaktif</option>
-        <option value="auto">Otomatis — judul/kategori memuat "Numerasi" → Survei Karakter; "Literasi" → Sulingjar</option>
+        <option value="auto">Otomatis — ikut paket survei di Bank Soal (kata "Numerasi" → Survei Karakter, "Literasi" → Sulingjar)</option>
         <option value="karakter">Survei Karakter (setelah Numerasi)</option>
         <option value="sulingjar">Survei Lingkungan Belajar / Sulingjar (setelah Literasi)</option>
       </select>
@@ -1105,14 +1165,8 @@
       <div style="margin-top:.6rem;padding:.6rem .7rem;border:1px dashed rgba(128,128,128,.4);border-radius:10px">
         <div style="font-size:.84rem;font-weight:600">Butir survei untuk latihan ini</div>
         <div id="ujian-survei-status" style="font-size:.8rem;color:var(--c-muted);margin:.2rem 0 .5rem"></div>
-        <div style="display:flex;flex-wrap:wrap;gap:.4rem">
-          <button type="button" class="secondary small" onclick="Survei.unduhTemplate('karakter')">⬇ Template Survei Karakter</button>
-          <button type="button" class="secondary small" onclick="Survei.unduhTemplate('sulingjar')">⬇ Template Sulingjar</button>
-          <button type="button" class="secondary small" onclick="document.getElementById('ujian-survei-file').click()">⬆ Impor butir dari Word</button>
-          <button type="button" class="secondary small" onclick="Survei.pakaiBawaan()">Pakai butir bawaan</button>
-          <input type="file" id="ujian-survei-file" accept=".docx" class="hidden" onchange="Survei.imporDariForm(event)">
-        </div>
-        <div style="font-size:.76rem;color:var(--c-muted);margin-top:.4rem">Ganti isi tabel template (pernyataan, dimensi, skala, arah) lalu impor, sehingga butir survei bisa berbeda di setiap latihan. Tabel survei juga boleh diletakkan di bawah tabel soal pada file Word yang sama.</div>
+        <div style="font-size:.76rem;color:var(--c-muted)">Butir survei dikelola di <strong>Bank Soal › Kelola Soal</strong> (kartu Survei Karakter / Sulingjar) dan menyatu dengan soal kategori ini — upload, unduh template, dan edit dilakukan di sana, sekali saja.</div>
+        <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.4rem"><button type="button" class="secondary small" onclick="Survei.pakaiBawaan()">Lepas butir khusus lama dari ujian ini</button></div>
       </div>
       <p style="font-size:.8rem;color:var(--c-muted);margin:.35rem 0 0">Urutan siswa: tes → (unggah bukti orak-orik bila aktif) → survei → nilai. Semua butir wajib dijawab; jawaban terlalu cepat, seragam, atau saling bertentangan akan diingatkan sekali dan ditandai di <strong>Hasil Survei</strong>.</p>
     </div>
@@ -1398,8 +1452,8 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=61"></script>
-<script src="anbk.js?v=61"></script>
-<script src="survei.js?v=8"></script>
+<script src="app.js?v=63"></script>
+<script src="anbk.js?v=63"></script>
+<script src="survei.js?v=9"></script>
 </body>
 </html>
