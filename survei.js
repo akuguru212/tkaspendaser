@@ -15,6 +15,7 @@
 const Survei = (function () {
   const $ = (id) => document.getElementById(id);
   const esc = (s) => escapeHtml_(String(s == null ? '' : s));
+  const normT = (t) => String(t || '').trim().toLowerCase().replace(/\s+/g, ' ');
 
   // Gaya survei disisipkan langsung dari sini agar tetap tampil walau survei.css tidak ikut terunggah / tersimpan di cache.
   (function () { if (document.getElementById('survei-css-inline')) return; const st = document.createElement('style'); st.id = 'survei-css-inline'; st.textContent = `/* Survei Karakter & Sulingjar — layar siswa (gaya ANBK) + halaman hasil guru */
@@ -75,25 +76,22 @@ const Survei = (function () {
 .sv-s4 { background: #e3f6ec; color: #1b7f4b; } .sv-s3 { background: #eaf6e3; color: #4b7f1b; } .sv-s2 { background: #fff1da; color: #b26a00; } .sv-s1 { background: #fde8e8; color: #c62828; } .sv-s0 { background: #eceff1; color: #6c757d; }
 .sv-pb-saran { background: #eaf2ff; border-radius: 8px; padding: 7px 11px; font-size: .8rem; margin: 8px 0 2px; }
 
-/* tampilan matriks (beberapa pernyataan per halaman, meniru tampilan TKA/ANBK asli) */
+/* tampilan matriks (beberapa pernyataan per halaman, gaya ANBK) */
 .sv-kode { color: #8a94a0; font-size: .62em; font-style: italic; white-space: nowrap; }
-.sv-ket-m { font-size: 14px; line-height: 1.6; color: #1f2933; margin: 0 0 14px; white-space: pre-line; }
-.sv-mx-wrap { overflow-x: auto; border: 1px solid #2f6db5; background: #fff; }
+.sv-ket-m { font-size: 13px; color: #343a40; margin-bottom: 10px; }
+.sv-mx-wrap { overflow-x: auto; border: 1px solid #dee2e6; border-radius: 4px; background: #fff; }
 .sv-mx { width: 100%; border-collapse: collapse; font-family: 'Poppins', sans-serif; font-size: 13.5px; }
-.sv-mx thead th { background: #3a86d8; color: #0b1d3a; font-weight: 700; font-size: 12px; line-height: 1.3; text-align: center; padding: 12px 8px; border: 1px solid rgba(255,255,255,.55); width: 112px; vertical-align: middle; }
-.sv-mx thead th.sv-mx-t { width: auto; }
-.sv-mx tbody tr { background: #fff; } .sv-mx tbody tr.done { background: #f3f8ff; }
-.sv-mx td { padding: 10px 8px; text-align: center; border: 1px solid #6c9bd2; } .sv-mx td.sv-mx-t { text-align: left; padding: 10px 12px; line-height: 1.5; color: #1f2933; }
-.sv-mx-c label { display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; min-width: 40px; min-height: 36px; }
+.sv-mx thead th { font-weight: 700; font-size: 12.5px; text-align: center; padding: 10px 8px; border-bottom: 1px solid #dee2e6; width: 110px; vertical-align: bottom; }
+.sv-mx thead th.sv-mx-t { text-align: left; width: auto; padding-left: 12px; }
+.sv-mx tbody tr { border-top: 1px solid #e9ecef; } .sv-mx tbody tr:nth-child(odd) { background: #f4f6f8; } .sv-mx tbody tr.done { background: #eaf2ff; }
+.sv-mx td { padding: 11px 8px; text-align: center; } .sv-mx td.sv-mx-t { text-align: left; padding-left: 12px; line-height: 1.5; color: #212529; }
+.sv-mx-c label { display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; min-width: 36px; min-height: 36px; }
 .sv-mx-c input { position: absolute; opacity: 0; pointer-events: none; }
-.sv-mx .sv-r { width: 18px; height: 18px; border: 2px solid #5b9bd9; background: #fff; }
-.sv-mx-c input:checked + .sv-r { border-color: #1a5fb4; background: #1a5fb4; }
-.sv-mx-c input:checked + .sv-r::after { content: ''; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; border-radius: 0; background: transparent; transform: rotate(45deg) translate(-1px, -1px); }
+.sv-mx-c input:checked + .sv-r { border-color: #0d6efd; } .sv-mx-c input:checked + .sv-r::after { content: ''; width: 9px; height: 9px; border-radius: 50%; background: #0d6efd; }
 .sv-mx-c input:focus-visible + .sv-r { outline: 3px solid rgba(13,110,253,.35); outline-offset: 2px; }
 .sv-mx-l { display: none; }
 @media (max-width: 700px) {
   .sv-mx thead { display: none; } .sv-mx, .sv-mx tbody, .sv-mx tr, .sv-mx td { display: block; width: 100%; }
-  .sv-mx td, .sv-mx td.sv-mx-t, .sv-mx td.sv-mx-c { border: 0; box-sizing: border-box; } .sv-mx tbody tr { border-top: 1px solid #6c9bd2; }
   .sv-mx td.sv-mx-t { padding: 12px 12px 4px; font-weight: 500; }
   .sv-mx td.sv-mx-c { text-align: left; padding: 0 12px; } .sv-mx-c label { width: 100%; justify-content: flex-start; min-height: 38px; }
   .sv-mx-l { display: inline; font-size: 13.5px; } .sv-mx tr { padding-bottom: 8px; }
@@ -106,6 +104,18 @@ const Survei = (function () {
 .sv-panel-g { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 8px; max-height: 420px; overflow-y: auto; padding: 2px; }
 .sv-pn { border: 0; border-radius: 4px; color: #fff; font: 600 13px 'Poppins', sans-serif; min-height: 32px; cursor: pointer; background: #8a94a0; }
 .sv-pn.ok { background: #28a745; } .sv-pn.kosong { background: #dc3545; } .sv-pn.baru { background: #8a94a0; }
+.sv-pn.ragu { background: #ffc107; color: #212529; }
+/* Editor butir survei (Kelola Soal) */
+#modal-survei-edit .modal { max-width: 1180px; width: 96vw; max-height: 92vh; display: flex; flex-direction: column; }
+#sv-ed-scroll { overflow: auto; flex: 1; border: 1px solid rgba(128,128,128,.3); border-radius: 8px; margin: .6rem 0; }
+#sv-ed-table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+#sv-ed-table th { position: sticky; top: 0; background: var(--c-surface, #f3f4f6); z-index: 1; text-align: left; padding: 6px; font-weight: 600; white-space: nowrap; }
+#sv-ed-table td { padding: 4px; vertical-align: top; border-top: 1px solid rgba(128,128,128,.2); }
+#sv-ed-table input, #sv-ed-table select, #sv-ed-table textarea { font-size: 12.5px; padding: 4px 6px; margin: 0; width: 100%; box-sizing: border-box; }
+.sv-ed-no { font-weight: 700; text-align: center; min-width: 28px; }
+.sv-ed-aksi { white-space: nowrap; }
+.sv-ed-aksi button { margin-right: 2px; }
+.paket-survei-card .aksi-card-aksi-row { flex-wrap: wrap; }
 .sv-pn.now { outline: 3px solid #0d6efd; outline-offset: 1px; }
 .sv-kes { display: flex; gap: 14px; align-items: center; border: 2px solid; border-radius: 12px; padding: 12px 16px; margin: 6px 0 14px; background: #fff; max-width: 640px; }
 .sv-kes-n { font: 700 40px/1 'Poppins', sans-serif; min-width: 66px; text-align: center; }
@@ -125,17 +135,15 @@ const Survei = (function () {
   // ---------------- skala jawaban (4 pilihan, tanpa pilihan tengah) ----------------
   const SKALA = {
     setuju: ['Sangat tidak setuju', 'Tidak setuju', 'Setuju', 'Sangat setuju'],
-    frek: ['Tidak pernah', 'Jarang', 'Sering', 'Selalu'],
+    frek: ['Tidak pernah', 'Kadang-kadang', 'Sering', 'Selalu'],
     peng: ['Tidak pernah', 'Sekali', 'Beberapa kali', 'Sering'],
-    kurang: ['Tidak setuju', 'Kurang setuju', 'Setuju', 'Sangat setuju'],
-    diriku: ['Sangat tidak sesuai dengan diriku', 'Tidak sesuai dengan diriku', 'Sesuai dengan diriku', 'Sangat sesuai dengan diriku']
+    kurang: ['Tidak setuju', 'Kurang setuju', 'Setuju', 'Sangat setuju']
   };
   const PETUNJUK_DEF = {
     setuju: 'Pilihlah satu jawaban yang paling sesuai dengan pendapat Anda.',
     kurang: 'Pilihlah satu jawaban yang paling sesuai dengan pendapat Anda.',
     frek: 'Pilihlah satu jawaban yang paling sesuai dengan kebiasaan atau keadaan Anda.',
-    peng: 'Pilihlah satu jawaban yang paling sesuai dengan pengalaman Anda.',
-    diriku: 'Apakah pernyataan berikut sesuai dengan dirimu?'
+    peng: 'Pilihlah satu jawaban yang paling sesuai dengan pengalaman Anda.'
   };
 
   // ---------------- butir: [id, dimensi, skala, arah(+1 positif / -1 negatif), teks] ----------------
@@ -313,7 +321,16 @@ const Survei = (function () {
 
   // ---------------- penentuan jenis survei dari pengaturan ujian ----------------
   // ujian.survei: '' (nonaktif) | 'auto' | 'karakter' | 'sulingjar'
-  function jenisUntukUjian(u) {
+  // PAKET SURVEI (Bank Soal): tiap kategori/mapel boleh punya paket Survei Karakter dan/atau Sulingjar
+  // (daftar paket = [{kategori, jenis, butir_json, guru_id, diubah}]). Mode 'auto': kata \"Numerasi\" ->
+  // karakter, \"Literasi\" -> sulingjar; bila judul/kategori tidak memuat keduanya dan kategori punya TEPAT
+  // satu paket, paket itulah yang dipakai.
+  const samaKat = (a, b) => normT(a) === normT(b);
+  function cariPaket(paket, kategori, jenis, guruId) {
+    const cocok = (paket || []).filter(p => p && p.jenis === jenis && samaKat(p.kategori, kategori));
+    return cocok.filter(p => guruId && String(p.guru_id) === String(guruId))[0] || cocok[0] || null;
+  }
+  function jenisUntukUjian(u, paket) {
     if (!u) return '';
     const m = String(u.survei || '').toLowerCase();
     if (m === 'karakter' || m === 'sulingjar') return m;
@@ -321,8 +338,16 @@ const Survei = (function () {
       const t = (String(u.judul || '') + ' ' + String(u.kategori || '')).toLowerCase();
       if (t.indexOf('numerasi') >= 0) return 'karakter';
       if (t.indexOf('literasi') >= 0) return 'sulingjar';
+      const ada = {}; (paket || []).forEach(p => { if (p && samaKat(p.kategori, u.kategori) && (p.jenis === 'karakter' || p.jenis === 'sulingjar')) ada[p.jenis] = 1; });
+      const k = Object.keys(ada); if (k.length === 1) return k[0];
     }
     return '';
+  }
+  // Jenis + butir (JSON) yang dipakai sebuah ujian: paket Bank Soal > butir khusus lama di ujian > bawaan ('').
+  function setUntukUjian(u, paket) {
+    const jenis = jenisUntukUjian(u, paket); if (!jenis) return { jenis: '', set: '' };
+    const p = cariPaket(paket, u.kategori, jenis, u.guru_id);
+    return { jenis, set: p ? String(p.butir_json || '') : String((u && u.survei_butir) || '') };
   }
 
   // ---------------- penskoran ----------------
@@ -410,7 +435,7 @@ const Survei = (function () {
   // =====================================================================================
   //  SISWA — layar survei (satu butir per halaman, gaya ANBK)
   // =====================================================================================
-  const S = { jenis: '', set: null, sesiId: '', jawaban: {}, detik: {}, idx: 0, tahap: 'intro', mulai: 0, tMasuk: 0, selesai: null, tampilHasil: false, diingatkan: false, dikunjungi: {} };
+  const S = { jenis: '', set: null, sesiId: '', jawaban: {}, detik: {}, idx: 0, tahap: 'intro', mulai: 0, tMasuk: 0, selesai: null, tampilHasil: false, diingatkan: false, dikunjungi: {}, ragu: {} };
   // S.idx = nomor HALAMAN (bukan butir). Satu halaman bisa memuat beberapa butir (tampilan matriks seperti ANBK).
   const hlm = () => S.set.halamanList;
   const halLengkap = (p) => p.idx.every(i => S.jawaban[S.set.butir[i][0]]);
@@ -438,8 +463,8 @@ const Survei = (function () {
       const b = J.butir[i]; const id = b[0]; const terpilih = S.jawaban[id];
       return `<tr class="${terpilih ? 'done' : ''}" id="sv-row-${id}"><td class="sv-mx-t">${esc(b[4])}${b[6] ? ` <small class="sv-kode">(${esc(b[6])})</small>` : ''}</td>${sk.map((t, k) => `<td class="sv-mx-c"><label><input type="radio" name="m-${id}" value="${k + 1}" ${terpilih === k + 1 ? 'checked' : ''} onchange="Survei.pilihId('${id}',${k + 1})"><span class="sv-r"></span><span class="sv-mx-l">${esc(t)}</span></label></td>`).join('')}</tr>`;
     }).join('');
-    return `<div class="sv-pad"><p class="sv-ket sv-ket-m">${esc(petunjuk)}</p>
-      <div class="sv-mx-wrap"><table class="sv-mx"><thead><tr><th class="sv-mx-t" aria-label="Pernyataan"></th>${sk.map(t => `<th>${esc(t)}</th>`).join('')}</tr></thead><tbody>${baris}</tbody></table></div></div>`;
+    return `<div class="sv-pad"><p class="sv-ket sv-ket-m"><b>${esc(petunjuk)}</b></p>
+      <div class="sv-mx-wrap"><table class="sv-mx"><thead><tr><th class="sv-mx-t">Pernyataan</th>${sk.map(t => `<th>${esc(t)}</th>`).join('')}</tr></thead><tbody>${baris}</tbody></table></div></div>`;
   }
 
   function render() {
@@ -461,20 +486,23 @@ const Survei = (function () {
       nav.innerHTML = `<span></span><button type="button" class="anbk-btn anbk-btn-primary" onclick="Survei.mulai()"><span>MULAI SURVEI</span> <i class="fa-solid fa-circle-chevron-right"></i></button><span></span>`;
     } else if (S.tahap === 'butir') {
       const p = hl[S.idx]; const awal = p.idx[0] + 1;
-      $('sv-nomor').textContent = adaMatriks() ? 'Soal nomor ' + (S.idx + 1) : 'Butir nomor ' + awal;
+      $('sv-nomor').textContent = adaMatriks() ? 'Halaman ' + (S.idx + 1) + ' dari ' + hl.length : 'Butir nomor ' + awal;
       box.innerHTML = `<div class="sv-layout"><aside class="sv-panel"><div class="sv-panel-t">Halaman Kuesioner</div><div class="sv-panel-g">${hl.map((h, i) => {
-        const lengkap = halLengkap(h); const cls = lengkap ? 'ok' : (S.dikunjungi[i] || i < S.idx ? 'kosong' : 'baru');
+        const lengkap = halLengkap(h); const cls = S.ragu[i] ? 'ragu' : (lengkap ? 'ok' : (S.dikunjungi[i] || i < S.idx ? 'kosong' : 'baru'));
         return `<button type="button" class="sv-pn ${cls}${i === S.idx ? ' now' : ''}" onclick="Survei.lompat(${i})" title="Halaman ${i + 1}">${i + 1}</button>`;
       }).join('')}</div></aside><div class="sv-main">${htmlHalaman(p)}</div></div>`;
       S.dikunjungi[S.idx] = true;
       const akhir = S.idx === hl.length - 1;
       nav.innerHTML = `<button type="button" class="anbk-btn anbk-btn-red" ${S.idx === 0 ? 'disabled' : ''} onclick="Survei.geser(-1)"><i class="fa-solid fa-circle-chevron-left"></i> <span>${adaMatriks() ? 'Halaman' : 'Butir'} sebelumnya</span></button>
+        <label class="anbk-btn anbk-btn-yellow anbk-ragu" title="Ragu-ragu"><input type="checkbox" id="sv-chk-ragu" ${S.ragu[S.idx] ? 'checked' : ''} onchange="Survei.toggleRagu()"><span>Ragu-ragu</span></label>
         <button type="button" class="anbk-btn anbk-btn-primary" id="sv-btn-next" ${halLengkap(p) ? '' : 'disabled'} onclick="Survei.geser(1)"><span>${akhir ? 'Selesai' : (adaMatriks() ? 'Halaman' : 'Butir') + ' berikutnya'}</span> <i class="fa-solid ${akhir ? 'fa-flag-checkered' : 'fa-circle-chevron-right'}"></i></button>`;
     } else if (S.tahap === 'konfirmasi') {
       $('sv-nomor').textContent = 'Konfirmasi Survei';
       const kosong = J.butir.map((r, i) => [r[0], i]).filter(x => !S.jawaban[x[0]]);
+      const raguList = Object.keys(S.ragu).map(Number).filter(i => i < hl.length).sort((a, b) => a - b);
       box.innerHTML = `<div class="sv-pad"><p class="sv-p">Terima kasih telah mengisi survei ini. Tekan tombol <mark class="anbk-mark anbk-mark-red">SELESAI SURVEI</mark> untuk mengirim jawaban, atau <mark class="anbk-mark anbk-mark-green">KEMBALI</mark> untuk memeriksa jawaban Anda.</p>
-        <div class="anbk-ringkas"><span>Terjawab <b>${jml}</b></span><span>Belum dijawab <b>${kosong.length}</b></span></div>
+        <div class="anbk-ringkas"><span>Terjawab <b>${jml}</b></span><span>Belum dijawab <b>${kosong.length}</b></span><span>Ragu-ragu <b>${raguList.length}</b></span></div>
+        ${raguList.length ? `<div class="anbk-peringatan"><p>${raguList.length} ${adaMatriks() ? 'halaman' : 'butir'} masih ditandai ragu-ragu. Anda boleh memeriksanya kembali sebelum mengirim.</p><div class="kumpul-chips">${raguList.map(i => `<button type="button" class="kumpul-chip" onclick="Survei.lompat(${i})">${i + 1}</button>`).join('')}</div></div>` : ''}
         ${kosong.length ? `<div class="anbk-peringatan"><p>Masih ada butir yang belum dijawab. Semua butir wajib dijawab.</p><div class="kumpul-chips">${kosong.map(x => `<button type="button" class="kumpul-chip" onclick="Survei.lompatButir(${x[1]})">${x[1] + 1}</button>`).join('')}</div></div>` : ''}</div>`;
       nav.innerHTML = `<button type="button" class="anbk-btn anbk-btn-green" onclick="Survei.lompat(${Math.min(S.idx, hl.length - 1)})">KEMBALI</button><span></span>
         <button type="button" class="anbk-btn anbk-btn-red" ${kosong.length ? 'disabled' : ''} id="sv-btn-kirim" onclick="Survei.kirim()">SELESAI SURVEI</button>`;
@@ -482,7 +510,7 @@ const Survei = (function () {
     window.scrollTo(0, 0);
   }
 
-  function simpanSementara() { try { sessionStorage.setItem('cbt_survei_' + S.sesiId, JSON.stringify({ j: S.jawaban, d: S.detik })); } catch (e) { } }
+  function simpanSementara() { try { sessionStorage.setItem('cbt_survei_' + S.sesiId, JSON.stringify({ j: S.jawaban, d: S.detik, r: S.ragu })); } catch (e) { } }
   function pilihId(id, n) {
     S.jawaban[id] = n;
     const p = hlm()[S.idx];
@@ -502,6 +530,17 @@ const Survei = (function () {
     if (to < 0) return;
     if (to >= hl.length) { catatWaktuButir(); S.tahap = 'konfirmasi'; S.tMasuk = 0; render(); return; }
     masukHalaman(to);
+  }
+  function toggleRagu() {
+    const el = $('sv-chk-ragu'); if (!el || S.tahap !== 'butir') return;
+    if (el.checked) S.ragu[S.idx] = 1; else delete S.ragu[S.idx];
+    const tomb = document.querySelectorAll('#sv-body .sv-pn')[S.idx];
+    if (tomb) {
+      const p = hlm()[S.idx];
+      tomb.classList.remove('ok', 'kosong', 'baru', 'ragu');
+      tomb.classList.add(S.ragu[S.idx] ? 'ragu' : (halLengkap(p) ? 'ok' : 'kosong'));
+    }
+    simpanSementara();
   }
   function lompat(i) { masukHalaman(i); }
   function lompatButir(bi) { masukHalaman(halamanDariButir(bi)); }
@@ -553,7 +592,7 @@ const Survei = (function () {
     try { info = await api('getSurveiSesi', { sesiId: state.sesiId, siswaId: state.user.id }); } catch (e) { info = null; }
     if (!info || !info.ok || !info.jenis || info.sudah || !JENIS[info.jenis]) return;
     let simpan = null; try { simpan = JSON.parse(sessionStorage.getItem('cbt_survei_' + state.sesiId) || 'null'); } catch (e) { }
-    Object.assign(S, { jenis: info.jenis, set: bangunSet(info.jenis, info.set), sesiId: state.sesiId, jawaban: (simpan && simpan.j) || {}, detik: (simpan && simpan.d) || {}, idx: 0, tahap: 'intro', mulai: Date.now(), tMasuk: 0, diingatkan: false, kirimBusy: false, dikunjungi: {}, tampilHasil: !!info.tampilHasil });
+    Object.assign(S, { jenis: info.jenis, set: bangunSet(info.jenis, info.set), sesiId: state.sesiId, jawaban: (simpan && simpan.j) || {}, detik: (simpan && simpan.d) || {}, idx: 0, tahap: 'intro', mulai: Date.now(), tMasuk: 0, diingatkan: false, kirimBusy: false, dikunjungi: {}, ragu: (simpan && simpan.r) || {}, tampilHasil: !!info.tampilHasil });
     const sc = $('survei-screen'); if (!sc) return;
     try { KumpulUI.sembunyikanSemua(); } catch (e) { }
     UI.tampilkan('survei-screen');
@@ -597,8 +636,9 @@ const Survei = (function () {
     const lama = sel.value;
     const res = await api('getDaftarUjian', { guruId: state.user.id });
     if (!res.ok) return;
-    const list = res.data.filter(u => jenisUntukUjian(u));
-    sel.innerHTML = '<option value="">Pilih ujian yang memakai survei...</option>' + list.map(u => `<option value="${esc(u.id)}">${esc(u.judul)} — ${esc(JENIS[jenisUntukUjian(u)].nama)}</option>`).join('');
+    await muatPaket(false);
+    const list = res.data.filter(u => jenisUntukUjian(u, daftarPaket()));
+    sel.innerHTML = '<option value="">Pilih ujian yang memakai survei...</option>' + list.map(u => `<option value="${esc(u.id)}">${esc(u.judul)} — ${esc(JENIS[jenisUntukUjian(u, daftarPaket())].nama)}</option>`).join('');
     if (lama && list.some(u => u.id === lama)) sel.value = lama;
     if (!list.length) $('tabel-survei').innerHTML = '<p class="subtitle">Belum ada ujian dengan survei. Buka <b>Kelola Ujian</b> lalu atur <b>Survei Setelah Ujian</b>.</p>';
   }
@@ -799,48 +839,29 @@ const Survei = (function () {
   //  BUTIR KHUSUS PER UJIAN — impor dari template Word (tabel)
   // =====================================================================================
   const F = { json: '' };
-  const normT = (t) => String(t || '').trim().toLowerCase().replace(/\s+/g, ' ');
   function cocokDimDasar(jenis, nama) {
     const n = normT(nama); if (!n) return null;
     const dsr = JENIS[jenis].dim;
     return dsr.filter(d => { const m = normT(d[1]); return m === n || m.indexOf(n) === 0 || n.indexOf(m) === 0; })[0] || null;
   }
-  async function bacaDocx(file, jenisPilihan) {
-    await muatPustaka_('mammoth');
-    const hasil = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() }, { convertImage: mammoth.images.imgElement(() => Promise.resolve({ src: '' })) });
-    const dom = new DOMParser().parseFromString(hasil.value, 'text/html');
-    const teks = normT(dom.body.textContent);
-    let jenis = '';
-    if (teks.indexOf('sulingjar') >= 0 || teks.indexOf('lingkungan belajar') >= 0) jenis = 'sulingjar';
-    else if (teks.indexOf('survei karakter') >= 0) jenis = 'karakter';
-    if (!jenis) jenis = jenisPilihan || '';
-    const tabel = Array.from(dom.querySelectorAll('table')).filter(t => {
-      const tr = t.querySelector('tr'); if (!tr) return false;
-      return Array.from(tr.querySelectorAll('th,td')).some(c => kunciHeader_(c.textContent) === 'pernyataan');
-    })[0];
+  // Inti: susun set butir dari baris mentah. Dipakai impor Word DAN editor butir di Kelola Soal.
+  // baris: [{ baris, no, nm, sk, ar, teks, hal, kode, pas, pet }] (semua teks mentah, mis. "Frekuensi", "Positif")
+  function susunSet(jenis, baris) {
     const galat = [];
-    if (!tabel) return { galat: ['Tabel butir survei tidak ditemukan. Gunakan template survei dan jangan mengubah baris judul kolom (No, Dimensi, Skala, Arah, Pernyataan, Pasangan).'] };
-    if (!jenis) return { galat: ['Jenis survei tidak dikenali. Pilih "Survei Karakter" atau "Sulingjar" pada pilihan survei terlebih dulu, lalu impor lagi.'] };
-    const trs = Array.from(tabel.querySelectorAll('tr'));
-    const hk = Array.from(trs[0].querySelectorAll('th,td')).map(c => kunciHeader_(c.textContent));
-    const ix = (k) => hk.findIndex(x => x === k || x.indexOf(k) === 0);
-    const cNo = ix('no'), cDim = ix('dimensi'), cSk = ix('skala'), cAr = ix('arah'), cP = ix('pernyataan'), cPs = ix('pasangan'), cHal = ix('halaman'), cKode = ix('kode'), cPet = ix('petunjuk');
-    if (cDim < 0 || cSk < 0 || cAr < 0 || cP < 0) return { galat: ['Kolom wajib belum lengkap: Dimensi, Skala, Arah, dan Pernyataan.'] };
     const awalan = jenis === 'karakter' ? 'K' : 'S';
     const dim = [], kodeDim = {}; const butir = []; const noKeId = {}; const rawPasang = []; const petunjuk = {};
     let urut = 0;
-    trs.slice(1).forEach((tr, bi) => {
-      const sel = Array.from(tr.querySelectorAll('th,td')).map(c => { const ps = Array.from(c.querySelectorAll('p')); return (ps.length > 1 ? ps.map(x => x.textContent.trim()).filter(Boolean).join('\n') : c.textContent).trim(); });
-      const baris = bi + 2; const teksP = (sel[cP] || '').trim(); const nm = (sel[cDim] || '').trim();
-      if (!teksP && !nm && !(sel[cSk] || '').trim()) return; // baris kosong
-      if (!teksP) { galat.push('Baris ' + baris + ': kolom Pernyataan kosong.'); return; }
-      if (!nm) { galat.push('Baris ' + baris + ': kolom Dimensi kosong.'); return; }
-      const sk = normT(sel[cSk]); let skala = '';
-      if (/^kur/.test(sk)) skala = 'kurang'; else if (/^set/.test(sk)) skala = 'setuju'; else if (/^(fre|ser)/.test(sk)) skala = 'frek'; else if (/^pen/.test(sk)) skala = 'peng'; else if (/^(ses|dir)/.test(sk)) skala = 'diriku';
-      if (!skala) { galat.push('Baris ' + baris + ': Skala "' + (sel[cSk] || '') + '" tidak dikenali (isi: Setuju, Kurang, Frekuensi, Pengalaman, atau Sesuai).'); return; }
-      const ar = normT(sel[cAr]); let arah = 0;
+    baris.forEach((r, bi) => {
+      const nb = r.baris || (bi + 1); const teksP = String(r.teks || '').trim(); const nm = String(r.nm || '').trim();
+      if (!teksP && !nm && !String(r.sk || '').trim()) return; // baris kosong
+      if (!teksP) { galat.push('Baris ' + nb + ': kolom Pernyataan kosong.'); return; }
+      if (!nm) { galat.push('Baris ' + nb + ': kolom Dimensi kosong.'); return; }
+      const sk = normT(r.sk); let skala = '';
+      if (/^kur/.test(sk)) skala = 'kurang'; else if (/^set/.test(sk)) skala = 'setuju'; else if (/^(fre|ser)/.test(sk)) skala = 'frek'; else if (/^pen/.test(sk)) skala = 'peng';
+      if (!skala) { galat.push('Baris ' + nb + ': Skala "' + (r.sk || '') + '" tidak dikenali (isi: Setuju, Kurang, Frekuensi, atau Pengalaman).'); return; }
+      const ar = normT(r.ar); let arah = 0;
       if (/^(\+|pos)/.test(ar)) arah = 1; else if (/^(-|−|–|neg)/.test(ar)) arah = -1;
-      if (!arah) { galat.push('Baris ' + baris + ': Arah "' + (sel[cAr] || '') + '" tidak dikenali (isi: Positif atau Negatif).'); return; }
+      if (!arah) { galat.push('Baris ' + nb + ': Arah "' + (r.ar || '') + '" tidak dikenali (isi: Positif atau Negatif).'); return; }
       urut++;
       if (urut > 99) { galat.push('Maksimal 99 butir.'); return; }
       const id = awalan + String(urut).padStart(2, '0');
@@ -851,12 +872,12 @@ const Survei = (function () {
         if (dim.some(d => d[0] === kode)) kode = 'd' + (dim.length + 1);
         kodeDim[kunciNama] = kode; dim.push([kode, dsr ? dsr[1] : nm]);
       }
-      const hal = cHal >= 0 ? (parseInt(String(sel[cHal] || '').replace(/\D/g, ''), 10) || 0) : 0;
-      const kodeTeks = cKode >= 0 ? String(sel[cKode] || '').trim().slice(0, 40) : '';
-      if (hal > 0 && cPet >= 0 && (sel[cPet] || '').trim() && !petunjuk[hal]) petunjuk[hal] = String(sel[cPet]).trim().slice(0, 800);
+      const hal = parseInt(String(r.hal == null ? '' : r.hal).replace(/\D/g, ''), 10) || 0;
+      const kodeTeks = String(r.kode || '').trim().slice(0, 40);
+      if (hal > 0 && String(r.pet || '').trim() && !petunjuk[hal]) petunjuk[hal] = String(r.pet).trim().slice(0, 300);
       butir.push([id, kode, skala, arah, teksP, hal, kodeTeks]);
-      noKeId[String(cNo >= 0 && sel[cNo] ? sel[cNo] : urut).replace(/\D/g, '') || urut] = id;
-      if (cPs >= 0 && (sel[cPs] || '').trim()) rawPasang.push([id, String(sel[cPs]).replace(/\D/g, ''), baris]);
+      noKeId[String(r.no == null || r.no === '' ? urut : r.no).replace(/\D/g, '') || urut] = id;
+      if (String(r.pas || '').trim()) rawPasang.push([id, String(r.pas).replace(/\D/g, ''), nb]);
     });
     if (butir.length < 5) galat.push('Minimal 5 butir yang valid (terbaca ' + butir.length + ').');
     const sklHal = {}; butir.forEach(b => { if (b[5] > 0) (sklHal[b[5]] = sklHal[b[5]] || {})[b[2]] = 1; });
@@ -869,97 +890,220 @@ const Survei = (function () {
       const pr = a[3] > 0 ? [a[0], b[0]] : [b[0], a[0]];
       if (!pasangan.some(x => x[0] === pr[0] && x[1] === pr[1])) pasangan.push(pr);
     });
-    return { jenis, galat, set: { jenis, dim, butir, pasangan, petunjuk } };
+    return { galat, set: { jenis, dim, butir, pasangan, petunjuk } };
   }
 
+  // jenisPilihan: jenis yang dipilih guru; paksa = true (impor dari kartu di Kelola Soal): jenis TIDAK boleh berbeda dari isi dokumen.
+  async function bacaDocx(file, jenisPilihan, paksa) {
+    await muatPustaka_('mammoth');
+    const hasil = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() }, { convertImage: mammoth.images.imgElement(() => Promise.resolve({ src: '' })) });
+    const dom = new DOMParser().parseFromString(hasil.value, 'text/html');
+    const teks = normT(dom.body.textContent);
+    let jenis = '';
+    if (teks.indexOf('sulingjar') >= 0 || teks.indexOf('lingkungan belajar') >= 0) jenis = 'sulingjar';
+    else if (teks.indexOf('survei karakter') >= 0) jenis = 'karakter';
+    if (paksa && jenisPilihan) {
+      if (jenis && jenis !== jenisPilihan) return { galat: ['File ini tampaknya template ' + JENIS[jenis].nama + ', bukan ' + JENIS[jenisPilihan].nama + '. Unggah lewat kartu ' + JENIS[jenis].nama + ', atau gunakan template yang sesuai.'] };
+      jenis = jenisPilihan;
+    }
+    if (!jenis) jenis = jenisPilihan || '';
+    const tabel = Array.from(dom.querySelectorAll('table')).filter(t => {
+      const tr = t.querySelector('tr'); if (!tr) return false;
+      return Array.from(tr.querySelectorAll('th,td')).some(c => kunciHeader_(c.textContent) === 'pernyataan');
+    })[0];
+    if (!tabel) return { galat: ['Tabel butir survei tidak ditemukan. Gunakan template survei dan jangan mengubah baris judul kolom (No, Dimensi, Skala, Arah, Pernyataan, Pasangan).'] };
+    if (!jenis) return { galat: ['Jenis survei tidak dikenali. Pilih "Survei Karakter" atau "Sulingjar" pada pilihan survei terlebih dulu, lalu impor lagi.'] };
+    const trs = Array.from(tabel.querySelectorAll('tr'));
+    const hk = Array.from(trs[0].querySelectorAll('th,td')).map(c => kunciHeader_(c.textContent));
+    const ix = (k) => hk.findIndex(x => x === k || x.indexOf(k) === 0);
+    const cNo = ix('no'), cDim = ix('dimensi'), cSk = ix('skala'), cAr = ix('arah'), cP = ix('pernyataan'), cPs = ix('pasangan'), cHal = ix('halaman'), cKode = ix('kode'), cPet = ix('petunjuk');
+    if (cDim < 0 || cSk < 0 || cAr < 0 || cP < 0) return { galat: ['Kolom wajib belum lengkap: Dimensi, Skala, Arah, dan Pernyataan.'] };
+    const baris = trs.slice(1).map((tr, bi) => {
+      const sel = Array.from(tr.querySelectorAll('th,td')).map(c => c.textContent.trim());
+      const v = (c) => (c >= 0 ? (sel[c] || '') : '');
+      return { baris: bi + 2, no: v(cNo), nm: v(cDim), sk: v(cSk), ar: v(cAr), teks: v(cP), hal: v(cHal), kode: v(cKode), pas: v(cPs), pet: v(cPet) };
+    });
+    const r = susunSet(jenis, baris);
+    return { jenis, galat: r.galat, set: r.set };
+  }
+
+  // =====================================================================================
+  //  PAKET SURVEI di BANK SOAL / KELOLA SOAL (menyatu dengan soal kategori)
+  // =====================================================================================
+  const daftarPaket = () => ((typeof state !== 'undefined' && state.guru && state.guru.paketSurvei) || []);
+  async function muatPaket(paksa) {
+    if (typeof state === 'undefined' || !state.user || state.user.role !== 'guru') return;
+    if (state.guru.paketSurvei && !paksa) return;
+    let res = null; try { res = await api('getPaketSurvei', { guruId: state.user.id }); } catch (e) { res = null; }
+    if (res && res.ok) state.guru.paketSurvei = res.data || []; else if (!state.guru.paketSurvei) state.guru.paketSurvei = [];
+  }
+  const paketKategori = (kategori, jenis) => cariPaket(daftarPaket(), kategori, jenis, state.user && state.user.id);
+  function ringkasPaket(p, jenis) {
+    let c = null; try { c = JSON.parse(p.butir_json); } catch (e) { c = null; }
+    if (!c || c.jenis !== jenis) return null;
+    const set = bangunSet(jenis, c); if (!set || !set.kustom) return null;
+    return { butir: set.butir.length, dim: set.dim.length, hal: set.halamanList.length };
+  }
+  const tglPendek = (iso) => { try { return new Date(iso).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }); } catch (e) { return ''; } };
+  const IKON_PAKET = { karakter: '🌟', sulingjar: '🏫' };
+  const SUBJUDUL = { karakter: 'paket Numerasi', sulingjar: 'paket Literasi' };
+
+  function badgePaket(kategori) {
+    return ['karakter', 'sulingjar'].filter(j => paketKategori(kategori, j) && ringkasPaket(paketKategori(kategori, j), j))
+      .map(j => `<span class="badge umum" title="Paket survei tersimpan di Bank Soal kategori ini">${j === 'karakter' ? '＋ Survei Karakter' : '＋ Sulingjar'}</span>`).join('');
+  }
+
+  // Dua kartu di halaman Kelola Soal (di samping Tambah Manual / Import Excel / Import Word)
+  function renderKartuKategori() {
+    const box = $('paket-survei-cards'); if (!box || typeof state === 'undefined') return;
+    const kat = state.guru.kategoriKelola || '';
+    box.innerHTML = ['karakter', 'sulingjar'].map(j => {
+      const p = paketKategori(kat, j); const r = p ? ringkasPaket(p, j) : null;
+      const status = r
+        ? `<span style="color:var(--c-success,#198754);font-weight:600">✔ Tersimpan</span> — ${r.butir} butir · ${r.dim} dimensi · ${r.hal} halaman${p.diubah ? ' · diubah ' + esc(tglPendek(p.diubah)) : ''}. Ikut otomatis saat ujian kategori ini.`
+        : `Belum ada paket — latihan memakai butir bawaan (${JENIS[j].butir.length} butir). Upload Word atau klik Edit untuk menyesuaikan.`;
+      return `<div class="aksi-card paket-survei-card" onclick="document.getElementById('paket-file-${j}').click()">
+        <div class="aksi-card-ico">${IKON_PAKET[j]}</div>
+        <div class="aksi-card-judul">${esc(JENIS[j].nama)} <small style="font-weight:500">(${SUBJUDUL[j]})</small></div>
+        <div class="aksi-card-desc">${status}</div>
+        <div class="aksi-card-aksi-row">
+          <button type="button" class="secondary small" onclick="event.stopPropagation();Survei.unduhTemplate('${j}')">⬇ Unduh Template</button>
+          <button type="button" class="secondary small" onclick="event.stopPropagation();Survei.bukaEditor('${j}')">✏ Edit Butir</button>
+          ${r ? `<button type="button" class="danger small" onclick="event.stopPropagation();Survei.hapusPaket('${j}')">🗑 Hapus</button>` : ''}
+        </div>
+        <input type="file" id="paket-file-${j}" accept=".docx" class="hidden" onchange="Survei.imporKeKategori(event,'${j}')">
+      </div>`;
+    }).join('');
+  }
+  async function bukaKategoriKelola() { await muatPaket(false); renderKartuKategori(); }
+
+  async function simpanPaket(kategori, jenis, set) {
+    const res = await api('simpanPaketSurvei', { guruId: state.user.id, kategori, jenis, butir: JSON.stringify(set) });
+    if (!res || !res.ok) { toast((res && res.error) || 'Paket survei gagal disimpan.', 'error'); return false; }
+    await muatPaket(true); renderKartuKategori(); try { Guru.renderMapelGrid(); } catch (e) { }
+    return true;
+  }
+  async function imporKeKategori(ev, jenis) {
+    const file = ev.target.files[0]; if (!file) return;
+    const kat = state.guru.kategoriKelola || '';
+    try {
+      const r = await bacaDocx(file, jenis, true);
+      if (r.galat && r.galat.length) { Dialog.info({ judul: 'Butir Survei Belum Bisa Diimpor', tipe: 'warning', ikon: 'fa-file-circle-exclamation', pesan: 'Perbaiki hal berikut di file Word lalu upload lagi:', daftar: r.galat.slice(0, 12) }); return; }
+      if (paketKategori(kat, jenis) && !(await Dialog.konfirmasi({ judul: 'Ganti Paket Survei?', tipe: 'warning', ikon: 'fa-clone', pesan: `Paket **${JENIS[jenis].nama}** untuk **${kat}** sudah ada. Isinya akan diganti dengan ${r.set.butir.length} butir dari file ini.`, teksYa: 'Ya, Ganti' }))) return;
+      if (await simpanPaket(kat, jenis, r.set)) toast(`${JENIS[jenis].nama}: ${r.set.butir.length} butir (${r.set.dim.length} dimensi) tersimpan di Bank Soal.`, 'success');
+    } catch (err) { toast('Gagal membaca file .docx: ' + err.message, 'error'); } finally { ev.target.value = ''; }
+  }
+  async function hapusPaket(jenis) {
+    const kat = state.guru.kategoriKelola || '';
+    if (!(await Dialog.konfirmasi({ judul: 'Hapus Paket Survei?', tipe: 'warning', ikon: 'fa-trash', pesan: `Paket **${JENIS[jenis].nama}** untuk **${kat}** dihapus. Ujian berikutnya kembali memakai butir bawaan sampai Anda mengunggah paket baru.`, teksYa: 'Ya, Hapus' }))) return;
+    const res = await api('hapusPaketSurvei', { guruId: state.user.id, kategori: kat, jenis });
+    if (!res || !res.ok) { toast((res && res.error) || 'Gagal menghapus.', 'error'); return; }
+    await muatPaket(true); renderKartuKategori(); try { Guru.renderMapelGrid(); } catch (e) { }
+    toast('Paket survei dihapus.', 'success');
+  }
+
+  // ---------------- EDITOR BUTIR (modal) ----------------
+  const E = { jenis: '', kategori: '', rows: [], uid: 0 };
+  const SK_LABEL = { setuju: 'Setuju', kurang: 'Kurang', frek: 'Frekuensi', peng: 'Pengalaman' };
+  function setKeRows(set) {
+    const baris = set.butir.map(b => ({ uid: ++E.uid, hal: b[5] || '', dim: set.dimNama ? set.dimNama[b[1]] : (set.dim.filter(d => d[0] === b[1])[0] || [0, b[1]])[1], sk: b[2], ar: b[3], teks: b[4], kode: b[6] || '', pasUid: null, pet: '' }));
+    const sudah = {};
+    baris.forEach(r => { if (r.hal && !sudah[r.hal] && set.petunjuk && set.petunjuk[r.hal]) { r.pet = set.petunjuk[r.hal]; } if (r.hal) sudah[r.hal] = true; });
+    const idKe = {}; set.butir.forEach((b, i) => { idKe[b[0]] = i; });
+    (set.pasangan || []).forEach(pr => { const x = idKe[pr[0]], y = idKe[pr[1]]; if (x >= 0 && y >= 0) { baris[x].pasUid = baris[y].uid; baris[y].pasUid = baris[x].uid; } });
+    return baris;
+  }
+  function bukaEditor(jenis) {
+    E.jenis = jenis; E.kategori = state.guru.kategoriKelola || '';
+    const p = paketKategori(E.kategori, jenis);
+    const set = bangunSet(jenis, p ? p.butir_json : '');
+    E.rows = setKeRows(set);
+    $('sv-ed-judul').textContent = JENIS[jenis].nama + ' — ' + E.kategori;
+    $('sv-ed-info').textContent = (p && ringkasPaket(p, jenis)) ? 'Mengedit paket yang tersimpan di Bank Soal.' : 'Paket belum ada: editor berisi butir bawaan. Ubah seperlunya lalu Simpan sebagai paket kategori ini.';
+    renderEditor(); $('modal-survei-edit').classList.remove('hidden');
+  }
+  function tutupEditor() { $('modal-survei-edit').classList.add('hidden'); }
+  const noDariUid = (uid) => { const i = E.rows.findIndex(r => r.uid === uid); return i >= 0 ? String(i + 1) : ''; };
+  function renderEditor() {
+    const dimList = Array.from(new Set(JENIS[E.jenis].dim.map(d => d[1]).concat(E.rows.map(r => r.dim).filter(Boolean))));
+    $('sv-ed-dim').innerHTML = dimList.map(d => `<option value="${esc(d)}">`).join('');
+    $('sv-ed-n').textContent = E.rows.length + ' butir';
+    $('sv-ed-body').innerHTML = E.rows.map((r, i) => `<tr>
+      <td class="sv-ed-no">${i + 1}</td>
+      <td><input type="number" min="0" data-i="${i}" data-f="hal" value="${esc(r.hal)}" style="width:56px"></td>
+      <td><input type="text" list="sv-ed-dim" data-i="${i}" data-f="dim" value="${esc(r.dim)}" style="min-width:150px"></td>
+      <td><select data-i="${i}" data-f="sk">${Object.keys(SK_LABEL).map(k => `<option value="${k}" ${r.sk === k ? 'selected' : ''}>${SK_LABEL[k]}</option>`).join('')}</select></td>
+      <td><select data-i="${i}" data-f="ar"><option value="1" ${r.ar > 0 ? 'selected' : ''}>Positif</option><option value="-1" ${r.ar < 0 ? 'selected' : ''}>Negatif</option></select></td>
+      <td><textarea rows="2" data-i="${i}" data-f="teks" style="min-width:260px">${esc(r.teks)}</textarea></td>
+      <td><input type="text" data-i="${i}" data-f="kode" value="${esc(r.kode)}" style="width:70px"></td>
+      <td><input type="number" min="1" data-i="${i}" data-f="pas" value="${esc(r.pasUid ? noDariUid(r.pasUid) : '')}" style="width:62px" placeholder="No"></td>
+      <td><input type="text" data-i="${i}" data-f="pet" value="${esc(r.pet)}" style="min-width:150px" placeholder="(baris pertama halaman)"></td>
+      <td class="sv-ed-aksi"><button type="button" class="secondary small icon" title="Naik" onclick="Survei.edGeser(${i},-1)">↑</button><button type="button" class="secondary small icon" title="Turun" onclick="Survei.edGeser(${i},1)">↓</button><button type="button" class="danger small icon" title="Hapus butir" onclick="Survei.edHapus(${i})">🗑</button></td>
+    </tr>`).join('');
+  }
+  function edUbah(ev) {
+    const el = ev.target; const i = Number(el.dataset.i), f = el.dataset.f; if (!(i >= 0) || !f) return; const r = E.rows[i]; if (!r) return;
+    if (f === 'ar') r.ar = Number(el.value) < 0 ? -1 : 1;
+    else if (f === 'pas') {
+      if (r.pasUid) { const lama = E.rows.find(x => x.uid === r.pasUid); if (lama && lama.pasUid === r.uid) lama.pasUid = null; }
+      const t = E.rows[Number(el.value) - 1];
+      if (t && t !== r) { if (t.pasUid) { const o = E.rows.find(x => x.uid === t.pasUid); if (o && o.pasUid === t.uid) o.pasUid = null; } r.pasUid = t.uid; t.pasUid = r.uid; } else r.pasUid = null;
+      if (ev.type === 'change') renderEditor();
+    } else r[f] = el.value;
+  }
+  function edTambah() {
+    const a = E.rows[E.rows.length - 1];
+    if (E.rows.length >= 99) { toast('Maksimal 99 butir.', 'error'); return; }
+    E.rows.push({ uid: ++E.uid, hal: a ? a.hal : '', dim: a ? a.dim : JENIS[E.jenis].dim[0][1], sk: a ? a.sk : 'frek', ar: 1, teks: '', kode: '', pasUid: null, pet: '' });
+    renderEditor(); const box = $('sv-ed-scroll'); if (box) box.scrollTop = box.scrollHeight;
+  }
+  function edHapus(i) { const r = E.rows[i]; E.rows.splice(i, 1); E.rows.forEach(x => { if (x.pasUid === r.uid) x.pasUid = null; }); renderEditor(); }
+  function edGeser(i, d) { const j = i + d; if (j < 0 || j >= E.rows.length) return; const t = E.rows[i]; E.rows[i] = E.rows[j]; E.rows[j] = t; renderEditor(); }
+  function edAturHalaman() {
+    let hal = 0, n = 0, sk = '', dim = '';
+    E.rows.forEach(r => { if (r.sk !== sk || normT(r.dim) !== dim || n >= 6) { hal++; n = 0; sk = r.sk; dim = normT(r.dim); } n++; r.hal = hal; });
+    renderEditor(); toast('Halaman diatur otomatis: satu dimensi dan skala sama per halaman, maksimal 6 pernyataan.', 'success');
+  }
+  async function edBawaan() {
+    if (!(await Dialog.konfirmasi({ judul: 'Muat Butir Bawaan?', tipe: 'warning', ikon: 'fa-rotate-left', pesan: 'Semua perubahan di editor diganti dengan butir bawaan aplikasi (belum disimpan sampai Anda menekan Simpan).', teksYa: 'Ya, Muat Bawaan' }))) return;
+    E.rows = setKeRows(JENIS[E.jenis]); renderEditor();
+  }
+  async function edSimpan() {
+    const baris = E.rows.map((r, i) => ({ baris: i + 1, no: i + 1, nm: r.dim, sk: SK_LABEL[r.sk], ar: r.ar < 0 ? 'Negatif' : 'Positif', teks: r.teks, hal: r.hal, kode: r.kode, pas: r.pasUid ? noDariUid(r.pasUid) : '', pet: r.pet }));
+    const r = susunSet(E.jenis, baris);
+    if (r.galat.length) { Dialog.info({ judul: 'Butir Survei Belum Bisa Disimpan', tipe: 'warning', ikon: 'fa-file-circle-exclamation', pesan: 'Perbaiki hal berikut lalu simpan lagi:', daftar: r.galat.slice(0, 12) }); return; }
+    if (await simpanPaket(E.kategori, E.jenis, r.set)) { tutupEditor(); toast(`${JENIS[E.jenis].nama}: ${r.set.butir.length} butir tersimpan di Bank Soal.`, 'success'); }
+  }
+  document.addEventListener('input', (ev) => { if (ev.target && ev.target.closest && ev.target.closest('#sv-ed-body') && ev.target.dataset.f !== 'pas') edUbah(ev); });
+  document.addEventListener('change', (ev) => { if (ev.target && ev.target.closest && ev.target.closest('#sv-ed-body')) edUbah(ev); });
+
+  // ---------------- form Kelola Ujian (hanya pilihan jenis + status; butir dikelola di Bank Soal) ----------------
   function jenisFormSaatIni() {
     const g = (id) => { const el = $(id); return el ? el.value : ''; };
-    return jenisUntukUjian({ survei: g('ujian-survei'), judul: g('ujian-judul'), kategori: g('ujian-kategori') });
+    return jenisUntukUjian({ survei: g('ujian-survei'), judul: g('ujian-judul'), kategori: g('ujian-kategori'), guru_id: state.user && state.user.id }, daftarPaket());
   }
   function statusForm() {
     const el = $('ujian-survei-status'); if (!el) return;
     const pilihan = ($('ujian-survei') || {}).value || '';
-    const jenis = jenisFormSaatIni();
+    const jenis = jenisFormSaatIni(); const kat = ($('ujian-kategori') || {}).value || '';
     let teks = '';
     if (!pilihan) teks = 'Survei nonaktif untuk ujian ini.';
-    else if (pilihan === 'auto' && !jenis) teks = 'Mode Otomatis: judul/kategori ujian ini belum memuat kata "Numerasi" atau "Literasi", jadi belum ada survei.';
+    else if (pilihan === 'auto' && !jenis) teks = 'Mode Otomatis: judul/kategori ujian ini belum memuat kata "Numerasi" atau "Literasi" dan kategorinya belum punya paket survei, jadi belum ada survei.';
     else {
+      const p = paketKategori(kat, jenis); const r = p ? ringkasPaket(p, jenis) : null;
       const c = F.json ? bangunSet(jenis, F.json) : null;
-      if (F.json && c && c.kustom) teks = `Butir khusus dari Word dipakai: ${c.butir.length} butir, ${c.dim.length} dimensi, ${c.halamanList.length} halaman (${JENIS[jenis].nama}).`;
-      else if (F.json) teks = 'Butir khusus yang tersimpan tidak cocok dengan jenis survei terpilih, jadi dipakai butir bawaan (' + JENIS[jenis].butir.length + ' butir).';
-      else teks = `Memakai butir bawaan ${JENIS[jenis].nama} (${JENIS[jenis].butir.length} butir, ${JENIS[jenis].halamanList.length} halaman). Impor file Word untuk mengganti butir pada latihan ini.`;
+      if (r) teks = `Memakai paket ${JENIS[jenis].nama} dari Bank Soal › ${kat}: ${r.butir} butir, ${r.dim} dimensi, ${r.hal} halaman. Ubah lewat Bank Soal › Kelola Soal.`;
+      else if (F.json && c && c.kustom) teks = `Memakai butir khusus lama yang tersimpan di ujian ini (${c.butir.length} butir). Buat paket di Bank Soal › Kelola Soal untuk menggantinya.`;
+      else teks = `Memakai butir bawaan ${JENIS[jenis].nama} (${JENIS[jenis].butir.length} butir). Upload paket survei di Bank Soal › Kelola Soal kategori "${kat || '…'}" agar menyatu dengan soalnya.`;
     }
     el.textContent = teks;
   }
   function setDraft(json) { F.json = json || ''; statusForm(); }
   function draftJson() { return F.json; }
-  function pakaiBawaan() { F.json = ''; statusForm(); toast('Kembali memakai butir bawaan.'); }
-  // Template Word dibuat LANGSUNG di browser (sama seperti template soal), jadi tidak bergantung pada
-  // file statis template-survei-*.docx yang bisa saja tidak ikut ter-upload ke hosting.
-  // Isi tabel = butir bawaan, sehingga persis sesuai format yang dibaca bacaDocx().
+  function pakaiBawaan() { F.json = ''; statusForm(); toast('Butir khusus lama dilepas dari ujian ini.'); }
   function unduhTemplate(jenis) {
-    const J = JENIS[jenis];
-    if (!J) { toast('Jenis survei tidak dikenali.', 'error'); return; }
-    if (typeof unduhDocx_ !== 'function') { toast('Pembuat file Word belum siap. Muat ulang halaman lalu coba lagi.', 'error'); return; }
-    const NAMA_SKALA = { setuju: 'Setuju', kurang: 'Kurang', frek: 'Frekuensi', peng: 'Pengalaman', diriku: 'Sesuai' };
-    const namaDim = {}; J.dim.forEach(d => { namaDim[d[0]] = d[1]; });
-    const noById = {}; J.butir.forEach((b, i) => { noById[b[0]] = i + 1; });
-    const pasangDari = {};
-    (J.pasangan || []).forEach(pr => { pasangDari[pr[0]] = noById[pr[1]]; pasangDari[pr[1]] = noById[pr[0]]; });
-    const halPertama = {};
-    const rows = J.butir.map((b, i) => {
-      const hal = Number(b[5]) || 0;
-      let pet = '';
-      if (hal > 0 && !halPertama[hal]) { halPertama[hal] = 1; pet = (J.petunjuk && J.petunjuk[hal]) || PETUNJUK_DEF[b[2]] || ''; }
-      return [String(i + 1), hal ? String(hal) : '', namaDim[b[1]] || b[1], NAMA_SKALA[b[2]] || b[2], Number(b[3]) < 0 ? 'Negatif' : 'Positif',
-        b[4], b[6] || '', pasangDari[b[0]] ? String(pasangDari[b[0]]) : '', pet];
-    });
-    const judul = jenis === 'karakter' ? 'TEMPLATE IMPOR SURVEI KARAKTER' : 'TEMPLATE IMPOR SURVEI LINGKUNGAN BELAJAR (SULINGJAR)';
-    const items = [
-      { text: judul, heading: true },
-      { text: 'CBT SPENDASER — SMP Negeri 2 Seririt', bold: true },
-      { text: 'Cara memakai', bold: true },
-      { text: 'Ubah isi tabel di bawah (pernyataan, dimensi, skala, arah) sesuai kebutuhan latihan. Tambah atau hapus baris sesuai jumlah butir (minimal 5, maksimal 99).' },
-      { text: 'Jangan mengubah baris judul kolom: No, Halaman, Dimensi, Skala, Arah, Pernyataan, Kode, Pasangan, Petunjuk.' },
-      { text: 'Di portal guru: Kelola Ujian → Survei Setelah Ujian → "Impor butir dari Word", lalu Simpan Ujian. Setiap latihan boleh memakai file yang berbeda.' },
-      { text: 'Tabel ini boleh diletakkan di bawah tabel soal pada file Word yang sama; impor soal akan melewati tabel survei ini.' },
-      { text: '' },
-      { text: 'Isi kolom', bold: true },
-      { text: 'Dimensi: nama kelompok butir. Indeks 0–100 dihitung per dimensi. Nama yang sama dengan dimensi bawaan memunculkan saran tindak lanjut otomatis.' },
-      { text: 'Skala (pilih salah satu kata): Setuju, Kurang, Frekuensi, Pengalaman, atau Sesuai. Pilihan jawabannya:' },
-      { text: 'Setuju: ' + SKALA.setuju.join(' · ') },
-      { text: 'Kurang: ' + SKALA.kurang.join(' · ') },
-      { text: 'Frekuensi: ' + SKALA.frek.join(' · ') },
-      { text: 'Pengalaman: ' + SKALA.peng.join(' · ') },
-      { text: 'Sesuai: ' + SKALA.diriku.join(' · ') },
-      { text: 'Arah: Positif jika jawaban tertinggi berarti kondisi baik; Negatif jika jawaban tertinggi berarti kondisi buruk (skor dibalik saat dihitung).' },
-      { text: 'Pasangan (boleh kosong): isi dengan No butir lain yang maknanya berlawanan (satu Positif, satu Negatif). Dipakai untuk mendeteksi jawaban yang saling bertentangan atau asal-asalan.' },
-      { text: 'Halaman (boleh kosong): angka yang sama pada butir yang berurutan = butir-butir itu tampil bersama dalam satu halaman berbentuk tabel (matriks) seperti ANBK. Semua butir pada satu halaman harus memakai Skala yang sama. Kosongkan jika ingin satu butir per halaman.' },
-      { text: 'Kode (boleh kosong): kode kecil yang ditampilkan di ujung pernyataan. Petunjuk (boleh kosong): teks di atas tabel, boleh berupa cerita/skenario singkat diikuti pertanyaannya, mis. "Kamu melihat ... Apakah pernyataan berikut sesuai dengan dirimu?"; isi pada baris pertama halaman tersebut.' },
-      { text: 'Survei tidak memiliki jawaban benar atau salah. Hasil berupa indeks 0–100 per dimensi.' },
-      { text: '' },
-      { table: { headers: ['No', 'Halaman', 'Dimensi', 'Skala', 'Arah', 'Pernyataan', 'Kode', 'Pasangan', 'Petunjuk'], rows, widths: [600, 900, 2400, 1200, 1100, 4800, 800, 1000, 2200] } }
-    ];
-    unduhDocx_('Template_Survei_' + (jenis === 'karakter' ? 'Karakter' : 'Sulingjar') + '.docx', items);
-    toast('Template survei (.docx) berhasil diunduh.', 'success');
-  }
-  async function imporDariForm(ev) {
-    const file = ev.target.files[0]; if (!file) return;
-    try {
-      const r = await bacaDocx(file, jenisFormSaatIni());
-      if (r.galat && r.galat.length) {
-        Dialog.info({ judul: 'Butir Survei Belum Bisa Diimpor', tipe: 'warning', ikon: 'fa-file-circle-exclamation', pesan: 'Perbaiki hal berikut di file Word lalu impor lagi:', daftar: r.galat.slice(0, 12) });
-        return;
-      }
-      F.json = JSON.stringify(r.set);
-      const sel = $('ujian-survei');
-      if (jenisFormSaatIni() !== r.jenis) sel.value = r.jenis; // jenis di dokumen menentukan jenis survei
-      else if (!sel.value) sel.value = r.jenis;
-      statusForm();
-      toast(`${r.set.butir.length} butir (${r.set.dim.length} dimensi) berhasil dimuat. Klik Simpan Ujian untuk menerapkan.`, 'success');
-    } catch (err) {
-      toast('Gagal membaca file .docx: ' + err.message, 'error');
-    } finally { ev.target.value = ''; }
+    const a = document.createElement('a'); a.href = 'template-survei-' + jenis + '.docx'; a.download = 'Template Survei ' + (jenis === 'karakter' ? 'Karakter' : 'Sulingjar') + '.docx';
+    document.body.appendChild(a); a.click(); a.remove();
   }
 
   // ---------------- pemasangan ke aplikasi ----------------
@@ -982,6 +1126,6 @@ const Survei = (function () {
   const _bukaDetailSiswa = ExamEngine.bukaDetailJawaban;
   ExamEngine.bukaDetailJawaban = async function () { await _bukaDetailSiswa.call(ExamEngine); try { await siapkanDetailSiswa(); } catch (e) { } };
 
-  return { mulai, pilih, pilihId, geser, lompat, lompatButir, kirim, jenisUntukUjian, bangunSet, hitung, periksaKualitas, kategoriIndeks, kategoriKesungguhan, JENIS, guruMuat, guruRender, guruUnduh,
-    modeDetail, gabungKeRekap, selRekap, ringkasSurvei, setDraft, draftJson, statusForm, pakaiBawaan, unduhTemplate, imporDariForm, htmlPembahasan };
+  return { toggleRagu, jenisUntukUjian, setUntukUjian, cariPaket, muatPaket, badgePaket, renderKartuKategori, bukaKategoriKelola, imporKeKategori, hapusPaket, bukaEditor, tutupEditor, edTambah, edHapus, edGeser, edAturHalaman, edBawaan, edSimpan, mulai, pilih, pilihId, geser, lompat, lompatButir, kirim, jenisUntukUjian, bangunSet, hitung, periksaKualitas, kategoriIndeks, kategoriKesungguhan, JENIS, guruMuat, guruRender, guruUnduh,
+    modeDetail, gabungKeRekap, selRekap, ringkasSurvei, setDraft, draftJson, statusForm, pakaiBawaan, unduhTemplate, htmlPembahasan };
 })();
