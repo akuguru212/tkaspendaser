@@ -1101,9 +1101,28 @@ const Survei = (function () {
   function setDraft(json) { F.json = json || ''; statusForm(); }
   function draftJson() { return F.json; }
   function pakaiBawaan() { F.json = ''; statusForm(); toast('Butir khusus lama dilepas dari ujian ini.'); }
+  // Template Word dibuat LANGSUNG di browser (tidak bergantung pada berkas .docx di GitHub): tabel kolom
+  // No | Halaman | Dimensi | Skala | Arah | Pernyataan | Kode | Pasangan | Petunjuk, berisi butir bawaan sebagai contoh isian.
   function unduhTemplate(jenis) {
-    const a = document.createElement('a'); a.href = 'template-survei-' + jenis + '.docx'; a.download = 'Template Survei ' + (jenis === 'karakter' ? 'Karakter' : 'Sulingjar') + '.docx';
-    document.body.appendChild(a); a.click(); a.remove();
+    try {
+      const J = JENIS[jenis]; if (!J) return;
+      if (typeof unduhDocx_ !== 'function') { toast('Fitur unduh template belum siap. Muat ulang halaman (Ctrl+F5).', 'error'); return; }
+      const baris = setKeRows(J);
+      const noUid = {}; baris.forEach((r, i) => { noUid[r.uid] = String(i + 1); });
+      const rows = baris.map((r, i) => [
+        String(i + 1), String(r.hal || ''), r.dim, SK_LABEL[r.sk] || '', r.ar < 0 ? 'Negatif' : 'Positif', r.teks, r.kode || '',
+        r.pasUid ? (noUid[r.pasUid] || '') : '', r.pet || ''
+      ]);
+      const items = [
+        { text: 'TEMPLATE ' + J.nama.toUpperCase() + ' — CBT Online', heading: true },
+        { text: 'Isi tabel di bawah: SATU BARIS = SATU BUTIR PERNYATAAN. Jangan mengubah baris judul kolom. Butir yang tertulis adalah contoh bawaan; ubah, hapus, atau tambah baris sesuai kebutuhan (minimal 5, maksimal 99 butir).' },
+        { text: 'Dimensi: nama kelompok butir. Skala: Setuju, Kurang, Frekuensi, atau Pengalaman (semua butir pada Halaman yang sama harus memakai Skala yang sama). Arah: Positif bila jawaban tertinggi berarti kondisi baik, Negatif bila berarti kondisi buruk (skor dibalik). Halaman: angka yang sama = butir tampil bersama sebagai tabel matriks (kosongkan/0 bila satu butir per layar). Pasangan: isi No butir lain yang maknanya berlawanan (satu Positif, satu Negatif). Kode dan Petunjuk boleh kosong; Petunjuk dibaca dari baris pertama pada tiap Halaman.' },
+        { text: 'Cara memasukkan: di portal guru buka Bank Soal › Kelola Soal (kategori yang sesuai) › kartu ' + J.nama + ' › "Upload Word". Butir tersimpan di Bank Soal bersama soal kategori itu dan dipakai berulang tanpa upload ulang; bisa diubah kapan saja lewat "Edit Butir".' },
+        { table: { headers: ['No', 'Halaman', 'Dimensi', 'Skala', 'Arah', 'Pernyataan', 'Kode', 'Pasangan', 'Petunjuk'], rows, widths: [480, 680, 2100, 1050, 860, 6300, 650, 780, 2138] } }
+      ];
+      unduhDocx_('Template ' + (jenis === 'karakter' ? 'Survei Karakter' : 'Survei Sulingjar') + '.docx', items);
+      toast('Template ' + J.nama + ' berhasil diunduh.', 'success');
+    } catch (e) { toast('Gagal membuat template: ' + e.message, 'error'); }
   }
 
   // ---------------- pemasangan ke aplikasi ----------------
@@ -1129,3 +1148,5 @@ const Survei = (function () {
   return { toggleRagu, jenisUntukUjian, setUntukUjian, cariPaket, muatPaket, badgePaket, renderKartuKategori, bukaKategoriKelola, imporKeKategori, hapusPaket, bukaEditor, tutupEditor, edTambah, edHapus, edGeser, edAturHalaman, edBawaan, edSimpan, mulai, pilih, pilihId, geser, lompat, lompatButir, kirim, jenisUntukUjian, bangunSet, hitung, periksaKualitas, kategoriIndeks, kategoriKesungguhan, JENIS, guruMuat, guruRender, guruUnduh,
     modeDetail, gabungKeRekap, selRekap, ringkasSurvei, setDraft, draftJson, statusForm, pakaiBawaan, unduhTemplate, htmlPembahasan };
 })();
+
+// v43s: berkas ini adalah versi dengan paket survei (muatPaket, badgePaket, editor butir).

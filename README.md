@@ -1,3 +1,51 @@
+# v43p — Nilai survei (jawaban terbaik = skor tertinggi) + evaluasi kelas
+
+- **Nilai Survei 0–100** per siswa, per dimensi, dan rata-rata: skor butir 1–4; jawaban terbaik = 4 (Sangat setuju/Selalu untuk pernyataan positif; Tidak pernah untuk pernyataan negatif, misal perundungan). Nilai dimensi = (rata-rata skor − 1) ÷ 3 × 100.
+- **Hasil Survei (guru):** panel **Evaluasi** (dimensi bernilai < 75, urut dari terendah, butir paling rendah, saran pembiasaan di kelas / tindak lanjut sekolah), tabel **rata-rata per kelas**, dan baris rata-rata (semua siswa & per kelas) di bagian bawah Excel.
+- Istilah "indeks" diganti "nilai" di seluruh tampilan; kolom Rekap Nilai: "Nilai Survei Karakter" / "Nilai Sulingjar". Pembahasan menampilkan rata-rata skor (mis. 3,2 dari 4).
+- Ujian baru: kotak "Tampilkan nilai survei (per dimensi) ke siswa" aktif secara bawaan. **Nilai Kesungguhan** tetap ada sebagai penyeimbang asal jawab.
+
+# v43o — Nilai Kesungguhan survei (anti asal jawab)
+
+- Setiap pengisian survei kini mendapat **Nilai Kesungguhan 0–100** (Sangat teliti ≥ 80, Cukup teliti 60–79, Asal-asalan < 60). Komponen: **waktu membaca** (rata-rata detik per butir), **variasi jawaban** (pola pilihan yang sama terus), dan **konsistensi** pernyataan berlawanan (bila set butir punya kolom Pasangan; tanpa pasangan bobot dialihkan ke dua komponen lain).
+- Nilai ini mengukur **ketelitian mengisi, bukan "baik/buruknya" jawaban**: siswa yang jujur tetapi indeksnya rendah tetap bisa bernilai kesungguhan tinggi, sehingga siswa tidak terdorong memilih jawaban "yang bagus".
+- **Siswa** melihat nilainya di layar "Survei Terkirim" (selalu tampil), dan diberi perkiraan nilai pada peringatan sebelum mengirim. Intro survei menjelaskan bahwa asal jawab menurunkan nilai.
+- **Guru:** kolom Survei di Rekap Nilai memuat "Kesungguhan N · kategori"; tab Hasil Survei punya kolom dan rata-rata Nilai Kesungguhan; Excel rekap & Excel Hasil Survei memuat kolomnya; Pembahasan Survei menampilkan rincian komponen.
+- Data lama (tanpa nilai) tetap terbaca; kolom nilainya kosong.
+
+# v43n — Survei per indikator (matriks) + panel Halaman Kuesioner
+
+- **Survei Karakter & Sulingjar bawaan kini berbentuk matriks per indikator (dimensi):** satu halaman = satu dimensi, maksimal 6 pernyataan ke bawah dengan 4 kolom jawaban (Karakter jadi 6 halaman). Semua butir Karakter memakai skala Setuju.
+- **Panel "Halaman Kuesioner"** di kiri: nomor halaman hijau = lengkap, merah = ada yang belum dijawab, abu-abu = belum dibuka; klik untuk loncat. Di HP panel berada di atas.
+- **Perbaikan tampilan:** gaya survei sekarang tertanam di `survei.js` (file `survei.css` dihapus), sehingga dialog "Periksa kembali jawaban" dan pilihan jawaban tampil benar walau file CSS tidak ikut terunggah ke GitHub Pages. WAJIB mengunggah `survei.js` terbaru dan `index.html`, `app.js` ke repositori.
+- Template Word Karakter & Sulingjar sudah memuat kolom Halaman per dimensi; ubah angka Halaman untuk mengatur pengelompokan.
+
+# v43m — Tampilan matriks survei (gaya ANBK)
+
+- **Beberapa pernyataan per halaman** dalam tabel: kolom pernyataan + 4 kolom pilihan jawaban, petunjuk di atas tabel, kode kecil di ujung pernyataan, "Halaman X dari Y", tombol lanjut aktif setelah **semua baris** halaman terisi. Di HP tabel otomatis menjadi daftar bertumpuk.
+- **Skala baru "Kurang"**: Tidak setuju · Kurang setuju · Setuju · Sangat setuju (skor tetap 1–4). Sulingjar bawaan kini memakai skala ini dan tampil dalam matriks 6 butir per halaman.
+- **Template Word** bertambah kolom **Halaman**, **Kode**, **Petunjuk** (landscape). Halaman sama pada butir berurutan = tampil satu tabel (skala harus sama); kosong = satu butir per halaman seperti sebelumnya. Template lama (tanpa kolom baru) tetap bisa diimpor.
+- File baru `contoh-sulingjar-matriks.docx`: contoh 6 butir kesiapsiagaan bencana sesuai tangkapan layar (1 halaman).
+
+# v43l — Butir survei bisa diganti per latihan, hasil survei di Rekap Nilai, pembahasan survei
+
+- **Template Word butir survei:** `template-survei-karakter.docx` dan `template-survei-sulingjar.docx` (sudah berisi 36 butir bawaan; kolom No, Dimensi, Skala, Arah, Pernyataan, Pasangan). Ubah isinya untuk tiap latihan, lalu di **Kelola Ujian → Survei Setelah Ujian → Impor butir dari Word → Simpan Ujian**. Tanpa impor, dipakai butir bawaan. Tabel survei juga boleh diletakkan di bawah tabel soal pada file Word yang sama (impor soal melewatinya).
+- **Rekap Nilai:** kolom hasil survei (Indeks Karakter / rata-rata indeks Sulingjar + kategori, tanda ⚠ bila pengisian perlu dicek) tepat di samping nilai tes; Excel rekap ikut memuat indeks tiap dimensi.
+- **Detail Jawaban (guru & siswa):** ada dua tab, **Pembahasan Soal** dan **Pembahasan Survei** (indeks per dimensi, tafsir, jawaban & skor tiap butir, saran tindak lanjut). Siswa hanya melihat pembahasan survei bila kotak "Tampilkan ringkasan indeks ke siswa" dicentang.
+- Mode Server: tempel ulang `Code.gs` + *New version* (kolom `survei_butir` di sheet Ujian dibuat otomatis).
+
+# v43k — Survei Karakter & Survei Lingkungan Belajar (Sulingjar) setelah ujian
+
+- **Alur siswa:** tes → (unggah bukti orak-orik bila aktif) → **survei** → nilai. Setelah ujian **Numerasi** muncul **Survei Karakter** (36 butir, 6 dimensi Profil Pelajar Pancasila); setelah ujian **Literasi** muncul **Sulingjar** (36 butir: kualitas pembelajaran, iklim keamanan, kebinekaan, inklusivitas, kesetaraan gender). Tampilan satu butir per halaman gaya ANBK, 4 pilihan jawaban tanpa pilihan tengah.
+- **Mengaktifkan:** Kelola Ujian → *Survei Setelah Ujian*: Nonaktif / **Otomatis** (judul atau kategori memuat "Numerasi" → Survei Karakter, "Literasi" → Sulingjar) / pilih manual. Ujian baru otomatis diset *Otomatis*; ujian lama tetap Nonaktif sampai diubah. Kotak *Tampilkan ringkasan indeks ke siswa* khusus latihan (ANBK/TKA asli tidak menampilkannya).
+- **Penskoran (meniru ANBK):** tidak ada jawaban benar/salah. Tiap butir diberi skor 1–4 (butir bernada negatif dibalik), **indeks dimensi = (rata-rata − 1) ÷ 3 × 100** (skala 0–100). Survei Karakter juga punya Indeks Karakter (rata-rata 6 dimensi). Kategori Baik ≥ 75, Sedang 50–74,99, Perlu perhatian < 50 hanya **acuan latihan**, bukan ambang resmi.
+- **Agar siswa tidak asal jawab:** semua butir wajib dijawab; waktu per butir, pola jawaban seragam, dan pasangan pernyataan berlawanan yang dijawab saling bertentangan dicek. Bila mencurigakan, siswa diingatkan **sekali** sebelum kirim (Periksa Kembali / Tetap Kirim) dan guru melihat label **Perlu dicek** beserta alasannya.
+- **Portal guru → menu baru "Hasil Survei":** rata-rata indeks per dimensi, 5 butir terendah (bahan perbaikan Rapor Pendidikan), tabel per siswa (indeks, durasi, kualitas pengisian), filter kelas/nama, unduh Excel (indeks + jawaban per butir). Pada Sulingjar, siswa yang menjawab *Beberapa kali/Sering* pada butir pengalaman tidak aman (perundungan, kekerasan, hukuman fisik, pelecehan) diberi label **Perlu tindak lanjut** — tangani secara rahasia.
+- **Pemulihan:** bila siswa menutup halaman sebelum survei terkirim, saat membuka ujian itu lagi ia diarahkan kembali ke survei (jawaban sementara tersimpan di perangkat). Menghapus nilai/mereset sesi ikut menghapus hasil survei.
+- **Butir adalah butir latihan buatan sendiri** mengikuti dimensi ANBK, bukan salinan butir resmi. Teks butir bisa diubah di `survei.js` (blok `JENIS`; id butir jangan diganti).
+- **Pasang:** ganti semua file. **Mode Server:** tempel ulang `Code.gs` lalu *Deploy > Manage deployments > New version* (sheet **Survei** serta kolom `survei` & `survei_tampil` di sheet Ujian dibuat otomatis; aksi baru `getSurveiSesi`, `simpanSurvei`, `getRekapSurvei`). **Mode Lokal:** cukup ganti file.
+- File baru: `survei.js`. File berubah: `app.js`, `index.html`, `Code.gs`, `README.md`.
+
 # v43d — Kategori nilai di Portal Guru, nama ANBK SMP Negeri 2 Seririt, tema ANBK untuk guru, akun format TP
 
 - **Kategori nilai di sisi guru:** Rekap Nilai kini punya kolom **Kategori** (Istimewa ≥ 95, Baik ≥ 76,67, Memadai 50–76,66, Kurang < 50; warna sama dengan layar siswa), filter kategori di kotak "Semua Hasil", ringkasan jumlah per kategori, lencana kategori di Detail Jawaban, kolom Kategori di Cetak Detail Kelas & Cetak Detail Siswa, serta di unduhan Excel (rekap nilai & evaluasi jawaban). Status Lulus/Remedial (berdasarkan KKM ujian) tetap ada.
@@ -508,15 +556,15 @@ Tab baru **📊 Analisis Soal** di Portal Guru. Pilih ujian, lalu tampil dua tab
 (dihitung dari siswa yang sudah **menyelesaikan** ujian tsb):
 
 1. **Analisis Butir Soal** — per soal: jumlah/persentase siswa yang menjawab
-   **benar**, **sebagian benar** (untuk tipe ceklis/mencocokkan/uraian yang
-   dinilai proporsional), **salah**, dan **tidak dijawab** -- lalu dari
+   **benar**, **sebagian benar** (kini hanya mungkin pada soal uraian berkata kunci;
+   PG Kompleks & Mencocokkan/Kategori bersifat dikotomis), **salah**, dan **tidak dijawab** -- lalu dari
    persentase benar itu diturunkan label **"Tingkat Kesulitan (Otomatis)"**
    (≥70% = Mudah, 40–70% = Sedang, <40% = Sulit), ditampilkan berdampingan
    dengan **"Tingkat Kesulitan (Guru)"** yang diisi manual saat membuat soal
    di Bank Soal -- supaya kelihatan soal mana yang ternyata jauh lebih
    sulit/mudah dari perkiraan awal.
 2. **Analisis Jawaban Siswa (per soal)** — matriks tiap siswa × tiap nomor
-   soal (✔ benar / ◐ sebagian benar / ✘ salah / – tidak dijawab), untuk
+   soal (✔ benar / ◐ sebagian benar [hanya uraian] / ✘ salah / – tidak dijawab), untuk
    melihat pola kesalahan (mis. banyak siswa salah di soal yang sama).
 
 Kedua tabel punya tombol **"⬇ Unduh CSV"** sendiri-sendiri (bisa dibuka lewat
@@ -1080,3 +1128,86 @@ Tujuannya agar siswa dan guru bisa sama-sama memeriksa jika ada kunci jawaban ya
 - Hanya bisa dibuka setelah ujian selesai dan hanya untuk sesi milik siswa itu sendiri.
 - Guru bisa mematikannya per ujian lewat kotak centang *Izinkan siswa melihat detail jawaban* di form ujian (default aktif).
 - Data disimpan di kolom baru `tampil_detail` pada sheet **Ujian** (dibuat otomatis).
+
+
+## ⭐ Penilaian Dikotomis (All-or-Nothing) untuk PGK TKA
+
+- **PGK MCMA (tipe `checkbox`, PG Kompleks)** — skor penuh hanya jika himpunan pilihan siswa
+  **sama persis** dengan kunci (tidak kurang, tidak berlebih). Selain itu skor 0.
+- **PGK Kategori (tipe `menjodohkan`; Benar/Salah, Sesuai/Tidak Sesuai, Tepat/Tidak Tepat)** —
+  skor penuh hanya jika **seluruh pernyataan** sesuai kunci. Satu pernyataan keliru atau kosong = 0.
+- Perbandingan jawaban kategori memakai **teks** sisi kanan (bukan hanya nomor indeks), sehingga
+  soal lama yang sisi kanannya berisi "Benar/Salah/Benar/Salah" tidak lagi salah dinilai.
+- Impor tabel kini meringkas sisi kanan ke nilai unik (mis. cukup kolom Benar & Salah).
+- Soal uraian (kata kunci) tidak berubah. Perubahan ada di `skorSoal()` (app.js) dan `skorSoal_()` (Code.gs).
+- **Nilai sesi lama:** jalankan *Hitung Ulang Nilai* di Portal Guru agar nilai yang sudah tersimpan memakai aturan baru.
+- **Wajib deploy ulang Code.gs** (Apps Script: Deploy > Manage deployments > New version) dan unggah ulang app.js.
+
+## ⭐ Template Soal Kategori (PGK Kategori) & Petunjuk PGK
+
+- Template Excel/Word kini punya baris contoh **Tipe `Kategori`**: tiap Opsi ditulis `pernyataan | Benar`
+  atau `pernyataan | Salah` (juga `Sesuai/Tidak Sesuai`, `Tepat/Tidak Tepat`). Kolom Kunci dikosongkan.
+  Pernyataan boleh memuat tanda `=`, mis. `x - y = 2 | Salah`. Sebelumnya tanda `=` memecah pernyataan
+  sehingga kolom tabel muncul sebagai "12. Benar", "2. Salah", dst.
+- Petunjuk otomatis "Pilih semua jawaban yang benar! Jawaban benar lebih dari satu." disembunyikan bila
+  teks soal sudah memuat instruksi serupa, sehingga tidak muncul dua kali.
+- Soal lama yang sudah terlanjur terimpor dengan kolom "12. Benar" perlu diimpor ulang (atau diedit di Bank Soal).
+
+## ⭐ Ikon Aplikasi (saat diinstal di HP)
+Ikon (latar biru) kini memakai lambang **Tut Wuri Handayani (Pusmendik)** sebagai gambar utama, dengan logo kecil
+**SMP Negeri 2 Seririt** sebagai badge di pojok kanan atas. Berkas: `icons/logo-test-*.png`,
+`logo-test-maskable-512.png`, `apple-touch-icon.png`, `favicon.ico`. Jika ikon di HP belum berubah,
+hapus aplikasi yang sudah terpasang lalu instal ulang (Android/iOS menyimpan ikon lama).
+
+## ⭐ Nama Aplikasi di HP
+Nama di bawah ikon setelah diinstal adalah **TKA SPENDASER** (`name`/`short_name` di `manifest.json` untuk Android,
+`apple-mobile-web-app-title` di `index.html` untuk iPhone). Untuk mengubahnya, edit kedua berkas itu lalu instal ulang aplikasi di HP.
+
+## ⭐ v43q — Paket Survei di Bank Soal + Ragu-ragu di Survei
+
+- **Paket soal + survei menjadi satu.** Di **Bank Soal › Kelola Soal** (per kategori/mapel) kini ada dua kartu di samping Tambah
+  Manual / Import Excel / Import Word: **Survei Karakter** (paket Numerasi) dan **Survei Lingkungan Belajar / Sulingjar** (paket
+  Literasi). Tiap kartu punya **Upload Word**, **Unduh Template**, **Edit Butir**, dan **Hapus**.
+- **Tersimpan permanen.** Paket disimpan di sheet baru **`PaketSurvei`** (dibuat otomatis oleh skema saat `Code.gs` dideploy ulang;
+  mode lokal: `paketSurvei`). Ia tetap ada selama tidak dihapus dan dipakai berkali-kali tanpa upload ulang. Menghapus kategori
+  secara permanen dari Arsip ikut menghapus paketnya; mengarsipkan kategori tidak.
+- **Edit Butir** membuka editor tabel (halaman, dimensi, skala, arah, pernyataan, kode, pasangan, petunjuk; tambah/hapus/geser butir,
+  *Atur Halaman Otomatis*, *Muat Butir Bawaan*). Validasi sama dengan impor Word. Kartu menampilkan jumlah butir, dimensi, halaman.
+- **Kelola Ujian › Survei Setelah Ujian** tidak lagi punya tombol upload; hanya pilihan Nonaktif / Otomatis / Karakter / Sulingjar
+  plus status sumber butir. Urutan sumber butir: **paket Bank Soal (kategori yang sama) → butir khusus lama di ujian → butir bawaan**.
+  Mode *Otomatis*: kata "Numerasi" → Karakter, "Literasi" → Sulingjar; bila tak ada kata itu dan kategori punya tepat satu paket,
+  paket itulah yang dipakai.
+- **Tombol Ragu-ragu kuning di tengah** juga ada di layar survei (antara *sebelumnya* dan *berikutnya*). Halaman ragu-ragu berwarna
+  kuning di panel; layar konfirmasi menampilkan jumlah dan nomor halamannya (tidak memblokir pengiriman).
+- Template Word survei kini menunjuk ke Bank Soal › Kelola Soal.
+- **Catatan:** mengubah butir paket setelah siswa mengisi memengaruhi cara hasil lama dibaca (kode butir K01/S01 dipetakan ke butir
+  yang sedang tersimpan). Untuk riwayat yang konsisten, buat paket baru (kategori baru) bila isi butir berubah banyak.
+- **Deploy:** ganti `Code.gs` lalu *Deploy › New version*; unggah `index.html`, `app.js`, `survei.js`, `anbk.js`, `anbk.css`, `style.css`
+  beserta tiga template `.docx` yang diperbarui.
+
+## ⭐ v43r — Token Aktif / Nonaktif per Kelas
+
+- **Tombol 🔑 Token Kelas** di daftar **Kelola Ujian** (kolom baru *Token Aktif untuk* menampilkan ringkasan: Semua kelas / daftar kelas / Terkunci).
+  Jendelanya menampilkan semua kelas (dari Data Siswa) beserta jumlah siswa; centang = **aktif**, tidak dicentang = **nonaktif**.
+  Perubahan tersimpan langsung (bisa dipakai saat ujian berlangsung, kelas per kelas sesuai jadwal). Ada tombol *Aktifkan Semua Kelas* dan *Nonaktifkan Semua*.
+- **Kelas nonaktif ditolak** saat memasukkan token maupun memulai ujian, walau tahu tokennya:
+  *"Token ujian ini belum diaktifkan untuk kelas 9B. Tunggu jadwal dari guru/pengawas."*
+  Siswa yang **sudah punya sesi berjalan tetap bisa melanjutkan** (tidak terputus bila kelasnya dinonaktifkan di tengah ujian).
+- **Token di layar peserta** (mode latihan) juga hanya tampil untuk kelas yang aktif; kelas lain melihat `------`.
+- **Ujian baru:** pilihan *Token berlaku untuk* — *Semua kelas* (default) atau *Kunci semua kelas dulu* lalu aktifkan per kelas.
+  Ujian lama tetap **berlaku untuk semua kelas** sampai Anda mengaturnya.
+- Data: kolom baru **`token_kelas`** di sheet **Ujian** (dibuat otomatis oleh skema). Kosong = semua kelas; `["9A","9B"]` = hanya kelas tsb; `[]` = semua dikunci.
+  Kelas dicocokkan tanpa membedakan huruf besar/kecil dan spasi; siswa tanpa kelas dihitung sebagai "Tanpa Kelas".
+- **Deploy:** ganti `Code.gs` lalu *Deploy › New version*; unggah `index.html`, `app.js`, `anbk.js`, `style.css`.
+
+## v43s — Perbaikan Bank Soal "Memuat..." / "Gagal memperbarui"
+- Pemanggilan fungsi survei dari `app.js` kini dijaga (`surveiAda_`): bila `survei.js` di server masih versi lama/tersimpan di cache
+  atau paket survei gagal dimuat, Bank Soal, Kelola Soal, dan Kelola Ujian tetap tampil normal (hanya fitur paket survei yang tidak muncul).
+- Penyebab umum: `app.js` baru diunggah tetapi `survei.js` belum (atau browser masih memakai `survei.js` lama). Unggah keduanya dan tekan Ctrl+F5.
+
+## v43t — Unduh Template Survei tanpa bergantung pada berkas di GitHub
+- Tombol **Unduh Template** (Survei Karakter / Sulingjar) di Bank Soal › Kelola Soal kini membuat file Word **langsung di browser**
+  (butir bawaan sebagai contoh isian, lengkap dengan Halaman dan Pasangan). Tidak lagi mengambil `template-survei-*.docx` dari repo,
+  sehingga tidak muncul "Couldn't download – No file" bila berkas itu belum diunggah.
+- Template yang diunduh bisa langsung diunggah kembali lewat tombol Upload dan menghasilkan butir yang identik dengan bawaan.
+- Berkas `template-survei-karakter.docx`, `template-survei-sulingjar.docx`, `contoh-sulingjar-matriks.docx` kini hanya contoh bacaan (tidak dipakai aplikasi).

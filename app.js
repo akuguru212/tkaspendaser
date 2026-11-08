@@ -203,6 +203,9 @@ function ringkasTokenKelas_(u) {
   const tampil = arr.slice(0, 4).map(k => escapeHtml_(k)).join(', ');
   return '<span class="badge ok">' + tampil + (arr.length > 4 ? ' +' + (arr.length - 4) : '') + '</span>';
 }
+// survei.js dimuat terpisah: pastikan fungsi yang dipanggil ada (file lama / cache bisa belum punya) supaya
+// bagian survei yang bermasalah TIDAK menghentikan pemuatan Bank Soal, Kelola Ujian, dll.
+function surveiAda_(fn) { return typeof Survei !== 'undefined' && Survei && typeof Survei[fn] === 'function'; }
 function kelasUnikDari_(list) {
   return [...new Set((list || []).map(x => String(x.kelas || '').trim()).filter(k => k && k !== '-'))]
     .sort((a, b) => a.localeCompare(b, 'id', { numeric: true }));
@@ -4024,7 +4027,7 @@ const UI = {
     document.getElementById('ujian-survei-tampil').checked = ujian ? (String(ujian.survei_tampil) === 'true') : true; // ujian baru: nilai survei tampil ke siswa (latihan)
     { const fa = document.getElementById('field-token-awal'); if (fa) fa.style.display = ujian ? 'none' : ''; const ta = document.getElementById('ujian-token-awal'); if (ta) ta.value = ''; }
     Survei.setDraft(ujian ? (ujian.survei_butir || '') : '');
-    Survei.muatPaket().then(() => Survei.statusForm());
+    if (surveiAda_('muatPaket')) Promise.resolve(Survei.muatPaket()).then(() => Survei.statusForm()).catch(() => { });
     Guru.sinkronDetailPembahasan();
     Guru.muatEditorPesanNilai(ujian && ujian.pesan_nilai);
     // null (bukan array kosong) khusus menandai "ujian baru, belum ada
@@ -4352,7 +4355,7 @@ const Guru = {
     const [res, resUjian] = await Promise.all([
       api('getBankSoal', { guruId: state.user.id }),
       api('getDaftarUjian', { guruId: state.user.id }),
-      (typeof Survei !== 'undefined') ? Survei.muatPaket(true) : null
+      surveiAda_('muatPaket') ? Promise.resolve(Survei.muatPaket(true)).catch(() => null) : null
     ]);
     const cont = document.getElementById('daftar-bank-soal');
     if (!res.ok) return gagalMuat_(cont, 'Gagal memuat: ' + res.error);
@@ -4418,7 +4421,7 @@ const Guru = {
         <div class="mapel-card-badges">
           <span class="badge token">TOKEN: ${meta.token}</span>
           <span class="badge umum">UMUM</span>
-          ${(typeof Survei !== 'undefined') ? Survei.badgePaket(k) : ''}
+          ${surveiAda_('badgePaket') ? Survei.badgePaket(k) : ''}
         </div>
         <div class="mapel-card-judul">${escapeHtml_(labelKategori(k))}</div>
         <div class="mapel-card-jumlah">Total Soal: <strong>${jumlahAktif}</strong>${peta[k].arsip ? ` <span class="subtitle" style="display:inline">(+${peta[k].arsip} arsip)</span>` : ''}</div>
@@ -4467,7 +4470,7 @@ const Guru = {
     if (filterSel) filterSel.value = kategori;
     UI.renderTipeTabs();
     Guru.renderDaftarSoal();
-    if (typeof Survei !== 'undefined') Survei.bukaKategoriKelola();
+    if (surveiAda_('bukaKategoriKelola')) Survei.bukaKategoriKelola();
   },
 
   kembaliKeGridMapel() {
@@ -4612,7 +4615,7 @@ const Guru = {
       Guru.hapusDariStateLokal_(idList);
       // paket survei kategori ini ikut dihapus bila tak ada lagi soal (aktif maupun arsip) yang memakainya
       if (!(state.guru.bankSoal || []).some(x => samaTeks_(x.kategori, kategori))) {
-        try { await api('hapusPaketSurvei', { guruId: state.user.id, kategori, jenis: '' }); if (typeof Survei !== 'undefined') await Survei.muatPaket(true); } catch (e) { }
+        try { await api('hapusPaketSurvei', { guruId: state.user.id, kategori, jenis: '' }); if (surveiAda_('muatPaket')) await Survei.muatPaket(true); } catch (e) { }
       }
     }
     toast(gagal ? `Gagal menghapus: ${res.error}` : `Kategori "${labelKategori(kategori)}" dihapus permanen dari Arsip (${cocok.length} soal).`, gagal ? 'error' : 'success');
