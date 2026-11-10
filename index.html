@@ -154,6 +154,8 @@
       <button class="nav-tab" data-tab="tab-bank-soal" onclick="UI.gantiTabGuru('tab-bank-soal')"><i class="fa-solid fa-layer-group nav-ico"></i><span>Bank Soal</span></button>
       <button class="nav-tab" data-tab="tab-ujian" onclick="UI.gantiTabGuru('tab-ujian')"><i class="fa-solid fa-calendar-days nav-ico"></i><span>Kelola Ujian</span></button>
       <button class="nav-tab" data-tab="tab-rekap" onclick="UI.gantiTabGuru('tab-rekap')"><i class="fa-solid fa-clipboard-check nav-ico"></i><span>Rekap Nilai</span></button>
+      <button class="nav-tab" data-tab="tab-leaderboard" onclick="UI.gantiTabGuru('tab-leaderboard')"><i class="fa-solid fa-trophy nav-ico"></i><span>Leaderboard</span></button>
+      <button class="nav-tab" data-tab="tab-lb-survei" onclick="UI.gantiTabGuru('tab-lb-survei')"><i class="fa-solid fa-ranking-star nav-ico"></i><span>Leaderboard Survei</span></button>
       <button class="nav-tab" data-tab="tab-survei" onclick="UI.gantiTabGuru('tab-survei')"><i class="fa-solid fa-square-poll-vertical nav-ico"></i><span>Hasil Survei</span></button>
       <button class="nav-tab" data-tab="tab-analisis" onclick="UI.gantiTabGuru('tab-analisis')"><i class="fa-solid fa-chart-pie nav-ico"></i><span>Analisis Soal</span></button>
       <button class="nav-tab" data-tab="tab-pelanggaran" onclick="UI.gantiTabGuru('tab-pelanggaran')"><i class="fa-solid fa-triangle-exclamation nav-ico"></i><span>Log Pelanggaran</span></button>
@@ -192,6 +194,7 @@
             <button onclick="UI.bukaModalUjian()"><i class="fa-solid fa-plus"></i> Buat Ujian Baru</button>
             <button class="secondary" onclick="UI.gantiTabGuru('tab-bank-soal')"><i class="fa-solid fa-layer-group"></i> Kelola Bank Soal</button>
             <button class="secondary" onclick="UI.gantiTabGuru('tab-rekap')"><i class="fa-solid fa-clipboard-check"></i> Rekap Nilai</button>
+            <button class="secondary" onclick="UI.gantiTabGuru('tab-leaderboard')"><i class="fa-solid fa-trophy"></i> Leaderboard</button>
           </div>
         </div>
         <i class="fa-solid fa-graduation-cap dash-hero-deco"></i>
@@ -415,6 +418,75 @@
           <span class="filter-info" id="kelas-rekap-info"></span>
         </div>
         <div id="tabel-rekap">Pilih ujian terlebih dahulu.</div>
+      </div>
+    </section>
+
+    <!-- ---------- TAB: LEADERBOARD (peringkat Literasi + Numerasi) ---------- -->
+    <section id="tab-leaderboard" class="hidden lb-root">
+      <h2>Leaderboard</h2>
+      <p class="subtitle">Peringkat siswa berdasarkan nilai <strong>Literasi</strong> dan <strong>Numerasi</strong>. Pilih <strong>Tes 1, Tes 2, ...</strong> atau <strong>Rata-rata Seluruh Tes</strong>, lalu pilih satu kelas atau seluruh kelas. Nilai Akhir = rata-rata Literasi dan Numerasi.</p>
+      <div class="panel">
+        <div class="toolbar">
+          <div class="toolbar-actions" style="align-items:center">
+            <button type="button" class="secondary btn-segarkan" id="lb-btn-segarkan" title="Ambil nilai terbaru dari semua tes" onclick="Leaderboard.muat(this)"><i class="fa-solid fa-rotate"></i> Segarkan</button><span class="segar-info" id="segar-info-tab-leaderboard" aria-live="polite"></span>
+          </div>
+          <div class="toolbar-actions">
+            <button type="button" class="secondary" title="Kelompokkan ujian ke Tes 1, Tes 2, ... secara manual (bila nama ujian tidak memuat Literasi/Numerasi)" onclick="Leaderboard.bukaAtur()"><i class="fa-solid fa-sliders"></i> Atur Tes</button>
+            <button type="button" class="secondary" title="Unduh Excel: 1 sheet sesuai pilihan + 1 sheet per kelas" onclick="Leaderboard.unduh()">⬇ Unduh Excel</button>
+            <button type="button" class="secondary" title="Cetak / simpan PDF sesuai pilihan yang tampil" onclick="Leaderboard.cetak()">🖨 Cetak PDF</button>
+          </div>
+        </div>
+        <div class="lb-filter-label">Peringkat berdasarkan</div>
+        <div class="lb-chips" id="lb-chips-tes"></div>
+        <div class="lb-filter-label">Kelas</div>
+        <div class="lb-chips" id="lb-chips-kelas"></div>
+        <div class="filter-bar" style="margin-bottom:0">
+          <input type="search" id="lb-cari" placeholder="🔍 Cari nama siswa..." oninput="Leaderboard.render()" autocomplete="off">
+          <label class="filter-cek" title="Hanya tampilkan siswa yang sudah mengerjakan Literasi DAN Numerasi"><input type="checkbox" id="lb-lengkap" onchange="Leaderboard.render()"> Sembunyikan yang belum lengkap</label>
+          <label class="filter-cek" title="Siswa yang diblokir karena pelanggaran biasanya tidak diikutkan"><input type="checkbox" id="lb-blokir" onchange="Leaderboard.render()"> Sertakan siswa yang diblokir</label>
+          <span class="filter-info" id="lb-info-filter"></span>
+        </div>
+      </div>
+      <div id="lb-hero"></div>
+      <div id="lb-stats"></div>
+      <div id="lb-podium"></div>
+      <div class="panel">
+        <div id="lb-tabel">Memuat Leaderboard... Jika tidak muncul, pastikan berkas <code>leaderboard.js</code> ikut diunggah ke repositori.</div>
+      </div>
+    </section>
+
+    <!-- ---------- TAB: LEADERBOARD SURVEI (Survei Karakter + Sulingjar) ---------- -->
+    <section id="tab-lb-survei" class="hidden lb-root">
+      <h2>Leaderboard Survei</h2>
+      <p class="subtitle">Peringkat siswa berdasarkan <strong>Nilai Survei Karakter</strong> dan <strong>Sulingjar</strong>. Pilih <strong>Tes 1, Tes 2, ...</strong> atau <strong>Rata-rata Seluruh Tes</strong>, lalu satu kelas atau seluruh kelas. Nilai Akhir = rata-rata keduanya.</p>
+      <div class="ls-catatan"><i class="fa-solid fa-circle-info"></i><div>Peringkat ini <strong>terpisah dari Leaderboard tes</strong>: nilai survei (0–100, dari jawaban survei, bukan benar/salah) tidak mempengaruhi nilai tes, dan sebaliknya. Gunakan untuk guru saja; jangan ditampilkan ke siswa agar tidak mendorong jawaban &ldquo;yang bagus&rdquo;. Pengisian bertanda <strong>⚠ dicek</strong> (terlalu cepat/seragam/bertentangan) bisa disembunyikan.</div></div>
+      <div class="panel">
+        <div class="toolbar">
+          <div class="toolbar-actions" style="align-items:center">
+            <button type="button" class="secondary btn-segarkan" id="ls-btn-segarkan" title="Ambil hasil survei terbaru" onclick="LeaderboardSurvei.muat(this)"><i class="fa-solid fa-rotate"></i> Segarkan</button><span class="segar-info" id="segar-info-tab-lb-survei" aria-live="polite"></span>
+          </div>
+          <div class="toolbar-actions">
+            <button type="button" class="secondary" title="Atur pengelompokan Tes 1, Tes 2, ... (dibagi dengan Leaderboard tes)" onclick="LeaderboardSurvei.atur()"><i class="fa-solid fa-sliders"></i> Atur Tes</button>
+            <button type="button" class="secondary" title="Unduh Excel: sheet sesuai pilihan + satu sheet per kelas" onclick="LeaderboardSurvei.unduh()">⬇ Unduh Excel</button>
+            <button type="button" class="secondary" title="Cetak / simpan PDF sesuai pilihan yang tampil" onclick="LeaderboardSurvei.cetak()">🖨 Cetak PDF</button>
+          </div>
+        </div>
+        <div class="lb-filter-label">Peringkat berdasarkan</div>
+        <div class="lb-chips" id="ls-chips-tes"></div>
+        <div class="lb-filter-label">Kelas</div>
+        <div class="lb-chips" id="ls-chips-kelas"></div>
+        <div class="filter-bar" style="margin-bottom:0">
+          <input type="search" id="ls-cari" placeholder="🔍 Cari nama siswa..." oninput="LeaderboardSurvei.render()" autocomplete="off">
+          <label class="filter-cek" title="Hanya tampilkan siswa yang sudah mengisi Survei Karakter DAN Sulingjar"><input type="checkbox" id="ls-lengkap" onchange="LeaderboardSurvei.render()"> Sembunyikan yang belum lengkap</label>
+          <label class="filter-cek" title="Sembunyikan pengisian yang ditandai perlu dicek (terlalu cepat, jawaban seragam, atau bertentangan)"><input type="checkbox" id="ls-cek" onchange="LeaderboardSurvei.render()"> Sembunyikan pengisian yang perlu dicek</label>
+          <span class="filter-info" id="ls-info-filter"></span>
+        </div>
+      </div>
+      <div id="ls-hero"></div>
+      <div id="ls-stats"></div>
+      <div id="ls-podium"></div>
+      <div class="panel">
+        <div id="ls-tabel">Memuat Leaderboard Survei... Jika tidak muncul, pastikan berkas <code>leaderboard-survei.js</code> ikut diunggah ke repositori.</div>
       </div>
     </section>
 
@@ -1455,5 +1527,7 @@
 <script src="app.js?v=64"></script>
 <script src="anbk.js?v=63"></script>
 <script src="survei.js?v=11"></script>
+<script src="leaderboard.js?v=1"></script>
+<script src="leaderboard-survei.js?v=1"></script>
 </body>
 </html>
