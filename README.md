@@ -1,3 +1,44 @@
+# v43x — Aktifkan / Nonaktifkan ujian (cegah token bentrok)
+
+- **Tombol "▶ Aktifkan" / "⏸ Nonaktifkan" di setiap baris Kelola Ujian.** Kolom Status kini menampilkan keadaan sebenarnya: **Berlangsung**, **Akan datang**, **Selesai**, atau **Nonaktif**. Baris ujian nonaktif diredupkan dan tokennya dicoret.
+- **Ujian nonaktif:** tokennya ditolak ("Ujian ini sedang tidak aktif"), tidak tampil di layar peserta (daftar token), dan siswa tidak bisa memulai sesi baru. **Siswa yang sudah mulai mengerjakan tetap bisa melanjutkan** sampai selesai. Nilai, rekap, dan soal tidak berubah; bisa diaktifkan lagi kapan saja.
+- **Peringatan otomatis:** bila ada dua ujian atau lebih **berlangsung bersamaan untuk kelas yang sama**, muncul kotak kuning di atas tabel dengan tombol cepat untuk menonaktifkan salah satunya. Bila kelasnya dibatasi berbeda lewat **🔑 Token Kelas** (mis. 9A dan 9B), peringatan tidak muncul.
+- **Perbaikan terkait:** (1) mengubah ujian lewat tombol **Ubah** tidak lagi mengaktifkan ulang ujian yang sedang dinonaktifkan; (2) bila ada dua ujian bertoken sama (mis. baris tersalin di Sheets), sistem memilih ujian yang aktif dan sedang dibuka, bukan sekadar yang pertama; (3) token ujian baru dijamin tidak sama dengan token ujian lain.
+- **Mode Server:** fitur tombol Aktif/Nonaktif berjalan dengan `app.js` baru saja, tetapi pemblokiran **sesi baru** untuk ujian nonaktif, pemilihan token ganda, dan token unik butuh `Code.gs` baru: tempel ulang lalu *Deploy > Manage deployments > New version*. **Mode Lokal:** cukup ganti file.
+- File berubah: `app.js`, `Code.gs`, `README.md`.
+
+# v43w — Ubah nama Mapel/kategori di kartu Bank Soal
+
+- **Tombol ✏️ pada kartu Mapel** (di sebelah tombol 🗑) untuk mengganti nama, mis. **Literasi → Literasi 1**. Tombol yang sama juga ada di halaman **Kelola Soal** ("✏️ Ubah Nama") dan di daftar **Kelola Kategori**.
+- **Yang ikut berganti nama:** semua soal di Mapel itu (termasuk yang diarsipkan), kolom Kategori pada ujian yang memakainya, dan paket survei (Karakter/Sulingjar) milik Mapel itu, sehingga pasangan survei tetap tersambung. **Token dan warna kartu tetap.** **Judul ujian tidak berubah** (ubah sendiri di Kelola Ujian bila perlu).
+- **Pengaman:** nama baru tidak boleh kosong, tidak boleh sama dengan nama lama, dan tidak boleh sama dengan Mapel lain milik Anda (tidak ada penggabungan otomatis). Soal milik guru lain tidak tersentuh. Perubahan huruf besar/kecil saja diperbolehkan.
+- **Mode Server:** WAJIB tempel ulang `Code.gs` lalu *Deploy > Manage deployments > New version* (aksi baru `ubahNamaKategori`; satu kali baca dan satu kali tulis per sheet, jadi cepat walau soal banyak). Tanpa ini aplikasi menampilkan pesan "Aksi tidak dikenal". **Mode Lokal:** cukup ganti file.
+- File berubah: `app.js`, `index.html`, `Code.gs`, `README.md`.
+
+# v43v — Menu Leaderboard Survei (Survei Karakter + Sulingjar)
+
+- **Menu baru "Leaderboard Survei"** di Portal Guru (di bawah Leaderboard). **Terpisah dari Leaderboard tes**: data, perhitungan, dan warna berbeda (banner hijau-tosca), sehingga nilai survei dan nilai tes tidak saling mempengaruhi.
+- **Pilihan:** Tes 1, Tes 2, ... atau **Rata-rata Seluruh Tes**; **Semua Kelas** atau per kelas.
+- **Kolom:** Rank | Nama Siswa | Kelas | **Survei Karakter** | **Sulingjar** (bersebelahan) | Nilai Akhir (rata-rata keduanya) | Kategori (Baik ≥ 75, Sedang 50–74,99, Perlu perhatian < 50) | Kesungguhan | Rank Kelas / Jml Tes. Arahkan kursor ke nilai pada mode satu tes untuk melihat nilai per dimensi.
+- **Pasangan survei per tes:** Survei Karakter berasal dari ujian Numerasi dan Sulingjar dari ujian Literasi (pengaturan *Kelola Ujian > Survei Setelah Ujian*); keduanya dipasangkan per tes dengan nama ujian yang sama seperti Leaderboard tes. **Atur Tes** dibagi dengan Leaderboard tes.
+- **Agar asal jawab tidak naik peringkat:** pengisian yang ditandai perlu dicek diberi tanda **⚠ dicek** dan bisa disembunyikan dengan satu kotak centang; kolom Kesungguhan ditampilkan di samping nilai.
+- Podium Top 3, kartu ringkasan (termasuk rata-rata Kesungguhan dan jumlah pengisian perlu dicek), **Unduh Excel** (sheet sesuai pilihan + sheet per kelas; mode satu tes memuat nilai tiap dimensi), dan **Cetak PDF**.
+- Label **Perlu tindak lanjut** pada Sulingjar (pengalaman tidak aman) sengaja **tidak** ditampilkan di leaderboard; tetap rahasia di tab Hasil Survei. Leaderboard survei hanya untuk guru.
+- Tidak perlu mengganti `Code.gs` (memakai aksi yang sudah ada). Perubahan kecil di `leaderboard.js`: gaya sekarang berbasis kelas `.lb-root` agar dipakai bersama.
+- File baru: `leaderboard-survei.js`. File berubah: `index.html`, `leaderboard.js`, `README.md`. **Unggah ketiganya (dan `leaderboard-survei.js`) ke repositori.**
+
+# v43u — Menu Leaderboard (peringkat Literasi + Numerasi)
+
+- **Menu baru "Leaderboard"** di Portal Guru (di bawah Rekap Nilai, plus tombol pintas di Dashboard). Menampilkan peringkat 1, 2, 3, dst. sampai siswa terakhir.
+- **Pilihan peringkat:** **Tes 1**, **Tes 2**, ... atau **Rata-rata Seluruh Tes**; dan **Semua Kelas** atau **per kelas** (tombol pilihan, bukan menu dropdown).
+- **Format tabel:** Rank | Nama Siswa | Kelas | **Literasi** | **Numerasi** (bersebelahan) | Nilai Akhir (rata-rata keduanya) | Kategori (Istimewa/Baik/Memadai/Kurang). Mode Semua Kelas menambah kolom *Rank Kelas*; mode Rata-rata menambah *Jml Tes*.
+- **Tampilan:** banner judul, 6 kartu ringkasan, **podium Top 3** (emas/perak/perunggu), bilah warna per nilai, baris 3 teratas diwarnai. Ikut warna tema yang dipilih; di HP tabel bisa digeser.
+- **Aturan peringkat:** nilai sama = peringkat sama (1, 2, 2, 4). Siswa yang baru mengerjakan salah satu (Literasi saja / Numerasi saja) diurutkan **setelah** siswa yang lengkap dan diberi tanda "Belum lengkap" (bisa disembunyikan). Siswa **diblokir** tidak diikutkan kecuali dicentang. Bila ada beberapa percobaan pada tes yang sama, dipakai nilai tertinggi. Rata-rata Seluruh Tes = rata-rata semua Literasi dan rata-rata semua Numerasi yang diikuti, lalu dirata-ratakan.
+- **Cara mengenali Tes 1/Tes 2:** otomatis dari judul ujian — kata *Literasi*/*Numerasi* menentukan jenisnya, sisa judul menjadi nama tes. Contoh: "Tes 1 - Literasi" + "Tes 1 - Numerasi" = **Tes 1**. Bila penamaan ujian berbeda, klik **Atur Tes** untuk menentukan jenis dan nomor tes tiap ujian (tersimpan di browser ini).
+- **Unduh Excel** (sheet sesuai pilihan + satu sheet per kelas yang diurutkan di dalam kelasnya; mode Rata-rata memuat nilai tiap tes) dan **Cetak PDF** (kop sekolah, tabel A4).
+- **Tombol Segarkan** mengambil nilai terbaru. Tidak perlu mengganti `Code.gs` (memakai aksi yang sudah ada). Mode Lokal & Mode Server sama-sama didukung.
+- File baru: `leaderboard.js` (gayanya tertanam di dalamnya). File berubah: `index.html`, `README.md`. **Unggah `leaderboard.js` dan `index.html` ke repositori.**
+
 # v43p — Nilai survei (jawaban terbaik = skor tertinggi) + evaluasi kelas
 
 - **Nilai Survei 0–100** per siswa, per dimensi, dan rata-rata: skor butir 1–4; jawaban terbaik = 4 (Sangat setuju/Selalu untuk pernyataan positif; Tidak pernah untuk pernyataan negatif, misal perundungan). Nilai dimensi = (rata-rata skor − 1) ÷ 3 × 100.

@@ -195,6 +195,31 @@ function kelasAktifUjian_(u) {
   try { const arr = JSON.parse(raw); if (Array.isArray(arr)) return arr.map(normKelas_); } catch (e) { }
   return null;
 }
+// Status ujian untuk guru: 'nonaktif' (dimatikan guru) | 'terjadwal' (belum dibuka) | 'selesai' (lewat batas) | 'berlangsung'.
+// Aturannya sama dengan pengecekan token siswa (jadwal + toleransi keterlambatan).
+function statusUjian_(u) {
+  if (!u || u.status !== 'aktif') return 'nonaktif';
+  const now = new Date();
+  if (u.mulai && now < new Date(u.mulai)) return 'terjadwal';
+  const batas = u.selesai ? new Date(new Date(u.selesai).getTime() + (Number(u.toleransi_menit) || 0) * 60000) : null;
+  if (batas && now > batas) return 'selesai';
+  return 'berlangsung';
+}
+// Bila ada beberapa ujian bertoken sama (mis. data tersalin), pilih yang aktif & sedang dibuka lebih dulu,
+// bukan sekadar yang pertama ditemukan.
+function pilihUjianByToken_(list, token) {
+  const t = String(token || '').toUpperCase();
+  const cocok = (list || []).filter(u => String(u.token) === t);
+  if (cocok.length < 2) return cocok[0];
+  return cocok.find(u => statusUjian_(u) === 'berlangsung') || cocok.find(u => u.status === 'aktif') || cocok[0];
+}
+// Dua ujian "bentrok" bila kelas yang boleh mengerjakannya beririsan (null = semua kelas).
+function kelasBeririsan_(a, b) {
+  const ka = kelasAktifUjian_(a), kb = kelasAktifUjian_(b);
+  if ((ka && !ka.length) || (kb && !kb.length)) return false; // salah satu terkunci untuk semua kelas
+  if (!ka || !kb) return true;
+  return ka.some(k => kb.includes(k));
+}
 function ringkasTokenKelas_(u) {
   const raw = String((u && u.token_kelas) == null ? '' : u.token_kelas).trim();
   if (raw === '') return '<span class="badge ok">Semua kelas</span>';
@@ -1645,6 +1670,24 @@ function ambilMetaMapel_(kategori, tandaiBuatan) {
   if (berubah) { try { localStorage.setItem(MAPEL_META_KEY, JSON.stringify(semua)); } catch (e) {} }
   return semua[kunci];
 }
+// Mapel diganti namanya: token & warna kartu ikut dipindah ke nama baru (tidak berubah).
+function pindahMetaMapel_(dari, ke) {
+  const semua = bacaSemuaMetaMapel_();
+  const kd = String(dari || '').toLowerCase(), kk = String(ke || '').toLowerCase();
+  if (!semua[kd]) return;
+  const m = semua[kd];
+  if (kd !== kk) delete semua[kd];
+  if (m.buatan) m.buatan = String(ke).trim();
+  semua[kk] = m;
+  try { localStorage.setItem(MAPEL_META_KEY, JSON.stringify(semua)); } catch (e) {}
+}
+// Gaya tombol "Ubah Nama" pada kartu Mapel (disisipkan dari sini supaya tampil walau style.css lama masih di cache).
+(function () {
+  if (document.getElementById('mapel-ubah-css')) return;
+  const st = document.createElement('style'); st.id = 'mapel-ubah-css';
+  st.textContent = '.mapel-card-ubah { right: 2.9rem !important; } .mapel-card-ubah:hover { background: color-mix(in srgb, var(--c-primary) 16%, var(--c-surface)) !important; color: var(--c-primary) !important; }';
+  document.head.appendChild(st);
+})();
 function hapusMapelBuatan_(kategori) {
   const semua = bacaSemuaMetaMapel_();
   const kunci = String(kategori || '').toLowerCase();
@@ -2769,6 +2812,19 @@ const LocalBackend = (function () {
         simpan();
         return { ok: true, count: n };
       }
+      case 'ubahNamaKategori': {
+        const dari = String(data.dari == null ? '' : data.dari).trim(), ke = String(data.ke == null ? '' : data.ke).trim();
+        if (!dari || !ke) return { ok: false, error: 'Nama kategori tidak boleh kosong.' };
+        if (ke.length > 60) return { ok: false, error: 'Nama kategori maksimal 60 karakter.' };
+        const milik = x => !data.guruId || String(x.guru_id) === String(data.guruId);
+        if (!samaTeks_(dari, ke) && D.bankSoal.some(s => milik(s) && samaTeks_(s.kategori, ke))) return { ok: false, error: 'Sudah ada kategori bernama "' + ke + '".' };
+        let nSoal = 0, nUjian = 0, nPaket = 0;
+        D.bankSoal.forEach(s => { if (milik(s) && samaTeks_(s.kategori, dari)) { s.kategori = ke; nSoal++; } });
+        D.ujian.forEach(u => { if (milik(u) && samaTeks_(u.kategori, dari)) { u.kategori = ke; nUjian++; } });
+        (D.paketSurvei || []).forEach(p => { if (milik(p) && samaTeks_(p.kategori, dari)) { p.kategori = ke; nPaket++; } });
+        simpan();
+        return { ok: true, soal: nSoal, ujian: nUjian, paket: nPaket };
+      }
       case 'getBankSoal': {
         let list = clone(D.bankSoal);
         if (data.guruId) list = list.filter(s => s.guru_id === data.guruId);
@@ -2783,7 +2839,7 @@ const LocalBackend = (function () {
           if (idx > -1) { D.ujian[idx] = Object.assign({}, D.ujian[idx], ujian); simpan(); return { ok: true, id: ujian.id }; }
         }
         ujian.id = genId('U');
-        if (!ujian.token) ujian.token = buatTokenAman_();
+        if (!ujian.token) { do { ujian.token = buatTokenAman_(); } while (D.ujian.some(x => x.token === ujian.token)); }
         ujian.status = ujian.status || 'aktif';
         D.ujian.push(ujian);
         simpan();
@@ -3116,7 +3172,7 @@ const LocalBackend = (function () {
       case 'cekToken': {
         const sBlokirCek = data.siswaId ? D.siswa.find(x => x.id === data.siswaId) : null;
         if (sBlokirCek && infoBlokirLokal(sBlokirCek).aktif) return { ok: false, error: pesanBlokirLokal(infoBlokirLokal(sBlokirCek)) };
-        const ujian = D.ujian.find(u => u.token === String(data.token || '').toUpperCase());
+        const ujian = pilihUjianByToken_(D.ujian, data.token);
         if (!ujian) return { ok: false, error: 'Token ujian tidak ditemukan.' };
         const now = new Date();
         if (ujian.mulai && now < new Date(ujian.mulai)) return { ok: false, error: 'Ujian belum dibuka.' };
@@ -3143,6 +3199,7 @@ const LocalBackend = (function () {
           return { ok: false, error: 'Anda sudah menyelesaikan ujian ini.' };
         }
         if (existing && existing.status === 'diblokir') return { ok: false, error: 'Sesi ujian Anda telah diblokir karena pelanggaran. Hubungi guru.' };
+        if (!existing && ujian.status !== 'aktif') return { ok: false, error: 'Ujian ini sedang tidak aktif.' }; // siswa yang sudah mengerjakan tetap boleh melanjutkan
         if (!existing) { const izK = izinKelasLokal_(ujian, data.siswaId); if (!izK.ok) return { ok: false, error: izK.error }; }
 
         const soalIds = String(ujian.soal_ids || '').split(',').filter(Boolean);
@@ -4416,6 +4473,7 @@ const Guru = {
       const jumlahAktif = peta[k].total - peta[k].arsip;
       return `
       <div class="mapel-card" style="--mapel-warna:${meta.warna}">
+        <button type="button" class="mapel-card-hapus mapel-card-ubah" title="Ubah nama Mapel ini (mis. Literasi menjadi Literasi 1)" onclick="event.stopPropagation();Guru.ubahNamaKategori('${escapeHtml_(k).replace(/'/g, "\\'")}')">✏️</button>
         <button type="button" class="mapel-card-hapus" title="Arsipkan seluruh soal Mapel ini" onclick="event.stopPropagation();Guru.hapusKategoriSoal('${escapeHtml_(k).replace(/'/g, "\\'")}')">🗑</button>
         <div class="mapel-card-ico">💡</div>
         <div class="mapel-card-badges">
@@ -4824,7 +4882,8 @@ const Guru = {
       ? unik.map(k => `
         <div class="row" style="align-items:center;justify-content:space-between;margin-bottom:.5rem">
           <span><strong>${escapeHtml_(labelKategori(k))}</strong> <span class="subtitle" style="display:inline">(${peta[k]} soal aktif)</span></span>
-          <button class="danger small" data-kategori="${escapeHtml_(k).replace(/"/g, '&quot;')}" onclick="Guru.hapusKategoriSoal(this.dataset.kategori)">🗑 Hapus</button>
+          <span style="display:flex;gap:.4rem"><button class="secondary small" data-kategori="${escapeHtml_(k).replace(/"/g, '&quot;')}" onclick="Guru.ubahNamaKategori(this.dataset.kategori)">✏️ Ubah Nama</button>
+          <button class="danger small" data-kategori="${escapeHtml_(k).replace(/"/g, '&quot;')}" onclick="Guru.hapusKategoriSoal(this.dataset.kategori)">🗑 Hapus</button></span>
         </div>`).join('')
       : '<p class="subtitle">Belum ada kategori aktif. Tambahkan lewat form di bawah, atau langsung ketik nama baru saat menambah soal.</p>';
   },
@@ -4842,6 +4901,43 @@ const Guru = {
   // aktif di kategori itu dipindahkan ke Arsip (bisa dikembalikan kapan saja
   // lewat filter status "Arsip"), lalu kategorinya otomatis hilang dari
   // daftar aktif karena tidak ada lagi soal aktif yang memakainya.
+  // Mengganti nama Mapel/kategori (mis. "Literasi" -> "Literasi 1"): semua soal (termasuk arsip), ujian yang memakai
+  // kategori itu, dan paket survei-nya ikut berganti nama; token & warna kartu tetap. Judul ujian TIDAK diubah.
+  async ubahNamaKategori(kategori) {
+    const lama = String(kategori == null ? '' : kategori).trim();
+    if (!lama || lama === '(tanpa kategori)') { toast('Kategori ini tidak bisa diganti namanya.', 'error'); return; }
+    const jumlah = (state.guru.bankSoal || []).filter(s => samaTeks_(s.kategori, lama)).length;
+    const label = labelKategori(lama);
+    const nama = await Dialog.input({
+      judul: 'Ubah Nama Mapel', ikon: 'fa-pen',
+      pesan: `Nama **${label}** akan diganti di **${jumlah} soal** (termasuk yang diarsipkan), ujian yang memakai kategori ini, dan paket survei-nya. Judul ujian tidak ikut berubah.`,
+      label: 'Nama baru', nilai: label, placeholder: 'Contoh: Literasi 1', maksimal: 60, wajib: true, pesanWajib: 'Nama tidak boleh kosong.',
+      teksYa: 'Simpan Nama',
+      validasi: v => {
+        const t = String(v).trim();
+        if (t === label) return 'Nama baru sama dengan nama lama.';
+        if ((state.guru.bankSoal || []).some(s => samaTeks_(s.kategori, t) && !samaTeks_(s.kategori, lama))) return `Sudah ada Mapel bernama "${t}". Gunakan nama lain.`;
+        return '';
+      }
+    });
+    if (!nama || !nama.trim()) return;
+    const baru = nama.trim();
+    toast('Mengubah nama Mapel...');
+    let res = null;
+    try { res = await api('ubahNamaKategori', { guruId: state.user.id, dari: lama, ke: baru }); } catch (e) { res = null; }
+    if (!res || !res.ok) {
+      const err = (res && res.error) || 'tidak ada respons dari server';
+      toast('Gagal mengubah nama: ' + err + (/tidak dikenal/i.test(err) ? ' — tempel ulang Code.gs terbaru ke Apps Script lalu Deploy > Manage deployments > New version.' : ''), 'error');
+      return;
+    }
+    pindahMetaMapel_(lama, baru);
+    const dalamKelola = state.guru.viewBankSoal === 'kelola' && samaTeks_(state.guru.kategoriKelola, lama);
+    await Guru.muatBankSoal();
+    if (dalamKelola) Guru.bukaKelolaSoal(baru);
+    if (!document.getElementById('modal-kelola-kategori').classList.contains('hidden')) Guru.renderKelolaKategori();
+    toast(`Mapel diubah menjadi "${baru}" (${res.soal || 0} soal, ${res.ujian || 0} ujian, ${res.paket || 0} paket survei diperbarui).`, 'success');
+  },
+
   async hapusKategoriSoal(kategori) {
     if (!(state.guru.bankSoal || []).some(s => samaTeks_(s.kategori, kategori))) {
       // Mapel kosong buatan sendiri: cukup dilepas dari daftar kartu.
@@ -5230,24 +5326,60 @@ const Guru = {
     if (!res.ok) return gagalMuat_(cont, 'Gagal memuat.');
     state.guru.ujianList = res.data;
     if (res.data.length === 0) { cont.innerHTML = '<p class="subtitle">Belum ada ujian.</p>'; return; }
-    cont.innerHTML = `<table class="ledger"><thead><tr>
+    const labelStatus = { berlangsung: ['ok', 'Berlangsung'], terjadwal: ['warn', 'Akan datang'], selesai: ['mute', 'Selesai'], nonaktif: ['no', 'Nonaktif'] };
+    // Peringatan: dua ujian (atau lebih) berlangsung bersamaan untuk kelas yang sama -> token keduanya sama-sama terlihat siswa.
+    const jalan = res.data.filter(u => statusUjian_(u) === 'berlangsung');
+    const bentrok = jalan.filter(a => jalan.some(b => b !== a && kelasBeririsan_(a, b)));
+    const banner = bentrok.length >= 2 ? `
+      <div class="ujian-bentrok" role="alert" style="margin:0 0 1rem;padding:.8rem 1rem;border-radius:14px;border:1px solid color-mix(in srgb,#f5a524 55%,var(--c-line));background:color-mix(in srgb,#f5a524 15%,var(--c-surface));font-size:.86rem;line-height:1.55">
+        <strong>⚠ ${bentrok.length} ujian berlangsung bersamaan untuk kelas yang sama</strong>
+        <div style="margin:.2rem 0 .55rem">Siswa bisa melihat dan salah memasukkan token ujian lain. Nonaktifkan salah satu, atau batasi kelasnya lewat <strong>🔑 Token Kelas</strong>.</div>
+        <div style="display:flex;gap:.45rem;flex-wrap:wrap">${bentrok.map(u => `<button type="button" class="secondary small" onclick="Guru.ubahStatusUjian('${u.id}', false)">⏸ Nonaktifkan ${escapeHtml_(u.judul)} (${escapeHtml_(u.token)})</button>`).join('')}</div>
+      </div>` : '';
+    cont.innerHTML = banner + `<table class="ledger"><thead><tr>
         <th>Judul</th><th>Token</th><th>Token Aktif untuk</th><th>Durasi</th><th>Jadwal</th><th>Maks. Pelanggaran</th><th>Status</th><th></th>
 
-      </tr></thead><tbody>` + res.data.map(u => `
-        <tr>
+      </tr></thead><tbody>` + res.data.map(u => {
+        const st = statusUjian_(u), mati = st === 'nonaktif';
+        const [kls, lbl] = labelStatus[st];
+        return `
+        <tr${mati ? ' style="opacity:.6"' : ''}>
           <td><strong>${escapeHtml_(u.judul)}</strong><br><span style="color:var(--c-muted);font-size:.78rem">${labelKategori(u.kategori)}${u.subkategori ? ' • ' + escapeHtml_(u.subkategori) : ''}</span></td>
-          <td><code style="font-size:1rem;font-weight:700">${u.token}</code></td>
+          <td><code style="font-size:1rem;font-weight:700${mati ? ';text-decoration:line-through' : ''}">${u.token}</code></td>
           <td id="tk-ringkas-${u.id}" style="font-size:.8rem;max-width:170px">${ringkasTokenKelas_(u)}</td>
           <td>${u.durasi_menit} menit</td>
           <td style="font-size:.8rem">${formatTanggal(u.mulai)}<br>s/d ${formatTanggal(u.selesai)}</td>
           <td>${u.max_pelanggaran}</td>
-          <td><span class="badge ${u.status === 'aktif' ? 'ok' : 'no'}">${u.status}</span></td>
+          <td><span class="badge ${kls}">${lbl}</span></td>
           <td>
+            ${mati
+              ? `<button class="accent small" onclick="Guru.ubahStatusUjian('${u.id}', true)" title="Aktifkan kembali: token bisa dipakai siswa lagi">▶ Aktifkan</button>`
+              : `<button class="secondary small" onclick="Guru.ubahStatusUjian('${u.id}', false)" title="Nonaktifkan: token tidak bisa dipakai & tidak tampil di layar peserta">⏸ Nonaktifkan</button>`}
             <button class="accent small" onclick="Guru.bukaTokenKelas('${u.id}')" title="Aktifkan / nonaktifkan token per kelas">🔑 Token Kelas</button>
             <button class="secondary small" onclick='Guru.bukaEditUjian("${u.id}")'>Ubah</button>
             <button class="danger small" onclick="Guru.hapusUjian('${u.id}')">Hapus</button>
           </td>
-        </tr>`).join('') + `</tbody></table>`;
+        </tr>`;
+      }).join('') + `</tbody></table>`;
+  },
+
+  // Aktifkan / nonaktifkan satu ujian. Ujian nonaktif: tokennya ditolak, tidak tampil di layar peserta, dan siswa tidak bisa
+  // memulai sesi baru; siswa yang sudah mengerjakan tetap bisa melanjutkan. Memakai aksi simpanUjian (hanya kolom status).
+  async ubahStatusUjian(id, aktifkan) {
+    const u = (state.guru.ujianList || []).find(x => x.id === id); if (!u) return;
+    if (!aktifkan) {
+      const ya = await Dialog.konfirmasi({
+        judul: 'Nonaktifkan Ujian?', tipe: 'warning', ikon: 'fa-circle-pause',
+        pesan: `Ujian **${u.judul}** (token **${u.token}**) dinonaktifkan.\n\nSiswa tidak bisa lagi memasukkan token atau memulai ujian ini, dan tokennya tidak tampil di layar peserta. Siswa yang sudah mulai mengerjakan tetap bisa melanjutkan sampai selesai.\n\nAnda bisa mengaktifkannya lagi kapan saja.`,
+        teksYa: 'Ya, Nonaktifkan'
+      });
+      if (!ya) return;
+    }
+    const res = await api('simpanUjian', { ujian: JSON.stringify({ id, status: aktifkan ? 'aktif' : 'nonaktif' }) });
+    if (!res || !res.ok) { toast('Gagal mengubah status ujian: ' + ((res && res.error) || 'tidak ada respons'), 'error'); return; }
+    await Guru.muatDaftarUjian();
+    try { Guru.renderDashboard(); } catch (e) { }
+    toast(aktifkan ? `Ujian "${u.judul}" diaktifkan. Token ${u.token} bisa dipakai siswa.` : `Ujian "${u.judul}" dinonaktifkan. Token ${u.token} tidak bisa dipakai.`, 'success');
   },
 
   // ---------------- TOKEN PER KELAS (modal) ----------------
@@ -5361,9 +5493,9 @@ const Guru = {
         selesai: document.getElementById('ujian-selesai').value ? new Date(document.getElementById('ujian-selesai').value).toISOString() : '',
         acak_soal: document.getElementById('ujian-acak-soal').checked,
         acak_opsi: document.getElementById('ujian-acak-opsi').checked,
-        instruksi_remedial: document.getElementById('ujian-instruksi-remedial').value.trim(),
-        status: 'aktif'
+        instruksi_remedial: document.getElementById('ujian-instruksi-remedial').value.trim()
       };
+      if (!ujian.id) ujian.status = 'aktif'; // ujian baru langsung aktif; saat mengubah, status (aktif/nonaktif) yang sudah diatur guru dipertahankan
       ujian.tampil_detail = document.getElementById('ujian-tampil-detail').checked;
       ujian.tampil_pembahasan = document.getElementById('ujian-tampil-pembahasan').checked;
       if (!ujian.id) ujian.token_kelas = (document.getElementById('ujian-token-awal') || {}).value === 'kunci' ? '[]' : ''; // ujian baru: semua kelas, atau dikunci dulu

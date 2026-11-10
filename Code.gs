@@ -273,6 +273,7 @@ function route_(action, data) {
     case 'hapusSoal': return withLock_(lock, function () { return actionHapusSoal_(data); });
     case 'hapusSoalBanyak': return withLock_(lock, function () { return actionHapusSoalBanyak_(data); });
     case 'ubahStatusSoalBanyak': return withLock_(lock, function () { return actionUbahStatusSoalBanyak_(data); });
+    case 'ubahNamaKategori': return withLock_(lock, function () { return actionUbahNamaKategori_(data); });
     case 'getBankSoal': return actionGetBankSoal_(data);
 
     // --- GURU: UJIAN ---
@@ -653,6 +654,48 @@ function actionUbahStatusSoalBanyak_(data) {
   return jsonOut_({ ok: true, count: berubah });
 }
 
+// Ganti nama Mapel/kategori (mis. "Literasi" -> "Literasi 1") milik satu guru: kolom kategori di Bank Soal (termasuk
+// arsip), Ujian, dan PaketSurvei ikut diganti sekaligus (1 baca + 1 tulis per sheet). Judul ujian tidak diubah.
+// data: { guruId, dari, ke }
+function actionUbahNamaKategori_(data) {
+  var dari = String(data.dari == null ? '' : data.dari).trim();
+  var ke = String(data.ke == null ? '' : data.ke).trim();
+  var guruId = String(data.guruId == null ? '' : data.guruId);
+  if (!dari || !ke) return jsonOut_({ ok: false, error: 'Nama kategori tidak boleh kosong.' });
+  if (ke.length > 60) return jsonOut_({ ok: false, error: 'Nama kategori maksimal 60 karakter.' });
+  if (!samaTeks_(dari, ke)) {
+    var bentrok = readAll_(SHEET.BANK_SOAL).some(function (s) {
+      return (!guruId || String(s.guru_id) === guruId) && samaTeks_(s.kategori, ke);
+    });
+    if (bentrok) return jsonOut_({ ok: false, error: 'Sudah ada kategori bernama "' + ke + '".' });
+  }
+  var hasil = {
+    soal: ubahKolomKategori_(SHEET.BANK_SOAL, guruId, dari, ke),
+    ujian: ubahKolomKategori_(SHEET.UJIAN, guruId, dari, ke),
+    paket: ubahKolomKategori_(SHEET.PAKET_SURVEI, guruId, dari, ke)
+  };
+  SpreadsheetApp.flush();
+  return jsonOut_({ ok: true, soal: hasil.soal, ujian: hasil.ujian, paket: hasil.paket });
+}
+
+function ubahKolomKategori_(nama, guruId, dari, ke) {
+  var sh = sh_(nama);
+  if (!sh || sh.getLastRow() < 2) return 0;
+  var headers = headersOf_(nama);
+  var kKat = headers.indexOf('kategori') + 1, kGuru = headers.indexOf('guru_id') + 1;
+  if (kKat < 1) return 0;
+  var jumlah = sh.getLastRow() - 1;
+  var kat = sh.getRange(2, kKat, jumlah, 1).getValues();
+  var guru = (guruId && kGuru > 0) ? sh.getRange(2, kGuru, jumlah, 1).getValues() : null;
+  var n = 0;
+  for (var i = 0; i < kat.length; i++) {
+    if (guru && String(guru[i][0]) !== guruId) continue;
+    if (samaTeks_(kat[i][0], dari)) { kat[i][0] = ke; n++; }
+  }
+  if (n > 0) sh.getRange(2, kKat, jumlah, 1).setValues(kat);
+  return n;
+}
+
 // Perbandingan teks yang tidak sensitif huruf besar/kecil & spasi di pinggir —
 // supaya soal hasil impor (mis. kategori tertulis "Kuis" atau "KUIS" di file)
 // tetap cocok dengan kode kategori baku ("kuis") yang dipakai dropdown di klien.
@@ -682,7 +725,11 @@ function actionSimpanUjian_(data) {
     }
   }
   ujian.id = genId_('U');
-  if (!ujian.token) ujian.token = buatTokenAman_();
+  if (!ujian.token) {
+    // Token baru dijamin tidak sama dengan token ujian lain.
+    var dipakai = {}; readAll_(SHEET.UJIAN).forEach(function (u) { dipakai[String(u.token)] = true; });
+    do { ujian.token = buatTokenAman_(); } while (dipakai[ujian.token]);
+  }
   ujian.status = ujian.status || 'aktif';
   appendObj_(SHEET.UJIAN, headers, ujian);
   return jsonOut_({ ok: true, id: ujian.id, token: ujian.token });
@@ -2114,10 +2161,30 @@ function actionSetTokenKelas_(data) {
   return jsonOut_({ ok: true, kelas: nilai });
 }
 
+// Status ujian: 'nonaktif' | 'terjadwal' | 'selesai' | 'berlangsung' (jadwal + toleransi keterlambatan, sama dgn cek token).
+function statusUjian_(u) {
+  if (!u || u.status !== 'aktif') return 'nonaktif';
+  var now = new Date();
+  if (u.mulai && now < new Date(u.mulai)) return 'terjadwal';
+  var batas = u.selesai ? new Date(new Date(u.selesai).getTime() + (Number(u.toleransi_menit) || 0) * 60000) : null;
+  if (batas && now > batas) return 'selesai';
+  return 'berlangsung';
+}
+// Bila ada beberapa ujian bertoken sama (mis. baris tersalin di Sheets), pilih yang aktif & sedang dibuka lebih dulu.
+function pilihUjianByToken_(list, token) {
+  var t = String(token || '').toUpperCase();
+  var cocok = (list || []).filter(function (u) { return String(u.token) === t; });
+  if (cocok.length < 2) return cocok[0];
+  var a = cocok.filter(function (u) { return statusUjian_(u) === 'berlangsung'; })[0];
+  if (a) return a;
+  var b = cocok.filter(function (u) { return u.status === 'aktif'; })[0];
+  return b || cocok[0];
+}
+
 function actionCekToken_(data) {
   var blokirCek = data.siswaId ? statusBlokirSiswa_(data.siswaId) : null;
   if (blokirCek && blokirCek.aktif) return jsonOut_({ ok: false, error: pesanBlokir_(blokirCek) });
-  var ujian = readAll_(SHEET.UJIAN).filter(function (u) { return u.token === String(data.token || '').toUpperCase(); })[0];
+  var ujian = pilihUjianByToken_(readAll_(SHEET.UJIAN), data.token);
   if (!ujian) return jsonOut_({ ok: false, error: 'Token ujian tidak ditemukan.' });
   var now = new Date();
   if (ujian.mulai && now < new Date(ujian.mulai)) return jsonOut_({ ok: false, error: 'Ujian belum dibuka.' });
@@ -2173,6 +2240,7 @@ function actionMulaiUjian_(data) {
     return jsonOut_({ ok: false, error: 'Sesi ujian Anda telah diblokir karena pelanggaran. Hubungi guru.' });
   }
   // Token per kelas: sesi BARU hanya boleh dibuat bila kelas siswa diaktifkan (sesi berjalan tetap boleh dilanjutkan).
+  if (!existing && ujian.status !== 'aktif') return jsonOut_({ ok: false, error: 'Ujian ini sedang tidak aktif.' }); // siswa yang sudah mengerjakan tetap boleh melanjutkan
   if (!existing) { var izinK = cekIzinKelas_(ujian, data.siswaId); if (!izinK.ok) return jsonOut_({ ok: false, error: izinK.error }); }
 
   var soalIds = String(ujian.soal_ids || '').split(',').filter(Boolean);
