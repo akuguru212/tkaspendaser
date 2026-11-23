@@ -158,6 +158,8 @@
       <button class="nav-tab" data-tab="tab-lb-survei" onclick="UI.gantiTabGuru('tab-lb-survei')"><i class="fa-solid fa-ranking-star nav-ico"></i><span>Leaderboard Survei</span></button>
       <button class="nav-tab" data-tab="tab-survei" onclick="UI.gantiTabGuru('tab-survei')"><i class="fa-solid fa-square-poll-vertical nav-ico"></i><span>Hasil Survei</span></button>
       <button class="nav-tab" data-tab="tab-analisis" onclick="UI.gantiTabGuru('tab-analisis')"><i class="fa-solid fa-chart-pie nav-ico"></i><span>Analisis Soal</span></button>
+    <button class="nav-tab" data-tab="tab-analisis-materi" onclick="UI.gantiTabGuru('tab-analisis-materi')"><i class="fa-solid fa-magnifying-glass-chart nav-ico"></i><span>Analisis Materi</span></button>
+    <button class="nav-tab" data-tab="tab-perkembangan" onclick="UI.gantiTabGuru('tab-perkembangan')"><i class="fa-solid fa-arrow-trend-up nav-ico"></i><span>Perkembangan Siswa</span></button>
       <button class="nav-tab" data-tab="tab-pelanggaran" onclick="UI.gantiTabGuru('tab-pelanggaran')"><i class="fa-solid fa-triangle-exclamation nav-ico"></i><span>Log Pelanggaran</span></button>
       <button class="nav-tab" data-tab="tab-pemantauan" onclick="UI.gantiTabGuru('tab-pemantauan')"><i class="fa-solid fa-eye nav-ico"></i><span>Pemantauan Ujian</span></button>
       <button class="nav-tab" data-tab="tab-siswa" onclick="UI.gantiTabGuru('tab-siswa')"><i class="fa-solid fa-users nav-ico"></i><span>Data Siswa</span></button>
@@ -548,6 +550,69 @@
     </section>
 
     <!-- ---------- TAB: LOG PELANGGARAN ---------- -->
+    <!-- ---------- TAB: ANALISIS MATERI (materi yang kurang per siswa / per materi) ---------- -->
+    <section id="tab-analisis-materi" class="hidden am-scope">
+      <h2>Analisis Materi</h2>
+      <p class="subtitle">Materi (<strong>Topik</strong> pada soal) mana yang masih kurang pada tiap siswa, untuk <strong>Literasi</strong> dan <strong>Numerasi</strong>. Siswa melihat analisis dan saran belajar yang sama di Portal Siswa. Isi kolom <em>Topik</em> pada soal di Bank Soal agar analisisnya rinci. Kurang = di bawah 60%.</p>
+      <div class="panel">
+        <div class="toolbar">
+          <div class="toolbar-actions" style="align-items:center">
+            <button type="button" class="secondary btn-segarkan" id="am-g-segarkan" title="Ambil hasil tes terbaru" onclick="AnalisisMateri.muat(this)"><i class="fa-solid fa-rotate"></i> Segarkan</button><span class="segar-info" id="segar-info-tab-analisis-materi" aria-live="polite"></span>
+          </div>
+          <div class="toolbar-actions">
+            <button type="button" class="secondary" title="Unduh Excel: per siswa, per materi, dan detail" onclick="AnalisisMateri.unduh()">⬇ Unduh Excel</button>
+            <button type="button" class="secondary" title="Cetak / simpan PDF sesuai pilihan yang tampil" onclick="AnalisisMateri.cetak()">🖨 Cetak PDF</button>
+          </div>
+        </div>
+        <div class="am-label">Tampilan</div>
+        <div class="am-chips" id="am-g-chips-tampil"></div>
+        <div class="am-label">Jenis</div>
+        <div class="am-chips" id="am-g-chips-jenis"></div>
+        <div class="am-label">Kelas</div>
+        <div class="am-chips" id="am-g-chips-kelas"></div>
+        <div class="filter-bar" style="margin-bottom:0">
+          <input type="search" id="am-g-cari" placeholder="🔍 Cari nama siswa / materi..." oninput="AnalisisMateri.render()" autocomplete="off">
+          <label class="filter-cek" title="Sembunyikan siswa yang tidak punya materi kurang (tampilan Per Siswa)"><input type="checkbox" id="am-g-hanya" onchange="AnalisisMateri.render()"> Hanya yang punya materi kurang</label>
+          <span class="filter-info" id="am-g-info"></span>
+        </div>
+      </div>
+      <div id="am-g-stats"></div>
+      <div class="panel">
+        <div id="am-g-tabel">Memuat Analisis Materi... Jika tidak muncul, pastikan berkas <code>analisis-materi.js</code> ikut diunggah ke repositori.</div>
+      </div>
+    </section>
+
+    <!-- ---------- TAB: PERKEMBANGAN SISWA (grafik naik / turun per tes) ---------- -->
+    <section id="tab-perkembangan" class="hidden am-scope">
+      <h2>Perkembangan Siswa</h2>
+      <p class="subtitle">Grafik perkembangan nilai <strong>Tes 1, Tes 2, Tes 3, ...</strong> (rata-rata Literasi dan Numerasi): lihat siapa yang <strong>naik</strong>, <strong>stabil</strong>, atau <strong>turun</strong>. Klik <em>Grafik</em> pada seorang siswa untuk melihat perkembangannya dibanding rata-rata kelas. Siswa melihat grafik yang sama di akunnya.</p>
+      <div class="panel">
+        <div class="toolbar">
+          <div class="toolbar-actions" style="align-items:center">
+            <button type="button" class="secondary btn-segarkan" id="pg-g-segarkan" title="Ambil hasil tes terbaru" onclick="Perkembangan.muat(this)"><i class="fa-solid fa-rotate"></i> Segarkan</button><span class="segar-info" id="segar-info-tab-perkembangan" aria-live="polite"></span>
+          </div>
+          <div class="toolbar-actions">
+            <button type="button" class="secondary" onclick="Perkembangan.unduh()">⬇ Unduh Excel</button>
+            <button type="button" class="secondary" onclick="Perkembangan.cetak()">🖨 Cetak PDF</button>
+          </div>
+        </div>
+        <div class="am-label">Kelas</div>
+        <div class="am-chips" id="pg-g-chips-kelas"></div>
+        <div class="filter-bar" style="margin-bottom:0">
+          <input type="search" id="pg-g-cari" placeholder="🔍 Cari nama siswa..." oninput="Perkembangan.render()" autocomplete="off">
+          <select id="pg-g-urut" onchange="Perkembangan.pilihUrut(this.value)" title="Urutan siswa"><option value="turun">Urut: penurunan terbesar</option><option value="naik">Urut: kenaikan terbesar</option><option value="nilai">Urut: nilai terakhir</option><option value="nama">Urut: nama</option></select>
+          <label class="filter-cek"><input type="checkbox" id="pg-g-turun" onchange="Perkembangan.render()"> Hanya yang menurun</label>
+          <span class="filter-info" id="pg-g-info"></span>
+        </div>
+      </div>
+      <div id="pg-g-stats"></div>
+      <div class="panel">
+        <div class="pg-card-h"><h3 id="pg-g-judul">Rata-rata per Tes</h3><small>Nilai rata-rata siswa pada tiap tes</small></div>
+        <div id="pg-g-grafik"></div><div id="pg-g-wawasan"></div>
+      </div>
+      <div class="panel"><div id="pg-g-tabel">Memuat Perkembangan Siswa... Jika tidak muncul, pastikan berkas <code>perkembangan.js</code> ikut diunggah ke repositori.</div></div>
+    </section>
+
     <section id="tab-pelanggaran" class="hidden">
       <h2>Log Pelanggaran Anti-Cheat</h2>
       <p class="subtitle">Riwayat pelanggaran (pindah tab, keluar fullscreen, dll.) per ujian.</p>
@@ -1281,6 +1346,18 @@
       <div class="anbk-token-row">Token : <b id="kd-token-tampil">------</b> <button type="button" class="anbk-btn anbk-btn-primary anbk-btn-xs" id="kd-refresh" onclick="Anbk.segarkanToken(true)">Refresh</button></div>
       <div id="siswa-blokir-banner" class="anbk-blokir hidden" role="alert"><b>Akun Anda sedang diblokir</b><span>Anda belum bisa mengikuti tes selama blokir ini aktif.</span><span id="siswa-blokir-alasan"></span></div>
     </section>
+    <section class="anbk-card sw-entry">
+      <h3><i class="fa-solid fa-gauge-high" style="color:#0d6efd"></i> Akun Saya</h3>
+      <p>Pantau nilai, grafik perkembangan, peringkat, dan materi yang perlu diperkuat dari simulasi yang sudah kamu kerjakan.</p>
+      <div class="sw-ent-grid">
+        <button type="button" onclick="PortalSiswa.buka('dashboard')"><i class="fa-solid fa-gauge-high"></i>Dashboard</button>
+        <button type="button" onclick="PortalSiswa.buka('grafik')"><i class="fa-solid fa-chart-line"></i>Grafik Perkembangan</button>
+        <button type="button" onclick="PortalSiswa.buka('riwayat')"><i class="fa-solid fa-clock-rotate-left"></i>Riwayat Simulasi</button>
+        <button type="button" onclick="PortalSiswa.buka('leaderboard')"><i class="fa-solid fa-trophy"></i>Leaderboard</button>
+        <button type="button" onclick="PortalSiswa.buka('analisis','literasi')"><i class="fa-solid fa-book-open"></i>Analisis Literasi</button>
+        <button type="button" onclick="PortalSiswa.buka('analisis','numerasi')"><i class="fa-solid fa-calculator"></i>Analisis Numerasi</button>
+      </div>
+    </section>
     <section class="anbk-card anbk-card-form">
       <h2>Konfirmasi data Peserta</h2>
       <div class="anbk-f"><label>Username</label><div class="anbk-v" id="kd-username">-</div></div>
@@ -1296,6 +1373,16 @@
   </main>
   <div id="konfirmasi-ujian" class="hidden"><span id="konf-judul-ujian"></span><span id="konf-info-ujian"></span></div>
   <span id="siswa-nama-label" class="hidden"></span>
+  <footer class="anbk-foot">Aplikasi simulasi latihan TKA &middot; SMP Negeri 2 Seririt</footer>
+</div>
+
+<!-- ======================= PORTAL SISWA: DASHBOARD & MENU ======================= -->
+<div id="sw-screen" class="anbk-page am-scope hidden">
+  <header class="anbk-hero"><div class="anbk-hero-in"><div class="anbk-brand"><img class="anbk-logo-tw" src="icons/tutwuri.png" alt="Tut Wuri Handayani"><img class="anbk-logo-sch" src="icons/smpn2.png" alt="SMP Negeri 2 Seririt"><div class="anbk-brand-t"><b>PUSMENDIK</b><span>APLIKASI ANBK</span></div></div><div class="anbk-user" onclick="Anbk.menuUser(event)" role="button" tabindex="0"><span class="anbk-user-nama"></span><span class="anbk-user-ico"><i class="fa-solid fa-graduation-cap"></i></span><div class="anbk-usermenu hidden"><button type="button" onclick="PortalSiswa.mulaiSimulasi()"><i class="fa-solid fa-play"></i> Mulai Simulasi</button><button type="button" onclick="Auth.logout()"><i class="fa-solid fa-right-from-bracket"></i> Keluar</button></div></div></div></header>
+  <div class="sw-wrap">
+    <aside class="sw-card sw-side" id="sw-side" aria-label="Menu siswa"></aside>
+    <main class="sw-main" id="sw-isi" aria-live="polite"></main>
+  </div>
   <footer class="anbk-foot">Aplikasi simulasi latihan TKA &middot; SMP Negeri 2 Seririt</footer>
 </div>
 
@@ -1525,10 +1612,13 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=64"></script>
+<script src="app.js?v=66"></script>
 <script src="anbk.js?v=63"></script>
 <script src="survei.js?v=11"></script>
 <script src="leaderboard.js?v=1"></script>
 <script src="leaderboard-survei.js?v=1"></script>
+<script src="analisis-materi.js?v=2"></script>
+<script src="perkembangan.js?v=1"></script>
+<script src="portal-siswa.js?v=1"></script>
 </body>
 </html>

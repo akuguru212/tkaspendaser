@@ -283,6 +283,8 @@ function route_(action, data) {
     case 'getRekapNilai': return actionGetRekapNilai_(data);
     case 'hitungUlangNilaiUjian': return withLock_(lock, function () { return actionHitungUlangNilaiUjian_(data); });
     case 'getAnalisisSoal': return actionGetAnalisisSoal_(data);
+    case 'getAnalisisMateri': return actionGetAnalisisMateri_(data);
+    case 'getPortalSiswa': return actionGetPortalSiswa_(data);
     case 'getLogPelanggaran': return actionGetLogPelanggaran_(data);
     case 'resetDevice': return withLock_(lock, function () { return actionResetDevice_(data); });
     case 'resetDeviceKelas': return withLock_(lock, function () { return actionResetDeviceKelas_(data); });
@@ -897,6 +899,273 @@ function actionGetAnalisisSoal_(data) {
   });
 
   return jsonOut_({ ok: true, totalPeserta: totalPeserta, soal: analisisSoal, siswa: jawabanSiswa });
+}
+
+// ----------------------------------------------------------------------------
+// ANALISIS MATERI (per TOPIK soal) -- dipakai Portal Siswa (menu Analisis Materi:
+// Literasi / Numerasi) dan Portal Guru (tab Analisis Materi).
+// - Mode SISWA : kirim siswaId -> semua sesi SELESAI milik siswa itu. Ujian yang
+//   gurunya mematikan "tampil_detail" TIDAK disertakan (dikirim di `tersembunyi`).
+// - Mode GURU  : kirim guruId (opsional ujianId) -> semua sesi selesai di ujian milik guru.
+// Hasil dibuat RINGKAS: tiap ujian membawa daftar soalnya (id, topik, subkategori, bobot),
+// tiap sesi membawa SATU string kode status sejajar dengan daftar soal ujian itu:
+//   b=benar  p=sebagian  s=salah  k=kosong  m=perlu dinilai manual  n=tidak diberikan/terhapus
+// Mode siswa juga membawa `o` = urutan tampil soal (indeks ke daftar soal ujian) agar
+// nomor soal yang dirujuk sama dengan yang dilihat siswa. Sesi 'berlangsung' & 'diblokir' tidak dihitung.
+// Penentuan topik/kelompok & ambang nilai dilakukan di klien (analisis-materi.js).
+// ----------------------------------------------------------------------------
+function kodeStatusSoal_(soal, jwb, idxOrder) {
+  var bobot = Number(soal.bobot) || 0;
+  var kosong = jwb === undefined || jwb === null || jwb === '' ||
+    (Array.isArray(jwb) && jwb.length === 0) ||
+    (soal.tipe === 'menjodohkan' && (typeof jwb !== 'object' || Object.keys(jwb).filter(function (k) { return jwb[k] !== '' && jwb[k] !== null && jwb[k] !== undefined; }).length === 0));
+  if (kosong) return 'k';
+  if (soal.tipe === 'uraian') {
+    var kc = parseKunciJson_(soal.kunci_json);
+    var kk = (kc && Array.isArray(kc.kataKunci)) ? kc.kataKunci.filter(function (x) { return String(x).trim(); }) : [];
+    if (!kk.length) return 'm';
+  }
+  var skor = skorSoal_(soal, jwb, idxOrder);
+  if (bobot > 0 && skor >= bobot - 0.001) return 'b';
+  if (skor > 0) return 'p';
+  return 's';
+}
+
+function actionGetAnalisisMateri_(data) {
+  var modeSiswa = !!data.siswaId;
+  var ujianSemua = readAll_(SHEET.UJIAN);
+  var ujianPeta = {};
+  if (modeSiswa) {
+    ujianSemua.forEach(function (u) { ujianPeta[u.id] = u; });
+  } else {
+    var guruAda = data.guruId && readAll_(SHEET.GURU).some(function (g) { return String(g.id) === String(data.guruId); });
+    if (!guruAda) return jsonOut_({ ok: false, error: 'Akun guru tidak dikenali.' });
+    ujianSemua.forEach(function (u) {
+      if (String(u.guru_id) !== String(data.guruId)) return;
+      if (data.ujianId && String(u.id) !== String(data.ujianId)) return;
+      ujianPeta[u.id] = u;
+    });
+  }
+  var cocok = function (s) {
+    return modeSiswa ? String(s.siswa_id) === String(data.siswaId) : !!ujianPeta[s.ujian_id];
+  };
+  var sesiBaris = readAll_(SHEET.SESI).filter(cocok);
+  var sudahAda = {};
+  sesiBaris.forEach(function (s) { sudahAda[s.id] = true; });
+  // sesi yang baru selesai tapi belum di-flush ke Sheets (lihat catatan di bacaSesiGabunganUntukUjian_)
+  var raw = CacheService.getScriptCache().get('pending_sesi_ids');
+  (raw ? JSON.parse(raw) : []).forEach(function (id) {
+    if (sudahAda[id]) return;
+    var st = ambilSesiState_(id);
+    if (st && cocok(st)) { sesiBaris.push(st); sudahAda[id] = true; }
+  });
+
+  var soalMap = {};
+  readAll_(SHEET.BANK_SOAL).forEach(function (s) { soalMap[s.id] = s; });
+  var siswaMap = {};
+  readAll_(SHEET.SISWA).forEach(function (s) { siswaMap[s.id] = s; });
+
+  var ujianKeluar = {}, disembunyikan = {}, sesiKeluar = [];
+  sesiBaris.forEach(function (baris) {
+    var sesi = ambilSesiState_(baris.id) || baris;
+    if (sesi.status === 'berlangsung' || sesi.status === 'diblokir') return;
+    var u = ujianPeta[sesi.ujian_id];
+    if (!u) return;
+    if (modeSiswa && String(u.tampil_detail).toLowerCase() === 'false') { disembunyikan[u.id] = { judul: u.judul, kategori: u.kategori || '' }; return; }
+    if (!ujianKeluar[u.id]) {
+      var ids = String(u.soal_ids || '').split(',').filter(Boolean);
+      ujianKeluar[u.id] = {
+        id: u.id, judul: u.judul, kategori: u.kategori || '', subkategori: u.subkategori || '',
+        ids: ids,
+        soal: ids.map(function (sid) {
+          var so = soalMap[sid];
+          return so ? { id: sid, t: String(so.topik || '').trim(), s: String(so.subkategori || '').trim(), w: Number(so.bobot) || 0 } : { id: sid, t: '', s: '', w: 0, x: 1 };
+        })
+      };
+    }
+    var uk = ujianKeluar[u.id];
+    var jawaban = {}; try { jawaban = JSON.parse(sesi.jawaban_json || '{}'); } catch (e) {}
+    var urutan = {}; try { urutan = JSON.parse(sesi.urutan_json || '{}'); } catch (e) {}
+    var opsiAcakMap = urutan.opsiAcak || {};
+    var diberikan = null;
+    if (Array.isArray(urutan.order) && urutan.order.length) { diberikan = {}; urutan.order.forEach(function (sid) { diberikan[sid] = true; }); }
+    var r = '';
+    uk.ids.forEach(function (sid) {
+      var so = soalMap[sid];
+      if (!so || (diberikan && !diberikan[sid])) { r += 'n'; return; }
+      r += kodeStatusSoal_(so, jawaban[sid], opsiAcakMap[sid]);
+    });
+    var siswa = siswaMap[sesi.siswa_id] || {};
+    var item = { id: sesi.id, u: u.id, si: sesi.siswa_id, nm: siswa.nama || '(tidak dikenal)', kl: siswa.kelas || '-', sl: sesi.selesai, nl: sesi.nilai, r: r };
+    if (modeSiswa) {
+      var o = [];
+      (Array.isArray(urutan.order) && urutan.order.length ? urutan.order : uk.ids).forEach(function (sid) {
+        var ix = uk.ids.indexOf(sid); if (ix >= 0) o.push(ix);
+      });
+      item.o = o;
+    }
+    sesiKeluar.push(item);
+  });
+  return jsonOut_({
+    ok: true,
+    ujian: Object.keys(ujianKeluar).map(function (k) { var x = ujianKeluar[k]; delete x.ids; return x; }),
+    sesi: sesiKeluar,
+    tersembunyi: Object.keys(disembunyikan).map(function (k) { return disembunyikan[k]; })
+  });
+}
+
+// ----------------------------------------------------------------------------
+// PORTAL SISWA — riwayat simulasi + leaderboard (dipakai Dashboard, Simulasi Selesai, Grafik
+// Perkembangan, Riwayat, Leaderboard di Portal Siswa).
+// Kirim siswaId. Hasil: { riwayat:[...sesi milik siswa...], lb:{ tes, kelas, data } }.
+// * riwayat : semua sesi SELESAI/DIBLOKIR milik siswa + rata-rata kelas untuk ujian itu (rataKelas).
+// * lb      : Leaderboard TOP 10 + peringkat siswa itu sendiri (nilai siswa lain TIDAK dikirim
+//             selain top 10), per "Tes 1/2/..." dan "Rata-rata Seluruh Tes", untuk "kelas" & "semua".
+// Aturan pengelompokan tes sama dengan menu Leaderboard guru (judul memuat Literasi/Numerasi).
+// Nilai dipakai = nilai TERTINGGI bila satu ujian dikerjakan beberapa kali; siswa diblokir tak ikut.
+// ----------------------------------------------------------------------------
+function ptNorm_(t) { return String(t == null ? '' : t).trim().toLowerCase().replace(/\s+/g, ' '); }
+function ptJenisTeks_(txt) {
+  var t = ptNorm_(txt), a = t.indexOf('literasi'), b = t.indexOf('numerasi');
+  if (a < 0 && b < 0) return '';
+  if (a >= 0 && b >= 0) return a < b ? 'literasi' : 'numerasi';
+  return a >= 0 ? 'literasi' : 'numerasi';
+}
+function ptJenisUjian_(u) { return ptJenisTeks_(u.judul) || ptJenisTeks_(u.kategori); }
+function ptLabelTes_(judul) {
+  var t = String(judul || '').replace(/literasi|numerasi/gi, ' ');
+  t = t.replace(/\(\s*\)|\[\s*\]/g, ' ').replace(/\s+/g, ' ').trim();
+  t = t.replace(/^[\s\-–—:|\/,_.]+|[\s\-–—:|\/,_.]+$/g, '').trim();
+  return t || 'Tes';
+}
+function ptUrutTes_(list) {
+  var semuaAngka = list.every(function (t) { return /\d/.test(t.label); });
+  var angka = function (t) { var m = String(t.label).match(/\d+/); return m ? parseFloat(m[0]) : 0; };
+  list.sort(function (a, b) {
+    if (semuaAngka) return (angka(a) - angka(b)) || String(a.label).localeCompare(String(b.label));
+    return (a.waktu - b.waktu) || String(a.label).localeCompare(String(b.label));
+  });
+  return list;
+}
+function ptRata_(arr) { return arr.length ? arr.reduce(function (a, b) { return a + b; }, 0) / arr.length : null; }
+function ptR2_(n) { return Math.round(Number(n) * 100) / 100; }
+
+// sesiFinal: sesi selesai (bukan diblokir) bernilai angka; hasil: { tes:[{key,label}], data:{scope:{mode:{total,saya,top}}} }
+function ptHitungLeaderboard_(sesiFinal, ujianMap, siswaMap, sayaId) {
+  var terbaik = {}; // siswaId|ujianId -> nilai tertinggi
+  sesiFinal.forEach(function (s) {
+    var k = s.siswa_id + '|' + s.ujian_id, n = Number(s.nilai);
+    if (terbaik[k] === undefined || n > terbaik[k]) terbaik[k] = n;
+  });
+  var tesPeta = {}, skor = {}; // skor[siswaId][tesKey] = {literasi, numerasi}
+  Object.keys(terbaik).forEach(function (k) {
+    var p = k.split('|'), u = ujianMap[p[1]]; if (!u) return;
+    var jenis = ptJenisUjian_(u); if (!jenis) return;
+    var label = ptLabelTes_(u.judul), key = 'a:' + ptNorm_(label);
+    var waktu = Date.parse(u.mulai) || 0;
+    if (!tesPeta[key]) tesPeta[key] = { key: key, label: label, waktu: waktu };
+    else if (waktu && (!tesPeta[key].waktu || waktu < tesPeta[key].waktu)) tesPeta[key].waktu = waktu;
+    var sw = skor[p[0]] = skor[p[0]] || {}, slot = sw[key] = sw[key] || {};
+    if (slot[jenis] === undefined || terbaik[k] > slot[jenis]) slot[jenis] = terbaik[k];
+  });
+  var tesList = ptUrutTes_(Object.keys(tesPeta).map(function (k) { return tesPeta[k]; }));
+  var saya = siswaMap[sayaId] || {};
+  var kelasSaya = ptNorm_(saya.kelas);
+  var hasil = { tes: tesList.map(function (t) { return { key: t.key, label: t.label }; }), kelas: saya.kelas || '', data: {} };
+  var mode = ['semua'].concat(tesList.map(function (t) { return t.key; }));
+
+  var barisUntuk = function (m) {
+    var rows = [];
+    Object.keys(skor).forEach(function (sid) {
+      var info = siswaMap[sid]; if (!info) return;
+      var lit = null, num = null;
+      if (m === 'semua') {
+        var L = [], N = [];
+        tesList.forEach(function (t) { var x = skor[sid][t.key]; if (!x) return; if (x.literasi !== undefined) L.push(x.literasi); if (x.numerasi !== undefined) N.push(x.numerasi); });
+        lit = ptRata_(L); num = ptRata_(N);
+      } else {
+        var x = skor[sid][m] || {};
+        lit = x.literasi !== undefined ? x.literasi : null; num = x.numerasi !== undefined ? x.numerasi : null;
+      }
+      if (lit === null && num === null) return;
+      var ada = []; if (lit !== null) ada.push(lit); if (num !== null) ada.push(num);
+      rows.push({ id: sid, nama: info.nama || '-', kelas: info.kelas || '-', lit: lit, num: num, akhir: ptRata_(ada), lengkap: lit !== null && num !== null });
+    });
+    rows.sort(function (a, b) {
+      return (Number(b.lengkap) - Number(a.lengkap)) || (ptR2_(b.akhir) - ptR2_(a.akhir)) || String(a.nama).localeCompare(String(b.nama));
+    });
+    var prev = null;
+    rows.forEach(function (r, i) { r.rank = (prev && prev.lengkap === r.lengkap && ptR2_(prev.akhir) === ptR2_(r.akhir)) ? prev.rank : i + 1; prev = r; });
+    return rows;
+  };
+  var ringkas = function (r) { return { rank: r.rank, nama: r.nama, kelas: r.kelas, lit: r.lit === null ? null : ptR2_(r.lit), num: r.num === null ? null : ptR2_(r.num), akhir: ptR2_(r.akhir), lengkap: r.lengkap, saya: String(r.id) === String(sayaId) }; };
+  ['kelas', 'semua'].forEach(function (scope) {
+    hasil.data[scope] = {};
+    mode.forEach(function (m) {
+      var rows = barisUntuk(m);
+      if (scope === 'kelas') rows = rows.filter(function (r) { return ptNorm_(r.kelas) === kelasSaya; }).map(function (r) { return r; });
+      if (scope === 'kelas') { // peringkat ulang di dalam kelas
+        var prev = null; rows.forEach(function (r, i) { r.rank = (prev && prev.lengkap === r.lengkap && ptR2_(prev.akhir) === ptR2_(r.akhir)) ? prev.rank : i + 1; prev = r; });
+      }
+      var me = rows.filter(function (r) { return String(r.id) === String(sayaId); })[0];
+      hasil.data[scope][m] = { total: rows.length, saya: me ? ringkas(me) : null, top: rows.slice(0, 10).map(ringkas) };
+    });
+  });
+  return hasil;
+}
+
+// Susun riwayat milik siswa + rata-rata kelas per ujian. `sesiSemua` = semua sesi (sudah digabung dg cache).
+function ptSusunRiwayat_(sesiSemua, ujianMap, siswaMap, sayaId) {
+  var saya = siswaMap[sayaId] || {}, kelasSaya = ptNorm_(saya.kelas);
+  var terbaik = {}; // ujianId -> { siswaId -> nilai tertinggi } untuk teman sekelas
+  sesiSemua.forEach(function (s) {
+    if (s.status !== 'selesai' || s.nilai === '' || s.nilai === null || s.nilai === undefined || isNaN(Number(s.nilai))) return;
+    var si = siswaMap[s.siswa_id]; if (!si || ptNorm_(si.kelas) !== kelasSaya) return;
+    var m = terbaik[s.ujian_id] = terbaik[s.ujian_id] || {}, n = Number(s.nilai);
+    if (m[s.siswa_id] === undefined || n > m[s.siswa_id]) m[s.siswa_id] = n;
+  });
+  var rataKelas = function (uid) {
+    var m = terbaik[uid]; if (!m) return null;
+    var arr = Object.keys(m).map(function (k) { return m[k]; });
+    return arr.length ? ptR2_(ptRata_(arr)) : null;
+  };
+  var out = [];
+  sesiSemua.forEach(function (s) {
+    if (String(s.siswa_id) !== String(sayaId) || s.status === 'berlangsung') return;
+    var u = ujianMap[s.ujian_id]; if (!u) return;
+    var nl = (s.nilai === '' || s.nilai === null || s.nilai === undefined || isNaN(Number(s.nilai))) ? null : Number(s.nilai);
+    out.push({
+      id: s.id, u: u.id, judul: u.judul, kategori: u.kategori || '', mulai: s.mulai, selesai: s.selesai, status: s.status,
+      nilai: nl, lulus: s.lulus, kkm: Number(u.nilai_lulus) || 0, pelanggaran: Number(s.pelanggaran) || 0,
+      detail: String(u.tampil_detail).toLowerCase() !== 'false', rataKelas: rataKelas(u.id), waktuUjian: u.mulai || ''
+    });
+  });
+  out.sort(function (a, b) { return (Date.parse(b.selesai) || 0) - (Date.parse(a.selesai) || 0); });
+  return out;
+}
+
+function actionGetPortalSiswa_(data) {
+  var siswaMap = {};
+  readAll_(SHEET.SISWA).forEach(function (s) { siswaMap[s.id] = s; });
+  if (!data.siswaId || !siswaMap[data.siswaId]) return jsonOut_({ ok: false, error: 'Akun siswa tidak dikenali.' });
+  var ujianMap = {};
+  readAll_(SHEET.UJIAN).forEach(function (u) { ujianMap[u.id] = u; });
+  var sesi = readAll_(SHEET.SESI), idx = {};
+  sesi.forEach(function (s, i) { idx[s.id] = i; });
+  // sesi yang baru selesai tapi belum di-flush ke Sheets: timpa/ tambahkan dari cache (hanya id yang pending -> cepat)
+  var raw = CacheService.getScriptCache().get('pending_sesi_ids');
+  (raw ? JSON.parse(raw) : []).forEach(function (id) {
+    var st = ambilSesiState_(id); if (!st) return;
+    if (idx[id] !== undefined) sesi[idx[id]] = st; else { sesi.push(st); idx[id] = sesi.length - 1; }
+  });
+  var sesiFinal = sesi.filter(function (s) {
+    return s.status === 'selesai' && s.nilai !== '' && s.nilai !== null && s.nilai !== undefined && !isNaN(Number(s.nilai));
+  });
+  return jsonOut_({
+    ok: true,
+    riwayat: ptSusunRiwayat_(sesi, ujianMap, siswaMap, data.siswaId),
+    lb: ptHitungLeaderboard_(sesiFinal, ujianMap, siswaMap, data.siswaId)
+  });
 }
 
 function actionGetLogPelanggaran_(data) {
