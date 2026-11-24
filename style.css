@@ -1846,3 +1846,7 @@ details.tm-det > summary { cursor: pointer; font-weight: 700; font-size: .88rem;
 .tk-jml { font-size: .78rem; color: var(--c-muted); text-align: right; }
 .tk-status { grid-column: 2 / span 2; font-size: .78rem; color: var(--c-muted); }
 .tk-row.on .tk-status { color: #198754; }
+
+/* Pratinjau soal berisi rumus (tabel Analisis Soal, daftar pilih soal): rumus KaTeX sejajar dengan teks di sekitarnya */
+.pv-math { white-space: nowrap; }
+.pv-math .katex { font-size: 1em; }

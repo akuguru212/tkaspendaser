@@ -29,7 +29,7 @@
      dimuat TANPA memblokir tampilan halaman login (dulu halaman kosong sampai keduanya selesai diunduh). -->
 <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 <link rel="dns-prefetch" href="https://script.google.com">
-<link rel="stylesheet" href="style.css?v=63">
+<link rel="stylesheet" href="style.css?v=64">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
@@ -553,13 +553,14 @@
     <!-- ---------- TAB: ANALISIS MATERI (materi yang kurang per siswa / per materi) ---------- -->
     <section id="tab-analisis-materi" class="hidden am-scope">
       <h2>Analisis Materi</h2>
-      <p class="subtitle">Materi (<strong>Topik</strong> pada soal) mana yang masih kurang pada tiap siswa, untuk <strong>Literasi</strong> dan <strong>Numerasi</strong>. Siswa melihat analisis dan saran belajar yang sama di Portal Siswa. Isi kolom <em>Topik</em> pada soal di Bank Soal agar analisisnya rinci. Kurang = di bawah 60%.</p>
+      <p class="subtitle">Materi (<strong>Topik</strong> pada soal) mana yang masih kurang pada tiap siswa, untuk <strong>Literasi</strong> dan <strong>Numerasi</strong>, plus hasil <strong>Survei Karakter</strong> dan <strong>Sulingjar</strong> (per dimensi). Gunakan <strong>Laporan PDF</strong> untuk membuat laporan per siswa, per kelas, atau seluruh siswa yang bisa dibagikan ke siswa. Siswa melihat analisis dan saran belajar yang sama di Portal Siswa. Isi kolom <em>Topik</em> pada soal di Bank Soal agar analisisnya rinci. Kurang = di bawah 60%.</p>
       <div class="panel">
         <div class="toolbar">
           <div class="toolbar-actions" style="align-items:center">
             <button type="button" class="secondary btn-segarkan" id="am-g-segarkan" title="Ambil hasil tes terbaru" onclick="AnalisisMateri.muat(this)"><i class="fa-solid fa-rotate"></i> Segarkan</button><span class="segar-info" id="segar-info-tab-analisis-materi" aria-live="polite"></span>
           </div>
           <div class="toolbar-actions">
+            <button type="button" title="Laporan PDF untuk dibagikan ke siswa: per siswa, per kelas, atau seluruh siswa" onclick="LaporanPdf.buka()"><i class="fa-solid fa-file-pdf"></i> Laporan PDF</button>
             <button type="button" class="secondary" title="Unduh Excel: per siswa, per materi, dan detail" onclick="AnalisisMateri.unduh()">⬇ Unduh Excel</button>
             <button type="button" class="secondary" title="Cetak / simpan PDF sesuai pilihan yang tampil" onclick="AnalisisMateri.cetak()">🖨 Cetak PDF</button>
           </div>
@@ -1612,13 +1613,14 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=66"></script>
+<script src="app.js?v=68"></script>
 <script src="anbk.js?v=63"></script>
-<script src="survei.js?v=11"></script>
+<script src="survei.js?v=12"></script>
 <script src="leaderboard.js?v=1"></script>
 <script src="leaderboard-survei.js?v=1"></script>
-<script src="analisis-materi.js?v=2"></script>
-<script src="perkembangan.js?v=1"></script>
+<script src="analisis-materi.js?v=3"></script>
+<script src="perkembangan.js?v=2"></script>
+<script src="laporan-pdf.js?v=1"></script>
 <script src="portal-siswa.js?v=1"></script>
 </body>
 </html>

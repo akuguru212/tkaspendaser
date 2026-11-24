@@ -1,3 +1,22 @@
+# v43z2 — Survei Karakter & Sulingjar pada Analisis Materi + Laporan PDF untuk siswa
+
+- **Analisis Materi (guru):** filter **Jenis** kini memuat **Survei Karakter** dan **Sulingjar** (selain Literasi & Numerasi). "Materi" pada survei = **dimensi** (mis. Gotong royong, Iklim keamanan). Nilai dimensi 0–100 dengan acuan survei: **≥ 75 Baik, 50–74 Sedang, < 50 Perlu perhatian**. Tampil di tabel *Per Siswa* (kolom & chip "K"/"S"), *Per Materi* (rata-rata, siswa yang perlu perhatian, tindak lanjut), dan *Detail* siswa (perkembangan antar-survei + saran). Data diambil dari hasil survei yang sudah ada (tanpa perubahan Code.gs).
+- **Laporan PDF untuk siswa:** tombol **Laporan PDF** (toolbar) dan tombol **PDF** per baris/Detail.
+  - **Cakupan:** satu siswa · satu kelas · seluruh siswa.
+  - **Format:** (kelas/seluruh siswa) **ZIP berisi satu PDF per siswa** (dikelompokkan per kelas, siap dibagikan) atau **satu PDF gabungan** (tiap siswa di halaman baru).
+  - **Isi (bisa dipilih):** identitas & ringkasan, **grafik perkembangan Tes 1/2/3** (naik/turun) + tabel & penjelasan otomatis, analisis materi Literasi/Numerasi + **saran belajar**, hasil **Survei Karakter** & **Sulingjar**, cara membaca, dan kotak **catatan guru** + tanda tangan.
+  - **Sulingjar:** saran **tindak lanjut sekolah** ikut ditampilkan di PDF siswa; untuk dimensi *Iklim keamanan* ditambah catatan keamanan (ceritakan ke guru BK / wali kelas).
+  - PDF digambar langsung dengan **jsPDF** (teks vektor, ± 20–25 KB/siswa), dimuat otomatis dari CDN saat dibutuhkan (butuh internet saat membuat PDF).
+- File baru: `laporan-pdf.js`. File berubah: `index.html`, `app.js`, `analisis-materi.js`, `perkembangan.js`, `survei.js`, `README.md`. **Unggah semuanya ke repositori.**
+
+# v43z1 — Perbaikan tampilan rumus ($LaTeX$) pada pratinjau soal
+
+- **Analisis Soal (Portal Guru):** kolom *Pertanyaan* tidak lagi menampilkan kode mentah seperti `$4{,}5$` atau `$1{,}5\times 10^{8}$`; rumus tampil **ter-render KaTeX** (4,5 · 1 : 200.000 · 1,5 × 10⁸). Teks dipotong di batas kata atau sebelum rumus, **tidak pernah di tengah rumus**.
+- **Tooltip (title), CSV, dan Excel** Analisis Soal memakai **teks polos yang terbaca** (mis. `1,5 × 10⁸`, `3/4`, `√(x²+1)`), bukan kode LaTeX.
+- **Kelola Ujian > pilih soal:** daftar soal dengan rumus juga dirapikan (sebelumnya memotong HTML mentah).
+- Bila KaTeX belum termuat (mis. internet putus), pratinjau otomatis memakai teks polos yang sama.
+- Fungsi baru di `app.js`: `latexKeTeks_()`, `teksSoalPolos_()`, `pratinjauSoalHtml_()`. File berubah: `app.js`, `style.css`, `index.html` (versi cache), `README.md`.
+
 # v43z — Dashboard Siswa + Grafik Perkembangan Skor (siswa & guru)
 
 - **Portal Siswa kini berupa dashboard** (halaman pertama setelah login) dengan menu: **Dashboard**, **Simulasi Selesai**, **Grafik Perkembangan**, **Riwayat Simulasi**, **Leaderboard**, **Analisis Materi**. Tombol **Mulai Simulasi** membuka layar token seperti sebelumnya (alur ujian tidak berubah). Dari layar token siswa bisa kembali lewat kartu **Akun Saya** atau menu kanan atas; setelah ujian, tombol *Kembali ke Beranda* mengarah ke dashboard.

@@ -69,6 +69,8 @@ const PUSTAKA_EKSTERNAL = {
   mammoth: { url: 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js', siap: () => typeof mammoth !== 'undefined' },
   // JSZip: dipakai untuk membuka .docx & mengubah rumus Word (OMML) -> LaTeX sebelum dibaca mammoth
   jszip: { url: 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', siap: () => typeof JSZip !== 'undefined' },
+  // jsPDF: membuat laporan PDF per siswa (menu Analisis Materi > Laporan PDF). Digambar langsung (vektor), bukan tangkapan layar.
+  jspdf: { url: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', cadangan: 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js', siap: () => !!(window.jspdf && window.jspdf.jsPDF) },
   // heic2any: mengonversi foto HEIC/HEIF (iPhone) -> JPEG di browser yang belum bisa membacanya (Chrome/Firefox/Android).
   // Hanya dimuat bila siswa benar-benar memilih foto HEIC. 'cadangan' dipakai bila CDN utama gagal.
   heic2any: { url: 'https://cdnjs.cloudflare.com/ajax/libs/heic2any/0.0.4/heic2any.min.js', cadangan: 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js', siap: () => typeof heic2any !== 'undefined' }
@@ -5669,7 +5671,7 @@ const Guru = {
     cont.innerHTML = daftar.map(s => `
       <label style="display:flex;gap:.5rem;align-items:flex-start;margin-bottom:.5rem;font-weight:400">
         <input type="checkbox" class="chk-soal-ujian" value="${s.id}" ${(autoCentangSemua || terpilih.includes(s.id)) ? 'checked' : ''} style="width:auto;margin-top:.2rem">
-        <span>${escapeHtml_(s.pertanyaan).slice(0, 90)} <em style="color:var(--c-muted)">(bobot ${s.bobot})</em></span>
+        <span>${pratinjauSoalHtml_(s.pertanyaan, 90)} <em style="color:var(--c-muted)">(bobot ${s.bobot})</em></span>
       </label>`).join('');
   },
 
@@ -6407,7 +6409,7 @@ const Guru = {
       </tr></thead><tbody>` +
       data.map(s => `<tr>
         <td>${s.nomor}</td>
-        <td style="max-width:260px" title="${escapeHtml_(bersihkanHtml_(s.pertanyaan))}">${escapeHtml_(potongTeks_(bersihkanHtml_(s.pertanyaan), 70))}</td>
+        <td style="max-width:260px" title="${escapeHtml_(teksSoalPolos_(s.pertanyaan))}">${pratinjauSoalHtml_(s.pertanyaan, 70)}</td>
         <td>${labelTipe(s.tipe)}</td>
         <td>${labelKesulitan(s.tingkatKesulitanGuru)}</td>
         <td>${s.jumlahBenar}</td>
@@ -6427,7 +6429,7 @@ const Guru = {
     const rows = data.map(s => {
       const persen = parseFloat(String(s.persenBenar).replace('%', ''));
       return [
-        s.nomor, String(bersihkanHtml_(s.pertanyaan)), labelTipe(s.tipe), labelKesulitan(s.tingkatKesulitanGuru),
+        s.nomor, String(teksSoalPolos_(s.pertanyaan)), labelTipe(s.tipe), labelKesulitan(s.tingkatKesulitanGuru),
         Number(s.jumlahBenar) || 0, Number(s.jumlahSebagianBenar) || 0, Number(s.jumlahSalah) || 0, Number(s.jumlahKosong) || 0,
         isNaN(persen) ? '' : persen, labelOto[s.kesulitanOtomatis] || s.kesulitanOtomatis
       ];
@@ -6448,7 +6450,7 @@ const Guru = {
     const simbol = { benar: '<span class="jwb-cell jwb-benar">✔</span>', sebagian: '<span class="jwb-cell jwb-sebagian">◐</span>', salah: '<span class="jwb-cell jwb-salah">✘</span>', kosong: '<span class="jwb-cell jwb-kosong">–</span>', na: '<span class="jwb-cell jwb-kosong">–</span>' };
     cont.innerHTML = `<p class="subtitle">✔ = benar &nbsp; ◐ = sebagian benar (hanya soal uraian) &nbsp; ✘ = salah &nbsp; – = tidak dijawab.</p>
       <div class="table-scroll-x"><table class="ledger"><thead><tr>
-        <th>Nama</th><th>Kelas</th><th>Nilai</th>` + soalList.map(s => `<th title="${escapeHtml_(bersihkanHtml_(s.pertanyaan))}">No ${s.nomor}</th>`).join('') + `
+        <th>Nama</th><th>Kelas</th><th>Nilai</th>` + soalList.map(s => `<th title="${escapeHtml_(teksSoalPolos_(s.pertanyaan))}">No ${s.nomor}</th>`).join('') + `
       </tr></thead><tbody>` +
       siswaList.map(sw => `<tr>
         <td>${escapeHtml_(sw.nama)}</td><td>${escapeHtml_(sw.kelas)}</td><td><strong>${sw.nilai}</strong></td>` +
@@ -7523,6 +7525,122 @@ function bersihkanHtml_(str) {
 function potongTeks_(str, maksPanjang) {
   const s = String(str == null ? '' : str);
   return s.length > maksPanjang ? s.slice(0, maksPanjang - 1) + '…' : s;
+}
+
+// ----------------------------------------------------------------------------
+// PRATINJAU SOAL BERISI RUMUS ($LaTeX$) -- agar tabel/daftar tidak menampilkan kode mentah
+// seperti "$1{,}5\times 10^{8}$" atau memotong rumus di tengah.
+//  * latexKeTeks_()      : LaTeX sederhana -> teks polos yang enak dibaca ("1,5 × 10⁸", "3/4", "√16").
+//                          Dipakai untuk tooltip (title), CSV/Excel, dan cadangan bila KaTeX belum termuat.
+//  * teksSoalPolos_()    : teks polos sebuah soal (tag HTML dibuang, semua $...$ diubah jadi teks polos).
+//  * pratinjauSoalHtml_(): HTML ringkas untuk sel tabel/daftar: teks + rumus yang dirender KaTeX,
+//                          dipotong di batas kata / sebelum rumus (tidak pernah di tengah rumus).
+// ----------------------------------------------------------------------------
+const LATEX_SUP_ = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '+': '⁺', '-': '⁻', '−': '⁻', '=': '⁼', '(': '⁽', ')': '⁾', 'n': 'ⁿ', 'i': 'ⁱ' };
+const LATEX_SUB_ = { '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉', '+': '₊', '-': '₋', '−': '₋', '=': '₌', '(': '₍', ')': '₎', 'a': 'ₐ', 'e': 'ₑ', 'o': 'ₒ', 'x': 'ₓ', 'n': 'ₙ', 'i': 'ᵢ' };
+const LATEX_SIMBOL_ = {
+  times: '×', cdot: '·', div: '÷', pm: '±', mp: '∓', leq: '≤', le: '≤', geq: '≥', ge: '≥', neq: '≠', ne: '≠', approx: '≈', equiv: '≡',
+  pi: 'π', alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', theta: 'θ', lambda: 'λ', mu: 'μ', rho: 'ρ', sigma: 'σ', omega: 'ω', phi: 'φ', Delta: 'Δ', Omega: 'Ω', Sigma: 'Σ',
+  circ: '°', degree: '°', angle: '∠', triangle: '△', infty: '∞', rightarrow: '→', to: '→', leftarrow: '←', Rightarrow: '⇒', leftrightarrow: '↔', Leftrightarrow: '⇔',
+  ldots: '…', dots: '…', cdots: '…', sum: 'Σ', mid: '|', parallel: '∥', perp: '⊥', sim: '∼', cong: '≅', in: '∈', cup: '∪', cap: '∩', subset: '⊂', emptyset: '∅',
+  quad: ' ', qquad: ' ', ',': ' ', ';': ' ', ':': ' ', '!': '', ' ': ' ', '%': '%', '$': '$', '{': '{', '}': '}', '&': '&', '#': '#', '_': '_', '|': '‖', '\\': ' ',
+  sin: 'sin', cos: 'cos', tan: 'tan', cot: 'cot', sec: 'sec', csc: 'csc', log: 'log', ln: 'ln', lim: 'lim', max: 'maks', min: 'min'
+};
+const LATEX_BINER_ = new Set(['times', 'cdot', 'div', 'pm', 'mp', 'leq', 'le', 'geq', 'ge', 'neq', 'ne', 'approx', 'equiv', 'rightarrow', 'to', 'leftarrow', 'Rightarrow', 'leftrightarrow', 'Leftrightarrow', 'in', 'cup', 'cap', 'subset', 'parallel', 'perp', 'sim', 'cong']);
+const LATEX_FUNGSI_ = new Set(['sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'log', 'ln', 'lim', 'max', 'min']);
+function latexKeTeks_(src) {
+  const s = String(src == null ? '' : src);
+  let i = 0;
+  const kurung = (t) => /^[A-Za-z0-9.,⁰-⁹√∛∜π°]+$/.test(t) ? t : '(' + t + ')';
+  const skrip = (tanda, t) => {
+    if (t === '°') return '°';
+    const peta = tanda === '^' ? LATEX_SUP_ : LATEX_SUB_;
+    const ganti = Array.from(t).map(ch => peta[ch]);
+    if (t && ganti.every(Boolean)) return ganti.join('');
+    return t.length <= 1 ? tanda + t : tanda + '(' + t + ')';
+  };
+  const arg = () => {
+    while (s[i] === ' ') i++;
+    if (s[i] === '{') {
+      let d = 1, j = i + 1;
+      while (j < s.length && d) { if (s[j] === '{') d++; else if (s[j] === '}') d--; j++; }
+      const isi = s.slice(i + 1, d ? j : j - 1); i = j; return latexKeTeks_(isi);
+    }
+    if (s[i] === '\\') { const m = /^\\([A-Za-z]+|.)/.exec(s.slice(i)); i += m[0].length; return perintah(m[1]); }
+    return i < s.length ? s[i++] : '';
+  };
+  const perintah = (n) => {
+    switch (n) {
+      case 'frac': case 'dfrac': case 'tfrac': { const a = arg(), b = arg(); return kurung(a) + '/' + kurung(b); }
+      case 'sqrt': {
+        let idx = '';
+        if (s[i] === '[') { const j = s.indexOf(']', i); if (j > 0) { idx = s.slice(i + 1, j); i = j + 1; } }
+        const a = arg(), awal = idx === '3' ? '∛' : (idx === '4' ? '∜' : (idx ? idx + '√' : '√'));
+        return awal + (/^[A-Za-z0-9.,]+$/.test(a) ? a : '(' + a + ')');
+      }
+      case 'text': case 'textbf': case 'textit': case 'mathrm': case 'mathbf': case 'mathit': case 'mathbb': case 'mbox': case 'operatorname': case 'boldsymbol': case 'bf': case 'hat': case 'widehat': case 'tilde': return arg();
+      case 'overline': case 'bar': return Array.from(arg()).map(ch => ch + '\u0305').join('');
+      case 'overrightarrow': case 'vec': return arg() + '\u20D7';
+      case 'left': case 'right': if (s[i] === '.') i++; return '';
+      case 'begin': case 'end': arg(); return '';
+      default: {
+        if (!Object.prototype.hasOwnProperty.call(LATEX_SIMBOL_, n)) return '';
+        const t = LATEX_SIMBOL_[n];
+        if (LATEX_BINER_.has(n)) return ' ' + t + ' ';
+        if (LATEX_FUNGSI_.has(n)) return t + ' ';
+        return t;
+      }
+    }
+  };
+  let out = '';
+  while (i < s.length) {
+    const c = s[i];
+    if (c === '\\') {
+      const m = /^\\([A-Za-z]+|.)/.exec(s.slice(i)); i += m[0].length;
+      if (/^(d|t)?frac$/.test(m[1]) && /\d$/.test(out)) out += ' '; // pecahan campuran: 2\frac{1}{2} -> "2 1/2"
+      out += perintah(m[1]);
+      if (/^[A-Za-z]+$/.test(m[1])) while (s[i] === ' ') i++;       // LaTeX mengabaikan spasi setelah nama perintah
+    }
+    else if (c === '{') out += arg();
+    else if (c === '}') i++;
+    else if (c === '^' || c === '_') { i++; out += skrip(c, arg()); }
+    else if (c === '&') { out += ' '; i++; }
+    else { out += c; i++; }
+  }
+  return out.replace(/\s+/g, ' ').trim();
+}
+function teksSoalPolos_(html) {
+  return bersihkanHtml_(html).replace(/\$([^$]+)\$/g, (m, tex) => latexKeTeks_(tex)).replace(/\s+/g, ' ').trim();
+}
+function pratinjauSoalHtml_(html, maks) {
+  const teks = bersihkanHtml_(html), bagian = [], re = /\$([^$]+)\$/g;
+  let idx = 0, m;
+  while ((m = re.exec(teks))) {
+    if (m.index > idx) bagian.push({ rumus: false, v: teks.slice(idx, m.index) });
+    bagian.push({ rumus: true, v: m[1] }); idx = re.lastIndex;
+  }
+  if (idx < teks.length) bagian.push({ rumus: false, v: teks.slice(idx) });
+  const gambarRumus = (tex) => {
+    if (window.katex && typeof window.katex.renderToString === 'function') {
+      // output 'html' saja (tanpa MathML tersembunyi) supaya teks rumus tidak terbaca/tersalin dua kali; label aksesibilitas = teks polos
+      try { return '<span class="pv-math" role="math" aria-label="' + escapeHtml_(latexKeTeks_(tex)) + '">' + window.katex.renderToString(tex, { throwOnError: false, output: 'html' }) + '</span>'; } catch (e) { /* jatuh ke teks polos */ }
+    }
+    return '<span class="pv-math">' + escapeHtml_(latexKeTeks_(tex)) + '</span>';
+  };
+  let sisa = maks, out = '', terpotong = false;
+  for (const b of bagian) {
+    if (sisa <= 0) { terpotong = true; break; }
+    if (!b.rumus) {
+      if (b.v.length <= sisa) { out += escapeHtml_(b.v); sisa -= b.v.length; continue; }
+      let p = b.v.slice(0, sisa); const sp = p.lastIndexOf(' ');
+      if (sp > sisa * 0.6) p = p.slice(0, sp);
+      out += escapeHtml_(p.replace(/\s+$/, '')); terpotong = true; break;
+    }
+    const panjang = latexKeTeks_(b.v).length;
+    if (panjang > sisa && out) { terpotong = true; break; }
+    out += gambarRumus(b.v); sisa -= panjang;
+  }
+  return out + (terpotong ? '…' : '');
 }
 function unduhTeksSebagaiFile_(teks, namaFile) {
   const blob = new Blob(['\ufeff' + teks], { type: 'text/csv;charset=utf-8;' }); // BOM supaya Excel baca UTF-8 dgn benar

@@ -474,6 +474,7 @@ const Perkembangan = (function () {
 
   return {
     susunTes, deret, tren, badgeTren, wawasan, garis, grafikTes, pasang, fmt, fmtD, jenisItem, labelTes, SERI, AMBANG_TREN,
+    olahGuru,
     buka, muat, render, pilihKelas, pilihUrut, detail, tutupDetail, unduh, cetak
   };
 })();

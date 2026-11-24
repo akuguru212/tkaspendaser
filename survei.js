@@ -745,6 +745,18 @@ const Survei = (function () {
     sedang: 'cukup baik, tetapi masih ada butir yang perlu ditingkatkan.',
     kurang: 'masih rendah dan perlu mendapat perhatian.'
   };
+  // Saran per dimensi untuk laporan (Analisis Materi & PDF).
+  // untuk: 'siswa' (bahasa untuk siswa), 'guru' (tindak lanjut), 'kelas' (pembiasaan di kelas / tindak lanjut sekolah).
+  // Sulingjar adalah penilaian siswa terhadap SEKOLAH, jadi saran sekolah tidak diberikan ke siswa (hanya catatan keamanan).
+  function saranDim(jenis, kode, untuk) {
+    const dasar = JENIS[jenis] && JENIS[jenis].dim.some(d => d[0] === kode);
+    if (!dasar) return '';
+    if (untuk === 'kelas') return (jenis === 'karakter' ? SARAN_KELAS[kode] : SARAN[kode]) || '';
+    if (untuk === 'guru') return SARAN[kode] || '';
+    if (jenis === 'karakter') return SARAN[kode] || '';
+    if (kode === 'ik') return 'Jika kamu pernah mengalami atau melihat hal yang tidak nyaman, ceritakan kepada guru BK, wali kelas, atau orang dewasa yang kamu percaya.';
+    return '';
+  }
   function headlineSurvei(jenis, h) { return { label: jenis === 'karakter' ? 'Nilai Survei Karakter' : 'Nilai Sulingjar', nilai: h.total }; }
 
   function htmlPembahasan(set, jenis, jawaban, kualitas, opsi) {
@@ -1145,7 +1157,7 @@ const Survei = (function () {
   const _bukaDetailSiswa = ExamEngine.bukaDetailJawaban;
   ExamEngine.bukaDetailJawaban = async function () { await _bukaDetailSiswa.call(ExamEngine); try { await siapkanDetailSiswa(); } catch (e) { } };
 
-  return { toggleRagu, jenisUntukUjian, setUntukUjian, cariPaket, muatPaket, badgePaket, renderKartuKategori, bukaKategoriKelola, imporKeKategori, hapusPaket, bukaEditor, tutupEditor, edTambah, edHapus, edGeser, edAturHalaman, edBawaan, edSimpan, mulai, pilih, pilihId, geser, lompat, lompatButir, kirim, jenisUntukUjian, bangunSet, hitung, periksaKualitas, kategoriIndeks, kategoriKesungguhan, JENIS, guruMuat, guruRender, guruUnduh,
+  return { saranDim, toggleRagu, jenisUntukUjian, setUntukUjian, cariPaket, muatPaket, badgePaket, renderKartuKategori, bukaKategoriKelola, imporKeKategori, hapusPaket, bukaEditor, tutupEditor, edTambah, edHapus, edGeser, edAturHalaman, edBawaan, edSimpan, mulai, pilih, pilihId, geser, lompat, lompatButir, kirim, jenisUntukUjian, bangunSet, hitung, periksaKualitas, kategoriIndeks, kategoriKesungguhan, JENIS, guruMuat, guruRender, guruUnduh,
     modeDetail, gabungKeRekap, selRekap, ringkasSurvei, setDraft, draftJson, statusForm, pakaiBawaan, unduhTemplate, htmlPembahasan };
 })();
 
