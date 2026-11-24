@@ -329,3 +329,24 @@ body.kunci-aktif #ujian-screen img { -webkit-user-drag: none; pointer-events: au
 }
 #kd-salin i { margin-right: 2px; }
 #kd-salin.is-disabled { opacity: .55; }
+
+/* ============================================================================
+   WARNA TOMBOL NAVIGASI BAWAH (HP) — mengikuti aplikasi TKA/ANBK asli
+   Sebelumnya = merah | Ragu-ragu = kuning | Berikutnya = biru
+   Berlaku di halaman soal (#ujian-screen) dan survei (#survei-screen)
+   ============================================================================ */
+@media (max-width: 640px) {
+  #ujian-screen #btn-soal-prev, #survei-screen #sv-btn-prev {
+    background: #dc3545 !important; color: #fff !important; box-shadow: 0 8px 18px -8px rgba(220,53,69,.75);
+  }
+  #ujian-screen #btn-soal-prev:disabled, #survei-screen #sv-btn-prev:disabled { opacity: .45; box-shadow: none; }
+
+  #ujian-screen .anbk-ragu, #survei-screen .anbk-ragu {
+    background: #ffc107 !important; color: #3a2a00 !important; border: 0 !important; box-shadow: 0 8px 18px -8px rgba(255,193,7,.9);
+  }
+  #ujian-screen .anbk-ragu input, #survei-screen .anbk-ragu input { background: #fff; border: 2px solid #3a3a3a; border-radius: 5px; }
+  #ujian-screen .anbk-ragu input:checked, #survei-screen .anbk-ragu input:checked { background: #3a3a3a; border-color: #3a3a3a; }
+  #ujian-screen .anbk-ragu:has(input:checked), #survei-screen .anbk-ragu:has(input:checked) { background: #ffb300 !important; color: #2b1f00 !important; box-shadow: inset 0 0 0 2px #3a3a3a; }
+
+  #ujian-screen #btn-soal-next, #survei-screen #sv-btn-next { background: #0d6efd !important; color: #fff !important; }
+}
