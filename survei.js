@@ -507,8 +507,21 @@ const Survei = (function () {
       nav.innerHTML = `<button type="button" id="sv-btn-kembali" class="anbk-btn anbk-btn-green" onclick="Survei.lompat(${Math.min(S.idx, hl.length - 1)})">KEMBALI</button><span></span>
         <button type="button" class="anbk-btn anbk-btn-red" ${kosong.length ? 'disabled' : ''} id="sv-btn-kirim" onclick="Survei.kirim()">SELESAI SURVEI</button>`;
     }
+    terapkanSkala();
     window.scrollTo(0, 0);
   }
+
+  // ---- ukuran font survei: 3 tingkat "A A A" (seperti halaman tes) ----
+  const SKALA_SV = [1, 1.2, 1.45]; let skalaIdx = 0;
+  try { const q = parseInt(localStorage.getItem('cbt_skala_survei'), 10); if (q >= 0 && q < 3) skalaIdx = q; } catch (e) { /* abaikan */ }
+  function terapkanSkala() {
+    const sc = $('survei-screen'); if (!sc) return;
+    const s = SKALA_SV[skalaIdx];
+    sc.style.setProperty('--sv-skala', s);
+    sc.style.setProperty('--sv-skala-h', 1 + (s - 1) * 0.4); // header kolom tabel naik lebih sedikit agar tidak berdesakan
+    [0, 1, 2].forEach(k => { const b = $('sv-skala-' + k); if (b) { b.classList.toggle('on', k === skalaIdx); b.setAttribute('aria-pressed', k === skalaIdx ? 'true' : 'false'); } });
+  }
+  function skala(i) { skalaIdx = i; try { localStorage.setItem('cbt_skala_survei', String(i)); } catch (e) { /* abaikan */ } terapkanSkala(); }
 
   function simpanSementara() { try { sessionStorage.setItem('cbt_survei_' + S.sesiId, JSON.stringify({ j: S.jawaban, d: S.detik, r: S.ragu })); } catch (e) { } }
   function pilihId(id, n) {
@@ -1157,7 +1170,7 @@ const Survei = (function () {
   const _bukaDetailSiswa = ExamEngine.bukaDetailJawaban;
   ExamEngine.bukaDetailJawaban = async function () { await _bukaDetailSiswa.call(ExamEngine); try { await siapkanDetailSiswa(); } catch (e) { } };
 
-  return { saranDim, toggleRagu, jenisUntukUjian, setUntukUjian, cariPaket, muatPaket, badgePaket, renderKartuKategori, bukaKategoriKelola, imporKeKategori, hapusPaket, bukaEditor, tutupEditor, edTambah, edHapus, edGeser, edAturHalaman, edBawaan, edSimpan, mulai, pilih, pilihId, geser, lompat, lompatButir, kirim, jenisUntukUjian, bangunSet, hitung, periksaKualitas, kategoriIndeks, kategoriKesungguhan, JENIS, guruMuat, guruRender, guruUnduh,
+  return { saranDim, toggleRagu, jenisUntukUjian, setUntukUjian, cariPaket, muatPaket, badgePaket, renderKartuKategori, bukaKategoriKelola, imporKeKategori, hapusPaket, bukaEditor, tutupEditor, edTambah, edHapus, edGeser, edAturHalaman, edBawaan, edSimpan, mulai, skala, pilih, pilihId, geser, lompat, lompatButir, kirim, jenisUntukUjian, bangunSet, hitung, periksaKualitas, kategoriIndeks, kategoriKesungguhan, JENIS, guruMuat, guruRender, guruUnduh,
     modeDetail, gabungKeRekap, selRekap, ringkasSurvei, setDraft, draftJson, statusForm, pakaiBawaan, unduhTemplate, htmlPembahasan };
 })();
 

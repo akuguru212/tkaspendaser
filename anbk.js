@@ -69,6 +69,17 @@ const Anbk = (function () {
     }
     return '';
   }
+  // Salin token yang sedang tampil ke clipboard (tombol "Salin" di samping token)
+  function salinTokenAktif(btn) {
+    const t = (($('kd-token-tampil') || {}).textContent || '').trim();
+    if (!t || /^-+$/.test(t)) { toast('Token belum tersedia. Tekan Refresh dulu atau tunggu guru membuka token.', 'error'); return; }
+    salinTeksAman_(t).then(() => {
+      toast('Token ' + t + ' disalin.', 'success');
+      const sp = btn && btn.querySelector('span'), ic = btn && btn.querySelector('i');
+      if (sp) { const l = sp.textContent; sp.textContent = 'Tersalin'; if (ic) ic.className = 'fa-solid fa-check'; setTimeout(() => { sp.textContent = l; if (ic) ic.className = 'fa-regular fa-copy'; }, 1500); }
+      const inp = $('input-token-ujian'); if (inp && !inp.value) { inp.value = t; inp.dispatchEvent(new Event('input', { bubbles: true })); }
+    }).catch(() => toast('Gagal menyalin otomatis. Tekan lama pada token lalu salin manual.', 'error'));
+  }
   async function segarkanToken(manual) {
     const btn = $('kd-refresh'); if (btn) btn.classList.add('is-disabled');
     try {
@@ -451,7 +462,7 @@ const Anbk = (function () {
     }
   });
 
-  return { setUser, isoTgl, tglPanjang, tampilKonfirmasiData, segarkanToken, tampilKonfirmasiTes, kembaliKeKonfirmasiData, menuUser, toggleSandi, pilihPortal,
+  return { setUser, isoTgl, tglPanjang, tampilKonfirmasiData, segarkanToken, salinTokenAktif, tampilKonfirmasiTes, kembaliKeKonfirmasiData, menuUser, toggleSandi, pilihPortal,
     bukaDaftar, bukaInfo, tutupModal, renderSoal, qrMatrix, qrSvg, bukaKartuLogin, cetakKartuLogin, simpanTampilToken };
 })();
 window.Anbk = Anbk;

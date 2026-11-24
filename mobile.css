@@ -300,3 +300,32 @@ body.kunci-blur #ujian-screen { visibility: hidden !important; }
 body.kunci-aktif #ujian-screen { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 body.kunci-aktif #ujian-screen img { -webkit-user-drag: none; pointer-events: auto; }
 @media print { body.kunci-aktif * { display: none !important; } }
+
+/* ============================================================================
+   Survei: ukuran font (A A A) + tombol Salin token
+   ============================================================================ */
+#survei-screen { --sv-skala: 1; --sv-skala-h: 1; }
+#survei-screen .anbk-font { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #44505e; }
+#survei-screen .anbk-fs.on { color: #0d6efd; font-weight: 700; }
+#survei-screen #sv-body .sv-q { font-size: calc(19px * var(--sv-skala)); }
+#survei-screen #sv-body .sv-o { font-size: calc(15px * var(--sv-skala)); }
+#survei-screen #sv-body .sv-p, #survei-screen #sv-body .sv-ul li { font-size: calc(15px * var(--sv-skala)); }
+#survei-screen #sv-body .sv-ket { font-size: calc(12.5px * var(--sv-skala)); }
+#survei-screen #sv-body .sv-ket-m { font-size: calc(13px * var(--sv-skala)); }
+#survei-screen #sv-body .sv-dim { font-size: calc(11.5px * var(--sv-skala)); }
+#survei-screen #sv-body .sv-mx td.sv-mx-t { font-size: calc(13.5px * var(--sv-skala)); }
+#survei-screen #sv-body .sv-mx thead th { font-size: calc(12.5px * var(--sv-skala-h)); }
+#survei-screen #sv-body .sv-mx thead th.sv-mx-t { font-size: calc(12.5px * var(--sv-skala-h)); }
+@media (max-width: 640px) {
+  #survei-screen .anbk-u-sub { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; padding: 0 2px; }
+  #survei-screen .anbk-font { font-size: 12px; gap: 4px; }
+  #survei-screen .anbk-fs { all: unset; box-sizing: border-box; cursor: pointer; width: 34px; height: 32px; display: grid; place-items: center; border-radius: 9px; color: #7a8696; font-family: 'Poppins', sans-serif; font-weight: 600; -webkit-tap-highlight-color: transparent; }
+  #survei-screen .anbk-fs.fs1 { font-size: 12px; } #survei-screen .anbk-fs.fs2 { font-size: 15px; } #survei-screen .anbk-fs.fs3 { font-size: 19px; }
+  #survei-screen .anbk-fs.on { background: #e8f1ff; color: #0d6efd; }
+  #survei-screen #sv-body .sv-mx td.sv-mx-t { font-size: calc(12px * var(--sv-skala)); }
+  #survei-screen #sv-body .sv-mx thead th { font-size: calc(9.5px * var(--sv-skala-h)); }
+  #survei-screen #sv-body .sv-mx thead th.sv-mx-t { font-size: calc(11px * var(--sv-skala-h)); }
+  #survei-screen #sv-body .sv-p, #survei-screen #sv-body .sv-ul li { font-size: calc(14px * var(--sv-skala)); }
+}
+#kd-salin i { margin-right: 2px; }
+#kd-salin.is-disabled { opacity: .55; }

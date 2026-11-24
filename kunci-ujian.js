@@ -194,3 +194,75 @@
   AntiCheat.nonaktifkan = function () { try { K.off(); } catch (e) { /* abaikan */ } return matiAsli.apply(this, arguments); };
   window.KunciUjian = K;
 })();
+
+/* ============================================================================
+   LAYAR TETAP MENYALA — halaman soal (#ujian-screen) DAN halaman survei (#survei-screen)
+   Berjalan sendiri (tidak bergantung AntiCheat), jadi aktif otomatis begitu salah satu halaman itu tampil
+   dan mati otomatis begitu halamannya ditutup.
+   - Utama   : Screen Wake Lock API (Chrome/Edge/Samsung Internet/Safari 16.4+), diminta ulang bila dilepas sistem
+               atau saat siswa kembali ke halaman.
+   - Cadangan: video senyap tak terlihat yang terus berputar (cara "NoSleep") untuk browser tanpa Wake Lock,
+               atau bila Wake Lock ditolak (mis. mode hemat baterai). Perlu satu ketukan layar agar boleh diputar.
+   ============================================================================ */
+(function () {
+  'use strict';
+  const IDS = ['ujian-screen', 'survei-screen'];
+  const LM = { lock: null, video: null, canvas: null, timer: null, memintaWake: false, adaGestur: false };
+
+  const perlu = () => IDS.some(id => { const e = document.getElementById(id); return e && !e.classList.contains('hidden') && e.offsetParent !== null; }) && !document.hidden;
+
+  async function wake() {
+    if (LM.lock || LM.memintaWake || !('wakeLock' in navigator)) return !!LM.lock;
+    LM.memintaWake = true;
+    try {
+      LM.lock = await navigator.wakeLock.request('screen');
+      LM.lock.addEventListener('release', () => { LM.lock = null; if (perlu()) setTimeout(nyalakan, 400); });
+      return true;
+    } catch (e) { LM.lock = null; return false; } finally { LM.memintaWake = false; }
+  }
+
+  // Cadangan: video dari <canvas> yang terus berubah, diputar tanpa suara & tak terlihat.
+  function siapVideo() {
+    if (LM.video) return true;
+    try {
+      const c = document.createElement('canvas'); c.width = 16; c.height = 16; LM.canvas = c;
+      if (!c.captureStream) return false;
+      const ctx = c.getContext('2d'); let n = 0;
+      const gambar = () => { ctx.fillStyle = (n++ % 2) ? '#000' : '#010101'; ctx.fillRect(0, 0, 16, 16); };
+      gambar(); LM.gambarTimer = setInterval(gambar, 1000);
+      const v = document.createElement('video');
+      v.setAttribute('playsinline', ''); v.setAttribute('muted', ''); v.muted = true; v.loop = true; v.setAttribute('aria-hidden', 'true');
+      v.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:.01;pointer-events:none;z-index:-1';
+      v.srcObject = c.captureStream(2);
+      document.body.appendChild(v); LM.video = v; return true;
+    } catch (e) { return false; }
+  }
+  function putarVideo() {
+    if (!siapVideo()) return;
+    const p = LM.video.play(); if (p && p.catch) p.catch(() => { /* butuh ketukan pengguna: dicoba lagi saat ketukan berikutnya */ });
+  }
+
+  async function nyalakan() {
+    if (!perlu()) return;
+    const ok = await wake();
+    if (!ok) putarVideo(); // Wake Lock tidak ada/ditolak -> pakai cadangan
+  }
+  function matikan() {
+    try { if (LM.lock) LM.lock.release(); } catch (e) { /* abaikan */ } LM.lock = null;
+    if (LM.video) { try { LM.video.pause(); LM.video.remove(); } catch (e) { /* abaikan */ } LM.video = null; clearInterval(LM.gambarTimer); LM.canvas = null; }
+  }
+  function tick() {
+    if (perlu()) { if (!LM.lock && !(LM.video && !LM.video.paused)) nyalakan(); }
+    else if (LM.lock || LM.video) matikan();
+  }
+  function gestur() {
+    if (!perlu()) return;
+    if (!LM.lock) { if (LM.video && LM.video.paused) putarVideo(); else if (!LM.video) nyalakan(); }
+  }
+
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { LM.lock = null; } else { setTimeout(() => { matikan(); nyalakan(); }, 200); } });
+  ['pointerdown', 'touchstart', 'click'].forEach(t => document.addEventListener(t, gestur, true));
+  window.addEventListener('pageshow', () => setTimeout(tick, 200));
+  LM.timer = setInterval(tick, 2000);
+  window.LayarMenyala = LM;
+})();

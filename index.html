@@ -34,7 +34,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
 <link rel="stylesheet" href="anbk.css?v=65">
-<link rel="stylesheet" href="mobile.css?v=3">
+<link rel="stylesheet" href="mobile.css?v=4">
 <!-- Font Awesome: ikon sidebar & tombol (gaya dashboard modern) -->
 <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
 <!-- KaTeX: render persamaan matematika (LaTeX) di dalam soal -->
@@ -1344,7 +1344,7 @@
   <header class="anbk-hero"><div class="anbk-hero-in"><div class="anbk-brand"><img class="anbk-logo-tw" src="icons/tutwuri.png" alt="Tut Wuri Handayani"><img class="anbk-logo-sch" src="icons/smpn2.png" alt="SMP Negeri 2 Seririt"><div class="anbk-brand-t"><b>PUSMENDIK</b><span>APLIKASI ANBK</span></div></div><div class="anbk-user" onclick="Anbk.menuUser(event)" role="button" tabindex="0"><span class="anbk-user-nama"></span><span class="anbk-user-ico"><i class="fa-solid fa-graduation-cap"></i></span><div class="anbk-usermenu hidden"><button type="button" data-aksi="kembali" onclick="Anbk.kembaliKeKonfirmasiData()"><i class="fa-solid fa-key"></i> Ganti Token</button><button type="button" onclick="Auth.logout()"><i class="fa-solid fa-right-from-bracket"></i> Keluar</button></div></div></div></header>
   <main class="anbk-wrap anbk-konf">
     <section class="anbk-card anbk-card-token">
-      <div class="anbk-token-row">Token : <b id="kd-token-tampil">------</b> <button type="button" class="anbk-btn anbk-btn-primary anbk-btn-xs" id="kd-refresh" onclick="Anbk.segarkanToken(true)">Refresh</button></div>
+      <div class="anbk-token-row">Token : <b id="kd-token-tampil">------</b> <button type="button" class="anbk-btn anbk-btn-green anbk-btn-xs" id="kd-salin" onclick="Anbk.salinTokenAktif(this)" aria-label="Salin token" title="Salin token"><i class="fa-regular fa-copy"></i> <span>Salin</span></button> <button type="button" class="anbk-btn anbk-btn-primary anbk-btn-xs" id="kd-refresh" onclick="Anbk.segarkanToken(true)">Refresh</button></div>
       <div id="siswa-blokir-banner" class="anbk-blokir hidden" role="alert"><b>Akun Anda sedang diblokir</b><span>Anda belum bisa mengikuti tes selama blokir ini aktif.</span><span id="siswa-blokir-alasan"></span></div>
     </section>
     <section class="anbk-card sw-entry" aria-labelledby="sw-entry-judul">
@@ -1514,7 +1514,14 @@
         <h2 class="anbk-u-no" id="sv-nomor">Petunjuk Pengerjaan</h2>
         <div class="anbk-u-tools"><span class="anbk-pill anbk-pill-timer" id="sv-progres">0 / 0 terjawab</span></div>
       </div>
-      <div class="anbk-u-sub"><span></span><div class="anbk-u-mapel" id="sv-judul">Survei</div></div>
+      <div class="anbk-u-sub">
+        <div class="anbk-font" role="group" aria-label="Ukuran font survei"><span>Ukuran font survei:</span>
+          <button type="button" id="sv-skala-0" class="anbk-fs fs1" onclick="Survei.skala(0)" aria-label="Kecil">A</button>
+          <button type="button" id="sv-skala-1" class="anbk-fs fs2" onclick="Survei.skala(1)" aria-label="Sedang">A</button>
+          <button type="button" id="sv-skala-2" class="anbk-fs fs3" onclick="Survei.skala(2)" aria-label="Besar">A</button>
+        </div>
+        <div class="anbk-u-mapel" id="sv-judul">Survei</div>
+      </div>
       <div class="anbk-hr"></div>
       <div class="anbk-soalbox"><div class="anbk-soalbar"></div><div id="sv-body"></div></div>
       <div class="anbk-hr anbk-hr-b"></div>
@@ -1615,9 +1622,9 @@
 
 <script src="config.js"></script>
 <script src="app.js?v=72"></script>
-<script src="anbk.js?v=63"></script>
-<script src="survei.js?v=13"></script>
-<script src="kunci-ujian.js?v=1"></script>
+<script src="anbk.js?v=64"></script>
+<script src="survei.js?v=14"></script>
+<script src="kunci-ujian.js?v=2"></script>
 <script src="leaderboard.js?v=1"></script>
 <script src="leaderboard-survei.js?v=1"></script>
 <script src="analisis-materi.js?v=4"></script>
