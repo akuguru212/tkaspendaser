@@ -1749,6 +1749,15 @@ function salinTeksAman_(teks) {
     } catch (e) { gagal(e); }
   });
 }
+function salinNilai(btn, label) {
+  const teks = btn && btn.dataset ? btn.dataset.salin : '';
+  if (!teks) return;
+  salinTeksAman_(teks).then(() => {
+    toast((label || 'Teks') + ' disalin: ' + teks, 'success');
+    const lama = btn.innerHTML; btn.innerHTML = '✔'; btn.classList.add('tersalin');
+    setTimeout(() => { btn.innerHTML = lama; btn.classList.remove('tersalin'); }, 1200);
+  }).catch(() => toast('Gagal menyalin otomatis. Blok teksnya lalu salin manual (Ctrl+C).', 'error'));
+}
 function salinToken(token, btn) {
   salinTeksAman_(String(token)).then(() => {
     toast('Token ' + token + ' disalin.', 'success');
@@ -6666,7 +6675,7 @@ const Guru = {
     cont.innerHTML = (jmlBlokir ? `<p class="subtitle" style="margin-bottom:.6rem">🚫 <strong>${jmlBlokir}</strong> akun siswa sedang diblokir (tidak bisa mengikuti kuis).</p>` : '') +
       `<table class="ledger"><thead><tr><th>Username</th><th>Password</th><th>Nama</th><th>NISN</th><th>Kelas</th><th>Status</th><th></th></tr></thead><tbody>` +
       data.map(s => `<tr>
-        <td>${escapeHtml_(s.username)}</td><td>${escapeHtml_(s.password)}</td><td>${escapeHtml_(s.nama)}</td><td>${escapeHtml_(s.nisn || '')}</td><td>${escapeHtml_(s.kelas)}</td>
+        <td style="white-space:nowrap">${escapeHtml_(s.username)} <button type="button" class="btn-salin-token" title="Salin username" aria-label="Salin username ${escapeHtml_(s.nama)}" data-salin="${escapeHtml_(s.username)}" onclick="salinNilai(this, 'Username')">📋</button></td><td style="white-space:nowrap">${escapeHtml_(s.password)} <button type="button" class="btn-salin-token" title="Salin password" aria-label="Salin password ${escapeHtml_(s.nama)}" data-salin="${escapeHtml_(s.password)}" onclick="salinNilai(this, 'Password')">📋</button></td><td>${escapeHtml_(s.nama)}</td><td>${escapeHtml_(s.nisn || '')}</td><td>${escapeHtml_(s.kelas)}</td>
         <td><span class="badge ${s.online ? 'ok' : 'no'}">${s.online ? 'Ada sesi aktif' : 'Tidak ada sesi'}</span>
           ${s.blokir ? `<br><span class="badge no" title="${escapeHtml_(s.blokirAlasan || 'Tanpa alasan')}">🚫 Diblokir</span>${s.blokirAlasan ? `<div style="font-size:.78rem;color:var(--c-muted);margin-top:.2rem">${escapeHtml_(s.blokirAlasan)}</div>` : ''}` : ''}</td>
         <td class="aksi">

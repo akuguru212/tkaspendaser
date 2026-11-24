@@ -2,6 +2,7 @@
 
 - **Tombol 📋 Salin token** di samping token ujian pada tabel **Kelola Ujian** dan tabel ujian di **Dashboard** guru. Sekali klik, token masuk clipboard (ada cadangan untuk koneksi non-HTTPS).
 - **Token pada kartu Bank Soal dihapus.** Token itu hanya hiasan: diacak dan disimpan di browser tiap perangkat, tidak dipakai untuk validasi apa pun, dan bisa membingungkan karena berbeda dari token ujian sungguhan. Token yang berlaku hanya yang ada di Kelola Ujian.
+- **Tombol 📋 di kolom Username dan Password** pada tabel **Data Siswa** (password disalin apa adanya, termasuk tanda `*` di belakangnya).
 - Hanya file `app.js`, `index.html`, `style.css` yang berubah. `Code.gs` tidak perlu diganti.
 
 # v43z2 — Survei Karakter & Sulingjar pada Analisis Materi + Laporan PDF untuk siswa
