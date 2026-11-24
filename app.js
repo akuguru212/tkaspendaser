@@ -1645,11 +1645,9 @@ function tulisDbLokalMentah(db) {
 }
 
 // ---------------- Meta tampilan tiap "Mapel" (kartu di grid Bank Soal) ----------------
-// Murni kosmetik (token acak 6 karakter + warna kartu) supaya tampilan kartu Mapel
-// terasa seperti aplikasi CBT sekolah pada umumnya — TIDAK dipakai untuk validasi
-// token ujian sungguhan (itu tetap kolom "token" di sheet Ujian, lihat tab Kelola
-// Ujian). Disimpan per-perangkat di localStorage, terpisah dari data soal supaya
-// tetap ringan & tidak perlu kolom baru di Sheets untuk sekadar hiasan kartu.
+// Hanya menyimpan warna kartu Mapel (kosmetik) + penanda Mapel buatan guru. Token
+// ujian sungguhan ada di kolom "token" sheet Ujian (tab Kelola Ujian); kartu Bank Soal
+// TIDAK lagi menampilkan token. Disimpan per-perangkat di localStorage.
 const MAPEL_META_KEY = 'cbt_mapel_meta_v1';
 const MAPEL_WARNA_LIST = ['#16a97e', '#4a5cf0', '#f5a524', '#e0433d', '#7b5cf5', '#0ea5b7'];
 function bacaSemuaMetaMapel_() {
@@ -1661,7 +1659,6 @@ function ambilMetaMapel_(kategori, tandaiBuatan) {
   let berubah = false;
   if (!semua[kunci]) {
     semua[kunci] = {
-      token: buatTokenAman_(),
       warna: MAPEL_WARNA_LIST[Object.keys(semua).length % MAPEL_WARNA_LIST.length]
     };
     berubah = true;
@@ -1672,7 +1669,7 @@ function ambilMetaMapel_(kategori, tandaiBuatan) {
   if (berubah) { try { localStorage.setItem(MAPEL_META_KEY, JSON.stringify(semua)); } catch (e) {} }
   return semua[kunci];
 }
-// Mapel diganti namanya: token & warna kartu ikut dipindah ke nama baru (tidak berubah).
+// Mapel diganti namanya: warna kartu ikut dipindah ke nama baru (tidak berubah).
 function pindahMetaMapel_(dari, ke) {
   const semua = bacaSemuaMetaMapel_();
   const kd = String(dari || '').toLowerCase(), kk = String(ke || '').toLowerCase();
@@ -1737,6 +1734,26 @@ function getDeviceId() {
     localStorage.setItem('cbt_device_id', id);
   }
   return id;
+}
+
+// ---- Salin token ujian ke clipboard (dipakai tombol 📋 di dashboard & Kelola Ujian) ----
+function salinTeksAman_(teks) {
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(teks);
+  return new Promise((ok, gagal) => {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = teks; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:-100px;opacity:0';
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, 99999);
+      const berhasil = document.execCommand('copy'); document.body.removeChild(ta);
+      berhasil ? ok() : gagal(new Error('copy gagal'));
+    } catch (e) { gagal(e); }
+  });
+}
+function salinToken(token, btn) {
+  salinTeksAman_(String(token)).then(() => {
+    toast('Token ' + token + ' disalin.', 'success');
+    if (btn) { const lama = btn.innerHTML; btn.innerHTML = '✔'; btn.classList.add('tersalin'); setTimeout(() => { btn.innerHTML = lama; btn.classList.remove('tersalin'); }, 1200); }
+  }).catch(() => toast('Gagal menyalin otomatis. Blok token lalu salin manual (Ctrl+C).', 'error'));
 }
 
 function toast(msg, jenis) {
@@ -4593,7 +4610,7 @@ const Guru = {
         const [kls, txt] = label[statusU(u)];
         return `<tr style="cursor:pointer;${i >= 5 ? 'display:none' : ''}" data-i="${i}" data-cari="${escapeHtml_((u.judul + ' ' + u.token).toLowerCase())}" onclick="UI.gantiTabGuru('tab-ujian')">
           <td><strong>${escapeHtml_(u.judul)}</strong></td>
-          <td><code>${u.token}</code></td>
+          <td style="white-space:nowrap"><code>${u.token}</code> <button type="button" class="btn-salin-token" title="Salin token" aria-label="Salin token ${u.token}" onclick="event.stopPropagation();salinToken('${u.token}', this)">📋</button></td>
           <td style="font-size:.8rem">${formatTanggal(u.mulai)}<br>s/d ${formatTanggal(u.selesai)}</td>
           <td><span class="badge ${kls}">${txt}</span></td>
         </tr>`;
@@ -4682,7 +4699,6 @@ const Guru = {
         <button type="button" class="mapel-card-hapus" title="Arsipkan seluruh soal Mapel ini" onclick="event.stopPropagation();Guru.hapusKategoriSoal('${escapeHtml_(k).replace(/'/g, "\\'")}')">🗑</button>
         <div class="mapel-card-ico">💡</div>
         <div class="mapel-card-badges">
-          <span class="badge token">TOKEN: ${meta.token}</span>
           <span class="badge umum">UMUM</span>
           ${surveiAda_('badgePaket') ? Survei.badgePaket(k) : ''}
         </div>
@@ -4713,7 +4729,7 @@ const Guru = {
     // Pakai ejaan yang sudah ada kalau mapel ini sebenarnya sudah ada (beda huruf besar/kecil saja).
     const ada = (state.guru.bankSoal || []).map(x => x.kategori).find(k => samaTeks_(k, bersih));
     const namaFinal = ada || bersih;
-    ambilMetaMapel_(namaFinal, true); // siapkan token/warna & tandai sbg mapel buatan guru
+    ambilMetaMapel_(namaFinal, true); // siapkan warna & tandai sbg mapel buatan guru
     Guru.bukaKelolaSoal(namaFinal);
   },
 
@@ -4728,7 +4744,7 @@ const Guru = {
     document.getElementById('kelola-soal-view').classList.remove('hidden');
     document.getElementById('kelola-soal-judul').textContent = labelKategori(kategori);
     const meta = ambilMetaMapel_(kategori);
-    document.getElementById('kelola-soal-token').textContent = 'TOKEN: ' + meta.token;
+    const elTokenLama = document.getElementById('kelola-soal-token'); if (elTokenLama) elTokenLama.textContent = '';
     const filterSel = document.getElementById('filter-kategori-soal');
     if (filterSel) filterSel.value = kategori;
     UI.renderTipeTabs();
@@ -5550,7 +5566,7 @@ const Guru = {
         return `
         <tr${mati ? ' style="opacity:.6"' : ''}>
           <td><strong>${escapeHtml_(u.judul)}</strong><br><span style="color:var(--c-muted);font-size:.78rem">${labelKategori(u.kategori)}${u.subkategori ? ' • ' + escapeHtml_(u.subkategori) : ''}</span></td>
-          <td><code style="font-size:1rem;font-weight:700${mati ? ';text-decoration:line-through' : ''}">${u.token}</code></td>
+          <td style="white-space:nowrap"><code style="font-size:1rem;font-weight:700${mati ? ';text-decoration:line-through' : ''}">${u.token}</code> <button type="button" class="btn-salin-token" title="Salin token" aria-label="Salin token ${u.token}" onclick="event.stopPropagation();salinToken('${u.token}', this)">📋</button></td>
           <td id="tk-ringkas-${u.id}" style="font-size:.8rem;max-width:170px">${ringkasTokenKelas_(u)}</td>
           <td>${u.durasi_menit} menit</td>
           <td style="font-size:.8rem">${formatTanggal(u.mulai)}<br>s/d ${formatTanggal(u.selesai)}</td>

@@ -421,7 +421,6 @@ table.ledger td.aksi { display: flex; gap: .4rem; flex-wrap: wrap; }
 }
 .mapel-card-hapus:hover { background: var(--c-no-bg); color: var(--c-danger); }
 .mapel-card-badges { display: flex; gap: .35rem; flex-wrap: wrap; }
-.mapel-card-badges .badge.token { background: color-mix(in srgb, var(--c-surface) 88%, transparent); color: var(--mapel-warna, var(--c-primary)); border: 1px solid var(--c-line); }
 .mapel-card-badges .badge.umum { background: var(--c-bg); color: var(--c-muted); }
 .mapel-card-judul { font-family: var(--font-display); font-weight: 800; font-size: 1.15rem; }
 .mapel-card-jumlah { font-size: .82rem; color: var(--c-muted); }
@@ -1850,3 +1849,8 @@ details.tm-det > summary { cursor: pointer; font-weight: 700; font-size: .88rem;
 /* Pratinjau soal berisi rumus (tabel Analisis Soal, daftar pilih soal): rumus KaTeX sejajar dengan teks di sekitarnya */
 .pv-math { white-space: nowrap; }
 .pv-math .katex { font-size: 1em; }
+
+/* Tombol salin token (dashboard & Kelola Ujian) */
+.btn-salin-token { display: inline-flex; align-items: center; justify-content: center; width: 1.9rem; height: 1.9rem; padding: 0; margin-left: .3rem; vertical-align: middle; border-radius: 8px; border: 1px solid var(--c-line); background: var(--c-surface); color: var(--c-text); font-size: .85rem; cursor: pointer; box-shadow: none; }
+.btn-salin-token:hover { background: color-mix(in srgb, var(--c-primary) 14%, var(--c-surface)); border-color: var(--c-primary); }
+.btn-salin-token.tersalin { background: var(--c-ok-bg, #e3f6ec); color: var(--c-ok, #16a97e); border-color: currentColor; }

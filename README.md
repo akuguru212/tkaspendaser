@@ -1,3 +1,9 @@
+# v43z4 — Tombol salin token & token Bank Soal dihapus
+
+- **Tombol 📋 Salin token** di samping token ujian pada tabel **Kelola Ujian** dan tabel ujian di **Dashboard** guru. Sekali klik, token masuk clipboard (ada cadangan untuk koneksi non-HTTPS).
+- **Token pada kartu Bank Soal dihapus.** Token itu hanya hiasan: diacak dan disimpan di browser tiap perangkat, tidak dipakai untuk validasi apa pun, dan bisa membingungkan karena berbeda dari token ujian sungguhan. Token yang berlaku hanya yang ada di Kelola Ujian.
+- Hanya file `app.js`, `index.html`, `style.css` yang berubah. `Code.gs` tidak perlu diganti.
+
 # v43z2 — Survei Karakter & Sulingjar pada Analisis Materi + Laporan PDF untuk siswa
 
 - **Analisis Materi (guru):** filter **Jenis** kini memuat **Survei Karakter** dan **Sulingjar** (selain Literasi & Numerasi). "Materi" pada survei = **dimensi** (mis. Gotong royong, Iklim keamanan). Nilai dimensi 0–100 dengan acuan survei: **≥ 75 Baik, 50–74 Sedang, < 50 Perlu perhatian**. Tampil di tabel *Per Siswa* (kolom & chip "K"/"S"), *Per Materi* (rata-rata, siswa yang perlu perhatian, tindak lanjut), dan *Detail* siswa (perkembangan antar-survei + saran). Data diambil dari hasil survei yang sudah ada (tanpa perubahan Code.gs).
