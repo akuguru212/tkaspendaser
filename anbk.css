@@ -1,3 +1,5 @@
+:root { --logo-h: 58px; } /* SATU ukuran logo (Tut Wuri & sekolah) untuk SEMUA halaman */
+@media (max-width: 640px) { :root { --logo-h: 44px; } }
 /* ============================================================================
    ANBK SKIN — tampilan sisi peserta/siswa meniru aplikasi ANBK (Pusmendik).
    Hanya berlaku di elemen berkelas .anbk-page; Portal Guru tidak terpengaruh.
@@ -30,7 +32,7 @@
 .anbk-hero::after { content: ""; position: absolute; inset: 0; background: var(--a-hdr-p); clip-path: polygon(13% 100%, 29.7% 0, 24% 100%); opacity: .9; }
 .anbk-hero-in { position: relative; z-index: 40; max-width: 1380px; margin: 0 auto; padding: 0 clamp(14px, 3.6vw, 50px); height: 92px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .anbk-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.anbk-brand img { width: 58px; height: 58px; display: block; flex: none; }
+.anbk-brand img { height: var(--logo-h); width: auto; display: block; flex: none; }
 .anbk-brand-t { display: flex; flex-direction: column; line-height: 1.25; }
 .anbk-brand-t b { font-size: 15px; font-weight: 600; letter-spacing: .1px; }
 .anbk-brand-t span { font-size: 13px; font-weight: 400; }
@@ -237,7 +239,6 @@
 @media (max-width: 640px) {
   .anbk-hero { height: 112px; }
   .anbk-hero-in { height: 74px; }
-  .anbk-brand img { width: 46px; height: 46px; }
   .anbk-brand-t b { font-size: 13.5px; } .anbk-brand-t span { font-size: 12px; }
   .anbk-user { font-size: 12.5px; gap: 6px; } .anbk-user-nama { max-width: 42vw; }
   .anbk-user-ico { width: 24px; height: 24px; font-size: 12px; }
@@ -275,7 +276,7 @@
   .kl-wrap.kl-k2 { grid-template-columns: 1fr 1fr; } .kl-wrap.kl-k1 { grid-template-columns: 1fr; gap: 6mm; font-size: 12.5pt; }
   .kl-card { border: 1.1px solid #444; background: #fff; break-inside: avoid; page-break-inside: avoid; }
   .kl-head { display: flex; align-items: center; gap: 2.2mm; padding: 2.2mm 2.6mm; border-bottom: 1.1px solid #444; }
-  .kl-logo { width: 13mm; height: 13mm; flex: none; } .kl-k1 .kl-logo { width: 22mm; height: 22mm; }
+  .kl-logo { height: 13mm; width: auto; flex: none; } .kl-k1 .kl-logo { height: 22mm; width: auto; }
   .kl-judul { flex: 1; text-align: center; font-weight: 700; font-size: 8.4pt; line-height: 1.3; } .kl-k1 .kl-judul { font-size: 13.5pt; }
   .kl-qr { width: 19mm; height: 19mm; flex: none; } .kl-k1 .kl-qr { width: 30mm; height: 30mm; } .kl-qr svg { width: 100%; height: 100%; display: block; }
   .kl-tb { width: 100%; border-collapse: collapse; } .kl-tb td { padding: 1.3mm 1mm; vertical-align: top; }
@@ -302,8 +303,7 @@
 
 /* ============ v43b: logo asli + penyesuaian HP sesuai tangkapan layar ANBK ============ */
 .anbk-brand { gap: 9px; }
-.anbk-brand .anbk-logo-tw { width: 58px; height: 58px; }
-.anbk-brand .anbk-logo-sch { width: auto; height: 50px; margin-right: 2px; }
+.anbk-brand .anbk-logo-tw, .anbk-brand .anbk-logo-sch { height: var(--logo-h); width: auto; }
 .anbk-brand-t { margin-left: 1px; }
 .anbk-in { width: 100%; border: 0; border-bottom: 1px solid #ececec; border-radius: 0; background: transparent; padding: 4px 0 6px; font: 400 14px 'Poppins', sans-serif; color: #212529; outline: none; box-shadow: none; height: auto; }
 .anbk-in::placeholder { color: #9aa0a6; } .anbk-in:focus { border-bottom-color: var(--a-blue); }
@@ -316,14 +316,11 @@
 @media (max-width: 640px) {
   .anbk-hero { height: 140px; }
   .anbk-hero-in { flex-direction: column; align-items: flex-start; justify-content: flex-start; height: auto; padding: 10px 14px 0 18px; gap: 0; }
-  .anbk-brand .anbk-logo-tw { width: 56px; height: 56px; } .anbk-brand .anbk-logo-sch { height: 46px; }
   .anbk-brand-t b { font-size: 14px; } .anbk-brand-t span { font-size: 13px; }
   .anbk-hero-in .anbk-user { align-self: flex-end; margin: 12px 24px 0 0; font-size: 14px; max-width: calc(100% - 16px); }
   .anbk-user-nama { max-width: 62vw; } .anbk-user-ico { width: 27px; height: 27px; }
   /* login & konfirmasi data: header satu baris (logo kiri, peserta kanan) */
   #login-screen .anbk-hero-in, #siswa-portal .anbk-hero-in { flex-direction: row; align-items: center; justify-content: space-between; height: 74px; padding: 6px 12px 0 12px; }
-  #login-screen .anbk-brand .anbk-logo-tw, #siswa-portal .anbk-brand .anbk-logo-tw { width: 40px; height: 40px; }
-  #login-screen .anbk-brand .anbk-logo-sch, #siswa-portal .anbk-brand .anbk-logo-sch { height: 34px; }
   #login-screen .anbk-brand, #siswa-portal .anbk-brand { gap: 6px; }
   #login-screen .anbk-brand-t b, #siswa-portal .anbk-brand-t b { font-size: 13px; } #login-screen .anbk-brand-t span, #siswa-portal .anbk-brand-t span { font-size: 11.5px; }
   #siswa-portal .anbk-hero-in .anbk-user { align-self: center; margin: 0; font-size: 11.5px; } #siswa-portal .anbk-user-nama { max-width: 24vw; }
@@ -356,7 +353,6 @@
   #btn-soal-next.selesai { width: 96px; } #btn-soal-next.selesai span { display: inline; font-size: 14px; }
   .anbk-ragu input { width: 20px; height: 20px; border-radius: 3px; }
 }
-@media print { .kl-logo.kl-sch { width: 13mm; height: auto; } .kl-k1 .kl-logo.kl-sch { width: 22mm; } }
 #siswa-portal .anbk-in { border: 0; border-bottom: 1px solid #ececec; border-radius: 0; background: transparent; box-shadow: none; padding: 4px 0 6px; height: auto; }
 #siswa-portal .anbk-in:focus { border-bottom-color: var(--a-blue); box-shadow: none; }
 #siswa-portal .anbk-tgl select { border-radius: 0; box-shadow: none; }
@@ -389,7 +385,7 @@ html[data-skin="anbk"] .anbk-guru-band {
   display: flex; align-items: center; gap: 12px; position: absolute; left: 0; right: 0; top: 0; height: 118px; padding: 0 2.2rem; z-index: 0; overflow: hidden; color: #fff;
   background: #326698 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 100' preserveAspectRatio='none'%3E%3Cpolygon points='0,0 297,0 188,100 0,100' fill='%232773b2'/%3E%3Cpolygon points='130,100 297,0 240,100' fill='%233379b6' fill-opacity='.9'/%3E%3C/svg%3E") no-repeat center / 100% 100%;
 }
-.anbk-guru-band .agb-logo { height: 58px; width: auto; display: block; flex: none; }
+.anbk-guru-band .agb-logo { height: var(--logo-h); width: auto; display: block; flex: none; }
 .anbk-guru-band .agb-teks { display: flex; flex-direction: column; line-height: 1.25; margin-left: 2px; min-width: 0; }
 .anbk-guru-band .agb-teks b { font-size: 15.5px; font-weight: 700; letter-spacing: .1px; }
 .anbk-guru-band .agb-teks small { font-size: 13px; font-weight: 400; }

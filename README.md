@@ -1322,3 +1322,20 @@ Nama di bawah ikon setelah diinstal adalah **TKA SPENDASER** (`name`/`short_name
   sehingga tidak muncul "Couldn't download – No file" bila berkas itu belum diunggah.
 - Template yang diunduh bisa langsung diunggah kembali lewat tombol Upload dan menghasilkan butir yang identik dengan bawaan.
 - Berkas `template-survei-karakter.docx`, `template-survei-sulingjar.docx`, `contoh-sulingjar-matriks.docx` kini hanya contoh bacaan (tidak dipakai aplikasi).
+
+
+## Pasang di HP (PWA) & ukuran logo seragam
+
+- **PWA**: aplikasi sekarang bisa diinstal. Berkas baru: `sw.js` (service worker) dan `pwa.js` (pendaftaran + tombol "Pasang"). Wajib dibuka lewat **HTTPS** (GitHub Pages, Netlify, Cloudflare Pages, dll.), bukan `file://` atau `http://` biasa.
+  - Android (Chrome): muncul kotak "Pasang aplikasi TKA SPENDASER" di layar login, atau menu ⋮ → *Instal aplikasi*.
+  - iPhone/iPad (Safari): ketuk **Bagikan → Tambahkan ke Layar Utama**.
+- `sw.js` memakai strategi *jaringan dulu* (file selalu yang terbaru saat online) dan **tidak pernah** meng-cache permintaan ke Google Apps Script. Setelah mengganti file aplikasi, naikkan `VERSI` di `sw.js` bila ingin membersihkan cache lama.
+- **Ukuran logo**: logo Tut Wuri Handayani dan logo SPENDASER kini memakai satu variabel `--logo-h` di bagian atas `anbk.css` (58px desktop, 44px HP) di semua halaman. Ubah angkanya di sana bila ingin lebih besar/kecil.
+
+## Tampilan HP (v43z7)
+
+- Berkas baru `mobile.css` (dimuat paling akhir) berisi seluruh tampilan khusus HP. Ubah tampilan HP cukup di file ini.
+- Dashboard siswa: menu pindah ke **tab bar di bawah layar** (Beranda, Selesai, Grafik, Riwayat, Peringkat, Analisis) sehingga tidak perlu geser samping. Label pendek diatur di `MENU` pada `portal-siswa.js`.
+- Layar soal: toolbar (nomor soal, timer, info, daftar soal) **menempel di atas**, pilihan jawaban berbentuk kartu, tombol Sebelumnya / Ragu-ragu / Berikutnya **menempel di bawah**, Daftar Soal & Informasi tampil sebagai *bottom sheet*.
+- Tulisan "Guru Pengajar · ..." tidak lagi melayang di atas soal, kini berada rapi di bawah kartu soal.
+- Cache PWA naik ke `spendaser-v2` agar HP siswa otomatis memuat tampilan baru.

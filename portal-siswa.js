@@ -20,12 +20,12 @@ const PortalSiswa = (function () {
   const IKON_JENIS = { literasi: 'fa-book-open', numerasi: 'fa-calculator', lainnya: 'fa-layer-group' };
   const WARNA_JENIS = { literasi: '#2563eb', numerasi: '#ea580c', lainnya: '#7c3aed' };
   const MENU = [
-    ['dashboard', 'Dashboard', 'fa-gauge-high'],
-    ['selesai', 'Simulasi Selesai', 'fa-circle-check'],
-    ['grafik', 'Grafik Perkembangan', 'fa-chart-line'],
-    ['riwayat', 'Riwayat Simulasi', 'fa-clock-rotate-left'],
-    ['leaderboard', 'Leaderboard', 'fa-trophy'],
-    ['analisis', 'Analisis Materi', 'fa-magnifying-glass-chart']
+    ['dashboard', 'Dashboard', 'fa-gauge-high', 'Beranda'],
+    ['selesai', 'Simulasi Selesai', 'fa-circle-check', 'Selesai'],
+    ['grafik', 'Grafik Perkembangan', 'fa-chart-line', 'Grafik'],
+    ['riwayat', 'Riwayat Simulasi', 'fa-clock-rotate-left', 'Riwayat'],
+    ['leaderboard', 'Leaderboard', 'fa-trophy', 'Peringkat'],
+    ['analisis', 'Analisis Materi', 'fa-magnifying-glass-chart', 'Analisis']
   ];
   const JUDUL = { dashboard: 'Dashboard', selesai: 'Simulasi yang Telah Diselesaikan', grafik: 'Grafik Perkembangan Skor', riwayat: 'Riwayat Simulasi', leaderboard: 'Leaderboard', analisis: 'Analisis Materi' };
 
@@ -245,7 +245,7 @@ const PortalSiswa = (function () {
   function renderKerangka() {
     const u = state.user || {};
     $('sw-side').innerHTML = `<div class="sw-prof"><div class="sw-av">${esc(inisial(u.nama))}</div><div><b>${esc(u.nama || '-')}</b><small>${u.kelas ? 'Kelas ' + esc(u.kelas) + ' · ' : ''}${esc(u.username || '')}</small></div></div>
-      <nav class="sw-nav" aria-label="Menu siswa">${MENU.map(m => `<button type="button" data-v="${m[0]}" class="${PS.view === m[0] ? 'on' : ''}" ${PS.view === m[0] ? 'aria-current="page"' : ''} onclick="PortalSiswa.buka('${m[0]}')"><i class="fa-solid ${m[2]}"></i>${m[1]}</button>`).join('')}</nav>
+      <nav class="sw-nav" aria-label="Menu siswa">${MENU.map(m => `<button type="button" data-v="${m[0]}" class="${PS.view === m[0] ? 'on' : ''}" ${PS.view === m[0] ? 'aria-current="page"' : ''} aria-label="${m[1]}" onclick="PortalSiswa.buka('${m[0]}')"><i class="fa-solid ${m[2]}"></i><span class="sw-tf">${m[1]}</span><span class="sw-ts">${m[3]}</span></button>`).join('')}</nav>
       <button type="button" class="sw-cta" onclick="PortalSiswa.mulaiSimulasi()"><i class="fa-solid fa-play"></i> Mulai Simulasi</button>`;
   }
   function judulHalaman(sub) {
