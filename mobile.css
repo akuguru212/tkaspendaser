@@ -195,3 +195,108 @@
   #ujian-screen .anbk-pill-timer b { font-size: 13px !important; }
   .anbk-page .anbk-brand-t b { font-size: 12.5px !important; }
 }
+
+/* ============================================================================
+   SURVEI (Karakter / Sulingjar) — TAMPILAN HP (≤ 640px)
+   - Tabel pertanyaan tetap tampil seperti di PC (kolom pilihan jawaban, header kecil)
+   - Tombol navigasi menempel di bawah, tidak terpotong
+   ============================================================================ */
+@media (max-width: 640px) {
+  #survei-screen .anbk-wrap-ujian { margin-top: -24px !important; padding-left: 10px !important; padding-right: 10px !important; }
+  #survei-screen .anbk-card-ujian { overflow: visible !important; background: transparent !important; box-shadow: none !important; border: 0 !important; padding: 0 !important; }
+  #survei-screen .anbk-soalbox { margin-top: 10px; border: 0 !important; border-radius: 16px; background: #fff !important; min-height: 0 !important; overflow: hidden; box-shadow: 0 1px 2px rgba(24,48,84,.06), 0 14px 30px -16px rgba(24,48,84,.26); }
+  #survei-screen .anbk-hr, #survei-screen .anbk-hr-b { display: none; }
+  #survei-screen .anbk-u-no { font-size: 15px !important; }
+  #survei-screen .anbk-u-mapel { font-size: 12.5px; }
+  #survei-screen::after { content: ""; display: block; flex: none; height: calc(88px + env(safe-area-inset-bottom, 0px)); }
+  #survei-screen .sv-pad { padding: 12px 10px 14px; }
+
+  /* panel nomor halaman: di atas, rapi */
+  #survei-screen .sv-layout { display: block; }
+  #survei-screen .sv-panel { padding: 12px 10px 4px; }
+  #survei-screen .sv-panel-t { font-size: 13px; padding: 8px 10px; margin-bottom: 8px; }
+  #survei-screen .sv-panel-g { grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 6px; max-height: 128px; }
+  #survei-screen .sv-pn { min-height: 38px; border-radius: 8px; }
+
+  /* ---- TABEL MATRIKS: kembali berupa tabel (menimpa mode "kartu bertumpuk") ---- */
+  #survei-screen .sv-mx-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #dfe5ec; border-radius: 12px; }
+  #survei-screen .sv-mx { display: table !important; width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 12.5px; }
+  #survei-screen .sv-mx thead { display: table-header-group !important; background: #eef3f9; }
+  #survei-screen .sv-mx tbody { display: table-row-group !important; width: auto; }
+  #survei-screen .sv-mx tr { display: table-row !important; width: auto; padding: 0; }
+  #survei-screen .sv-mx th, #survei-screen .sv-mx td { display: table-cell !important; width: auto; }
+  #survei-screen .sv-mx thead th { font-size: 9.5px; line-height: 1.2; font-weight: 600; padding: 8px 2px; width: 14%; word-break: normal; overflow-wrap: anywhere; hyphens: auto; color: #3b4a5c; }
+  #survei-screen .sv-mx thead th.sv-mx-t { width: 38%; padding-left: 8px; font-size: 11px; }
+  #survei-screen .sv-mx td { padding: 8px 2px; vertical-align: middle; text-align: center; border-top: 1px solid #e9edf2; }
+  #survei-screen .sv-mx td.sv-mx-t { padding: 8px 6px 8px 8px; text-align: left; font-size: 12px; line-height: 1.4; font-weight: 500; }
+  #survei-screen .sv-mx td.sv-mx-c { padding: 0; text-align: center; }
+  #survei-screen .sv-mx-c label { width: 100%; min-width: 0; min-height: 46px; justify-content: center; }
+  #survei-screen .sv-mx-l { display: none !important; }
+  #survei-screen .sv-mx tbody tr:nth-child(odd) { background: #f6f8fb; }
+  #survei-screen .sv-mx tbody tr.done { background: #eaf2ff; }
+  /* tabel dengan 5+ pilihan: boleh digeser mendatar agar tetap terbaca */
+  #survei-screen .sv-mx:has(thead th:nth-child(7)) { min-width: 560px; }
+
+  /* ---- TOMBOL NAVIGASI: menempel di bawah, tidak terpotong ---- */
+  #survei-screen .anbk-nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; display: flex !important; flex-wrap: nowrap; align-items: stretch; justify-content: stretch; gap: 8px !important;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); background: rgba(255,255,255,.97); border-top: 1px solid #e6ebf2; border-radius: 20px 20px 0 0;
+    box-shadow: 0 -10px 30px rgba(24,48,84,.14); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  }
+  #survei-screen .anbk-nav > span:empty { display: none; }
+  #survei-screen .anbk-nav .anbk-btn { flex: 1 1 0; width: auto !important; min-width: 0; height: 50px !important; padding: 0 8px !important; border-radius: 14px !important; font: 600 14px/1.1 'Poppins', sans-serif !important; white-space: normal; text-align: center; overflow: hidden; }
+  #survei-screen .anbk-nav .anbk-btn:active { transform: scale(.98); }
+  #survei-screen .anbk-nav .anbk-btn span { overflow: visible; text-overflow: clip; }
+
+  /* tahap butir: [‹ ikon] [Ragu-ragu] [Berikutnya ›] */
+  #survei-screen #sv-btn-prev { flex: 0 0 52px; background: #eef2f7 !important; color: #3b4a5c !important; font-size: 20px !important; }
+  #survei-screen #sv-btn-prev span { display: none !important; }
+  #survei-screen #sv-btn-prev:disabled { opacity: .45; }
+  #survei-screen .anbk-ragu, #survei-screen .anbk-ragu * { text-decoration: none !important; }
+  #survei-screen .anbk-ragu { flex: 1.1 1 0; background: #fff8e1 !important; color: #8a5a00 !important; border: 1.5px solid #ffd666; gap: 8px; }
+  #survei-screen .anbk-ragu span { display: inline !important; font-size: 13px; font-weight: 600; white-space: nowrap; }
+  #survei-screen .anbk-ragu input { width: 18px; height: 18px; border-color: #b98200; border-radius: 5px; background: #fff; }
+  #survei-screen .anbk-ragu input:checked { background: #b98200; }
+  #survei-screen .anbk-ragu:has(input:checked) { background: #ffc107 !important; border-color: #e0a800; color: #3a2a00 !important; }
+  #survei-screen #sv-btn-next { flex: 1.5 1 0; background: #0d6efd !important; color: #fff !important; box-shadow: 0 8px 18px -8px rgba(13,110,253,.7); gap: 8px; }
+  #survei-screen #sv-btn-next span { white-space: nowrap; }
+  #survei-screen #sv-btn-next:disabled { opacity: .5; box-shadow: none; }
+
+  /* tahap konfirmasi: [KEMBALI] [SELESAI SURVEI] sama lebar */
+  #survei-screen .anbk-nav[data-tahap="konfirmasi"] .anbk-btn { font-size: 14px !important; letter-spacing: .01em; }
+  #survei-screen #sv-btn-kembali { background: #198754 !important; box-shadow: 0 8px 18px -8px rgba(25,135,84,.7); }
+  #survei-screen #sv-btn-kirim { background: #dc3545 !important; box-shadow: 0 8px 18px -8px rgba(220,53,69,.7); }
+  #survei-screen #sv-btn-kirim:disabled { opacity: .5; box-shadow: none; }
+  #survei-screen .anbk-nav[data-tahap="intro"] .anbk-btn { flex: 1 1 100%; }
+
+  /* kotak konfirmasi */
+  #survei-screen .anbk-mark { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 13px; line-height: 1.5; }
+  #survei-screen .sv-p { font-size: 14px; line-height: 1.7; }
+}
+@media (max-width: 340px) {
+  #survei-screen .anbk-ragu span { font-size: 12px; }
+  #survei-screen .anbk-nav { gap: 6px !important; padding-left: 8px; padding-right: 8px; }
+  #survei-screen .anbk-nav .anbk-btn { font-size: 12.5px !important; }
+}
+
+/* ============================================================================
+   KUNCI UJIAN — penutup wajib layar penuh / alarm, pembatas screenshot & seleksi
+   ============================================================================ */
+#kunci-overlay { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; padding: 20px; background: rgba(15,23,42,.96); }
+#kunci-overlay.hidden { display: none; }
+#kunci-overlay .kunci-kartu { max-width: 380px; width: 100%; text-align: center; background: #fff; border-radius: 22px; padding: 26px 22px 22px; box-shadow: 0 24px 60px rgba(0,0,0,.45); font-family: 'Poppins', sans-serif; }
+#kunci-overlay .kunci-ikon { width: 64px; height: 64px; margin: 0 auto 12px; border-radius: 50%; display: grid; place-items: center; font-size: 28px; background: #e7f0ff; color: #0d6efd; }
+#kunci-overlay h3 { margin: 0 0 8px; font-size: 18px; color: #1f2a37; }
+#kunci-overlay p { margin: 0 0 18px; font-size: 14px; line-height: 1.6; color: #4a5568; }
+#kunci-overlay button { all: unset; box-sizing: border-box; width: 100%; height: 52px; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 14px; background: #0d6efd; color: #fff; font: 600 15px/1 'Poppins', sans-serif; cursor: pointer; }
+#kunci-overlay.alarm { background: rgba(120,10,10,.97); animation: kunci-kedip .6s linear infinite alternate; }
+#kunci-overlay.alarm .kunci-ikon { background: #fde8e8; color: #c62828; }
+#kunci-overlay.alarm h3 { color: #c62828; }
+#kunci-overlay.alarm button { background: #c62828; }
+@keyframes kunci-kedip { from { background: rgba(120,10,10,.97); } to { background: rgba(200,20,20,.97); } }
+body.kunci-tutup #ujian-screen { visibility: hidden; }
+/* isi soal disembunyikan saat halaman kehilangan fokus (hasil tangkapan layar / app switcher jadi kosong) */
+body.kunci-blur #ujian-screen { visibility: hidden !important; }
+body.kunci-aktif #ujian-screen { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+body.kunci-aktif #ujian-screen img { -webkit-user-drag: none; pointer-events: auto; }
+@media print { body.kunci-aktif * { display: none !important; } }

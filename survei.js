@@ -473,7 +473,7 @@ const Survei = (function () {
     const jml = Object.keys(S.jawaban).length;
     $('sv-judul').textContent = J.nama;
     $('sv-progres').textContent = jml + ' / ' + total + ' terjawab';
-    const nav = $('sv-nav');
+    const nav = $('sv-nav'); nav.setAttribute('data-tahap', S.tahap);
     if (S.tahap === 'intro') {
       $('sv-nomor').textContent = 'Petunjuk Pengerjaan';
       box.innerHTML = `<div class="sv-pad"><div class="sv-intro"><i class="fa-solid ${J.ikon}"></i><h3>${esc(J.nama)}</h3></div>
@@ -493,7 +493,7 @@ const Survei = (function () {
       }).join('')}</div></aside><div class="sv-main">${htmlHalaman(p)}</div></div>`;
       S.dikunjungi[S.idx] = true;
       const akhir = S.idx === hl.length - 1;
-      nav.innerHTML = `<button type="button" class="anbk-btn anbk-btn-red" ${S.idx === 0 ? 'disabled' : ''} onclick="Survei.geser(-1)"><i class="fa-solid fa-circle-chevron-left"></i> <span>${adaMatriks() ? 'Halaman' : 'Butir'} sebelumnya</span></button>
+      nav.innerHTML = `<button type="button" id="sv-btn-prev" class="anbk-btn anbk-btn-red" ${S.idx === 0 ? 'disabled' : ''} onclick="Survei.geser(-1)"><i class="fa-solid fa-circle-chevron-left"></i> <span>${adaMatriks() ? 'Halaman' : 'Butir'} sebelumnya</span></button>
         <label class="anbk-btn anbk-btn-yellow anbk-ragu" title="Ragu-ragu"><input type="checkbox" id="sv-chk-ragu" ${S.ragu[S.idx] ? 'checked' : ''} onchange="Survei.toggleRagu()"><span>Ragu-ragu</span></label>
         <button type="button" class="anbk-btn anbk-btn-primary" id="sv-btn-next" ${halLengkap(p) ? '' : 'disabled'} onclick="Survei.geser(1)"><span>${akhir ? 'Selesai' : (adaMatriks() ? 'Halaman' : 'Butir') + ' berikutnya'}</span> <i class="fa-solid ${akhir ? 'fa-flag-checkered' : 'fa-circle-chevron-right'}"></i></button>`;
     } else if (S.tahap === 'konfirmasi') {
@@ -504,7 +504,7 @@ const Survei = (function () {
         <div class="anbk-ringkas"><span>Terjawab <b>${jml}</b></span><span>Belum dijawab <b>${kosong.length}</b></span><span>Ragu-ragu <b>${raguList.length}</b></span></div>
         ${raguList.length ? `<div class="anbk-peringatan"><p>${raguList.length} ${adaMatriks() ? 'halaman' : 'butir'} masih ditandai ragu-ragu. Anda boleh memeriksanya kembali sebelum mengirim.</p><div class="kumpul-chips">${raguList.map(i => `<button type="button" class="kumpul-chip" onclick="Survei.lompat(${i})">${i + 1}</button>`).join('')}</div></div>` : ''}
         ${kosong.length ? `<div class="anbk-peringatan"><p>Masih ada butir yang belum dijawab. Semua butir wajib dijawab.</p><div class="kumpul-chips">${kosong.map(x => `<button type="button" class="kumpul-chip" onclick="Survei.lompatButir(${x[1]})">${x[1] + 1}</button>`).join('')}</div></div>` : ''}</div>`;
-      nav.innerHTML = `<button type="button" class="anbk-btn anbk-btn-green" onclick="Survei.lompat(${Math.min(S.idx, hl.length - 1)})">KEMBALI</button><span></span>
+      nav.innerHTML = `<button type="button" id="sv-btn-kembali" class="anbk-btn anbk-btn-green" onclick="Survei.lompat(${Math.min(S.idx, hl.length - 1)})">KEMBALI</button><span></span>
         <button type="button" class="anbk-btn anbk-btn-red" ${kosong.length ? 'disabled' : ''} id="sv-btn-kirim" onclick="Survei.kirim()">SELESAI SURVEI</button>`;
     }
     window.scrollTo(0, 0);

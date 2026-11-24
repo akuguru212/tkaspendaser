@@ -6582,7 +6582,10 @@ const Guru = {
     salin_teks: { ikon: '📋', label: 'Mencoba menyalin teks (diblokir)', hitung: false },
     tempel_teks: { ikon: '📥', label: 'Mencoba menempel teks (diblokir)', hitung: false },
     potong_teks: { ikon: '✂', label: 'Mencoba memotong teks (diblokir)', hitung: false },
-    klik_kanan: { ikon: '🖱', label: 'Mencoba klik kanan (diblokir)', hitung: false }
+    klik_kanan: { ikon: '🖱', label: 'Mencoba klik kanan (diblokir)', hitung: false },
+    screenshot: { ikon: '📸', label: 'Mencoba screenshot (terdeteksi)', hitung: false },
+    alarm_keluar: { ikon: '🚨', label: 'Alarm peringatan dibunyikan (mencoba keluar)', hitung: false },
+    tombol_terlarang: { ikon: '⌨', label: 'Menekan tombol terlarang (diblokir)', hitung: false }
   },
 
   async bukaLogPelanggaran(sesiId, nama) {
