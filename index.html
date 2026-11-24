@@ -33,7 +33,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
-<link rel="stylesheet" href="anbk.css?v=62">
+<link rel="stylesheet" href="anbk.css?v=64">
 <!-- Font Awesome: ikon sidebar & tombol (gaya dashboard modern) -->
 <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
 <!-- KaTeX: render persamaan matematika (LaTeX) di dalam soal -->
@@ -1395,6 +1395,9 @@
       <div class="anbk-f"><label>Waktu Tes</label><div class="anbk-v anbk-v-lg" id="tk-waktu">-</div></div>
       <div class="anbk-f"><label>Alokasi Waktu Tes</label><div class="anbk-v anbk-v-lg" id="tk-alokasi">-</div></div>
       <button type="button" id="tk-mulai" class="anbk-btn anbk-btn-primary anbk-btn-block" onclick="Siswa.mulaiUjian()">Mulai</button>
+      <div class="anbk-pisah" role="separator"><span>atau</span></div>
+      <button type="button" class="anbk-btn-dash" onclick="PortalSiswa.buka('dashboard')"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i><span>Kembali ke Dashboard</span></button>
+      <p class="anbk-dash-ket"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> Sudah mengerjakan simulasi? Lihat nilai, grafik perkembangan, dan analisis materimu di Dashboard.</p>
     </section>
   </main>
   <footer class="anbk-foot">Aplikasi simulasi latihan TKA &middot; SMP Negeri 2 Seririt</footer>

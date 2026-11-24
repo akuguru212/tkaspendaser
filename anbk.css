@@ -25,10 +25,10 @@
 #login-screen.anbk-page { display: flex; padding: 0; align-items: stretch; justify-content: flex-start; flex-direction: column; }
 
 /* ---------- Header biru bertingkat ---------- */
-.anbk-hero { position: relative; flex: 0 0 auto; height: 135px; background: var(--a-hdr); overflow: hidden; color: #fff; }
+.anbk-hero { position: relative; flex: 0 0 auto; height: 135px; background: var(--a-hdr); overflow: visible; color: #fff; }
 .anbk-hero::before { content: ""; position: absolute; inset: 0; background: var(--a-hdr-l); clip-path: polygon(0 0, 29.7% 0, 18.8% 100%, 0 100%); }
 .anbk-hero::after { content: ""; position: absolute; inset: 0; background: var(--a-hdr-p); clip-path: polygon(13% 100%, 29.7% 0, 24% 100%); opacity: .9; }
-.anbk-hero-in { position: relative; z-index: 2; max-width: 1380px; margin: 0 auto; padding: 0 clamp(14px, 3.6vw, 50px); height: 92px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.anbk-hero-in { position: relative; z-index: 40; max-width: 1380px; margin: 0 auto; padding: 0 clamp(14px, 3.6vw, 50px); height: 92px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .anbk-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .anbk-brand img { width: 58px; height: 58px; display: block; flex: none; }
 .anbk-brand-t { display: flex; flex-direction: column; line-height: 1.25; }
@@ -450,3 +450,22 @@ html[data-skin="anbk"] #guru-portal .dash-hero, html[data-skin="anbk"] #guru-por
   #cetak-area .cp-kat-memadai { color: #b45309; background: #fff4e0; border-color: #b45309; }
   #cetak-area .cp-kat-kurang { color: #b91c1c; background: #fdecec; border-color: #b91c1c; }
 }
+
+/* Menu pengguna (Dashboard Saya / Ganti Token / Keluar): tidak boleh terpotong header atau tertutup kartu di bawahnya.
+   Header tidak lagi memotong isinya (bentuk diagonal sudah dibatasi clip-path), dan baris header berada di atas konten. */
+.anbk-hero { overflow: visible; }
+.anbk-hero-in { z-index: 40; }
+.anbk-usermenu { z-index: 60; max-width: calc(100vw - 24px); white-space: nowrap; }
+.anbk-usermenu.hidden { display: none; }
+
+/* Tombol "Kembali ke Dashboard" pada layar Konfirmasi Tes */
+.anbk-pisah { display: flex; align-items: center; gap: .75rem; margin: 16px 0 12px; color: #8a96a5; font: 500 11.5px/1 'Poppins', sans-serif; text-transform: uppercase; letter-spacing: .08em; }
+.anbk-pisah::before, .anbk-pisah::after { content: ""; flex: 1 1 auto; height: 1px; background: #dde3ea; }
+.anbk-btn-dash { all: unset; box-sizing: border-box; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: .6rem; padding: .72rem 1rem; border-radius: 30px; border: 1.5px solid #0d6efd; background: #fff; color: #0d6efd; font: 600 14px/1.2 'Poppins', sans-serif; transition: background .15s ease, color .15s ease, box-shadow .15s ease; -webkit-tap-highlight-color: transparent; }
+.anbk-btn-dash i { font-size: .85rem; transition: transform .15s ease; }
+.anbk-btn-dash:hover { background: #eef4ff; box-shadow: 0 4px 12px rgba(13,110,253,.16); }
+.anbk-btn-dash:hover i { transform: translateX(-3px); }
+.anbk-btn-dash:active { background: #dfeaff; }
+.anbk-btn-dash:focus-visible { outline: 3px solid rgba(13,110,253,.35); outline-offset: 2px; }
+.anbk-dash-ket { margin: 10px 2px 0; font-size: 11.5px; line-height: 1.55; color: #6c757d; text-align: center; }
+.anbk-dash-ket i { color: #0d6efd; margin-right: .25rem; }

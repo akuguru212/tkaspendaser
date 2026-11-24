@@ -5,7 +5,9 @@
 - **Tombol 📋 di kolom Username dan Password** pada tabel **Data Siswa** (password disalin apa adanya, termasuk tanda `*` di belakangnya).
 - **Layar Konfirmasi data Peserta:** kartu "Akun Saya" berisi 6 menu diganti kartu **Portal Siswa** yang rapi dengan satu tombol **Kembali ke Dashboard**.
 - **Analisis Materi (portal siswa):** submenu baru **Survei Karakter** dan **Sulingjar** di samping Literasi dan Numerasi. Isinya nilai 0–100 per dimensi, kategori (Baik / Sedang / Perlu perhatian), dan saran. Hasil hanya tampil bila guru mengaktifkan tampilan hasil survei ke siswa pada ujian terkait. Tidak butuh perubahan `Code.gs`.
-- Hanya file `app.js`, `index.html`, `style.css`, `portal-siswa.js`, `analisis-materi.js` yang berubah. `Code.gs` tidak perlu diganti.
+- **Perbaikan menu pengguna** (Dashboard Saya / Ganti Token / Keluar): sebelumnya terpotong oleh header dan tertutup kartu di bawahnya, sekarang tampil utuh di semua layar peserta dan portal siswa.
+- **Layar Konfirmasi Tes:** tombol **Kembali ke Dashboard** yang jelas di bawah tombol Mulai (dengan keterangan singkat), supaya siswa yang terlanjur masuk tidak bingung cara kembali.
+- Hanya file `app.js`, `index.html`, `style.css`, `portal-siswa.js`, `analisis-materi.js`, `anbk.css` yang berubah. `Code.gs` tidak perlu diganti.
 
 # v43z2 — Survei Karakter & Sulingjar pada Analisis Materi + Laporan PDF untuk siswa
 
