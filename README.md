@@ -1,3 +1,18 @@
+# v43z5 — Foto profil siswa (tersimpan di Google Drive)
+
+- **Siswa dapat mengunggah foto profil** dari menu pengguna (pojok kanan atas → **Foto Profil**) atau dengan mengetuk avatar di Portal Siswa / banner Dashboard. Foto tampil sebagai avatar di header, sisi kiri Portal Siswa, dan banner Dashboard. Tanpa foto, avatar menampilkan inisial nama seperti sebelumnya.
+- **Editor pemangkas bulat:** geser, zoom (slider, tombol +/−, roda mouse, cubit 2 jari), putar 90°, dan pintasan keyboard (panah, +/−, R). Bisa seret-lepas foto, pilih dari galeri, atau **Kamera** (di HP). Mendukung JPG, PNG, WEBP, dan **HEIC** (iPhone). Foto besar dari kamera HP aman: diperkecil saat dibaca sehingga hemat memori.
+- **Hasil dikompres di perangkat siswa:** foto persegi 512 px (≤ ± 180 KB) + pratinjau 128 px (± 5 KB). Unggah cepat walau sinyal lemah.
+- **Penyimpanan (Mode Server):** foto penuh masuk ke Google Drive pemilik skrip, folder **`CBT_Foto_Profil`**, dengan nama berkas informatif, mis. `9A - Budi Santoso (SW_ab12cd).jpg`. Folder ini **PRIVAT** (tidak dibagikan ke publik); hanya akun pemilik skrip yang bisa membukanya. Pratinjau 128 px disimpan di sheet baru **`FotoProfil`** untuk avatar, jadi tampilan tidak bergantung pada tautan Drive publik dan login tetap ringan.
+- **Unggah ulang menggantikan foto lama** (berkas lama dipindah ke sampah Drive, tidak menumpuk). Siswa juga bisa **menghapus** fotonya sendiri.
+- **Keamanan server:** unggah/hapus hanya sah dari perangkat yang tercatat saat login (`deviceId`), isi berkas diperiksa sebagai JPEG sungguhan, ukuran dibatasi, ada jeda antar-unggah, dan ukuran berkas di Drive diverifikasi sama dengan yang dikirim. Berkas yang gagal disimpan tidak ditinggalkan di Drive.
+- **Portal Guru → Data Siswa:** kolom baru **Foto**. Klik foto untuk melihat detail, **Buka di Drive** (foto penuh), atau **Hapus foto** (mis. foto tidak pantas). Foto otomatis ikut terhapus saat siswa atau satu kelas dihapus.
+- **Mode Lokal:** hanya pratinjau 128 px yang disimpan, di perangkat itu saja (tidak ke Drive).
+- **Cara memasang:**
+  1. **Code.gs:** tempel seluruh isi baru, lalu **Deploy → Manage deployments → ✏️ → Version: New version → Deploy**. Tidak perlu `setupAwal` dan tidak perlu membuat sheet/kolom manual — sheet `FotoProfil` dibuat otomatis pada permintaan pertama. Izin Drive sudah dipakai fitur gambar soal, jadi umumnya tidak ada permintaan izin baru.
+  2. **Frontend:** unggah file baru **`foto-profil.js`** serta `app.js` dan `index.html` yang berubah. `config.js` tidak perlu diganti.
+- File baru: `foto-profil.js`. File berubah: `Code.gs`, `app.js`, `index.html`, `README.md`.
+
 # v43z4 — Tombol salin token & token Bank Soal dihapus
 
 - **Tombol 📋 Salin token** di samping token ujian pada tabel **Kelola Ujian** dan tabel ujian di **Dashboard** guru. Sekali klik, token masuk clipboard (ada cadangan untuk koneksi non-HTTPS).

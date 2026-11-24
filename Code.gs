@@ -95,7 +95,8 @@ var SHEET = {
   CONFIG: 'Config',
   BUKTI: 'BuktiOrek',
   SURVEI: 'Survei',
-  PAKET_SURVEI: 'PaketSurvei'
+  PAKET_SURVEI: 'PaketSurvei',
+  FOTO: 'FotoProfil'
 };
 
 // SATU-SATUNYA tempat mendefinisikan kolom tiap sheet. Menambah 1 nama di
@@ -139,7 +140,12 @@ var SCHEMA = {
   // PAKET SURVEI di Bank Soal: butir Survei Karakter / Sulingjar yang menyatu dengan soal satu kategori (mis. Numerasi
   // + Survei Karakter, Literasi + Sulingjar). Disimpan sekali, dipakai berkali-kali oleh ujian berkategori sama sampai
   // dihapus. Satu baris per (guru, kategori, jenis). butir_json = {jenis, dim, butir, pasangan, petunjuk}.
-  PaketSurvei: ['id', 'guru_id', 'kategori', 'jenis', 'butir_json', 'diubah']
+  PaketSurvei: ['id', 'guru_id', 'kategori', 'jenis', 'butir_json', 'diubah'],
+  // FOTO PROFIL SISWA. Satu baris per siswa; id = id siswa (kolom pertama WAJIB id supaya findRowIndexById_ jalan).
+  // Foto resolusi penuh (512 px) disimpan PRIVAT di Google Drive (folder CBT_Foto_Profil, tidak dibagikan ke publik);
+  // 'thumb' = pratinjau kecil 128 px (data URL JPEG) untuk avatar di portal & tabel guru, sehingga tidak bergantung
+  // pada tautan Drive publik. Sengaja di sheet terpisah supaya sheet Siswa (dibaca setiap login) tetap ringan.
+  FotoProfil: ['id', 'file_id', 'nama_berkas', 'thumb', 'bytes', 'waktu']
 };
 
 var DEVICE_STALE_MINUTES = 15; // sesi dianggap "lepas" jika tidak ping selama ini (menit)
@@ -308,6 +314,9 @@ function route_(action, data) {
     case 'hapusKelas': return withLock_(lock, function () { return actionHapusKelas_(data); });
     case 'getDaftarSiswa': return actionGetDaftarSiswa_(data);
     case 'blokirSiswa': return withLock_(lock, function () { return actionBlokirSiswa_(data); });
+    case 'uploadFotoProfil': return actionUploadFotoProfil_(data); // kunci dipegang sebentar di dalam (hanya saat menulis baris)
+    case 'hapusFotoProfil': return actionHapusFotoProfil_(data);
+    case 'hapusFotoProfilGuru': return actionHapusFotoProfilGuru_(data);
     case 'uploadBuktiOrek': return actionUploadBuktiOrek_(data); // kunci dipegang sebentar di dalam (hanya saat menulis baris)
     case 'getBuktiOrek': return actionGetBuktiOrek_(data);
     case 'setTokenKelas': return withLock_(lock, function () { return actionSetTokenKelas_(data); });
@@ -497,7 +506,7 @@ function actionLogin_(data) {
     // Akun yang diblokir TETAP boleh login (supaya siswa melihat pesan & alasannya di portal),
     // tetapi tidak bisa mengikuti ujian -- ditegakkan di cekToken & mulaiUjian.
     var blokirInfo = statusBlokirSiswa_(siswa.id);
-    return jsonOut_({ ok: true, user: { id: siswa.id, nama: siswa.nama, username: siswa.username, kelas: siswa.kelas, role: 'siswa', deviceId: deviceId, blokir: blokirInfo, nisn: String(siswa.nisn || ''), jenis_kelamin: String(siswa.jenis_kelamin || ''), tempat_lahir: String(siswa.tempat_lahir || ''), tanggal_lahir: tglIso_(siswa.tanggal_lahir) } });
+    return jsonOut_({ ok: true, user: { id: siswa.id, nama: siswa.nama, username: siswa.username, kelas: siswa.kelas, role: 'siswa', deviceId: deviceId, blokir: blokirInfo, nisn: String(siswa.nisn || ''), jenis_kelamin: String(siswa.jenis_kelamin || ''), tempat_lahir: String(siswa.tempat_lahir || ''), tanggal_lahir: tglIso_(siswa.tanggal_lahir), foto: thumbFotoProfil_(siswa.id) } });
   }
 
   return jsonOut_({ ok: false, error: 'Role tidak valid.' });
@@ -1432,7 +1441,10 @@ function actionImportSiswa_(data) {
 }
 
 function actionGetDaftarSiswa_(data) {
+  var fotoMap = {};
+  try { readAll_(SHEET.FOTO).forEach(function (f) { fotoMap[String(f.id)] = f; }); } catch (e) {}
   var list = readAll_(SHEET.SISWA).map(function (s) {
+    var f = fotoMap[String(s.id)];
     // deviceId & lastPing disertakan (bukan cuma flag online) supaya tab "Status
     // Login" guru bisa menampilkan perangkat mana yang sedang mengunci akun ini,
     // dan sejak kapan -- tanpa keduanya, guru cuma tahu "online/tidak" tanpa detail.
@@ -1441,7 +1453,8 @@ function actionGetDaftarSiswa_(data) {
       nisn: String(s.nisn || ''), jenis_kelamin: String(s.jenis_kelamin || ''), tempat_lahir: String(s.tempat_lahir || ''), tanggal_lahir: tglIso_(s.tanggal_lahir),
       online: !!s.device_id, deviceId: s.device_id || '', lastPing: s.last_ping || '',
       blokir: String(s.blokir || '').toLowerCase() === 'ya',
-      blokirAlasan: s.blokir_alasan || '', blokirSejak: s.blokir_sejak ? String(s.blokir_sejak) : ''
+      blokirAlasan: s.blokir_alasan || '', blokirSejak: s.blokir_sejak ? String(s.blokir_sejak) : '',
+      foto: f ? String(f.thumb || '') : '', fotoUrl: f && f.file_id ? 'https://drive.google.com/file/d/' + f.file_id + '/view' : '', fotoWaktu: f ? String(f.waktu || '') : ''
     };
   });
   if (data.kelas) list = list.filter(function (s) { return s.kelas === data.kelas; });
@@ -1788,6 +1801,175 @@ function actionUploadBuktiOrek_(data) {
   return jsonOut_(hasil);
 }
 
+// ----------------------------------------------------------------------------
+// FOTO PROFIL SISWA
+// Alur: klien memotong foto jadi persegi 512 px (JPEG) + pratinjau 128 px, lalu mengirim keduanya.
+//  - Foto penuh -> Google Drive, folder PRIVAT "CBT_Foto_Profil" (TIDAK dibagikan ke publik; hanya pemilik
+//    skrip/guru yang bisa membukanya lewat akun Google-nya).
+//  - Pratinjau -> sheet "FotoProfil" (+ cache) untuk avatar di portal siswa & tabel guru.
+// Keamanan: unggah/hapus hanya sah bila deviceId cocok dengan perangkat yang tercatat saat siswa login
+// (jadi orang lain tak bisa mengganti foto hanya dengan menebak id siswa), isi berkas diperiksa sebagai JPEG
+// sungguhan (magic bytes), ukuran dibatasi, dan ada jeda antar-unggah. Unggah ulang menggantikan foto lama
+// (berkas lama dibuang ke tempat sampah Drive) sehingga Drive tidak menumpuk.
+// ----------------------------------------------------------------------------
+var FOTO_FOLDER = 'CBT_Foto_Profil';
+var FOTO_MAKS_BASE64 = 900000;   // ~650 KB biner; klien menargetkan <= ~180 KB
+var FOTO_MAKS_THUMB = 30000;     // panjang data URL; batas sel Sheets 50.000 karakter
+var FOTO_JEDA_DETIK = 6;         // jeda minimal antar-unggah per siswa
+
+// findRowIndexById_ melempar galat bila sheet baru berisi header (0 baris data), jadi dibungkus aman.
+function cariBarisFoto_(id) {
+  if (sh_(SHEET.FOTO).getLastRow() < 2) return -1;
+  return findRowIndexById_(SHEET.FOTO, id);
+}
+
+function folderFotoProfil_() {
+  var cache = CacheService.getScriptCache();
+  var kunci = 'folder_id_' + FOTO_FOLDER;
+  var id = cache.get(kunci);
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) { cache.remove(kunci); } }
+  var folder = getOrCreateFolder_(FOTO_FOLDER); // sengaja TANPA setSharing: foto siswa tidak boleh publik
+  cache.put(kunci, folder.getId(), 21600);
+  return folder;
+}
+
+function namaBerkasFoto_(siswa) {
+  var bersih = function (t) { return String(t || '').replace(/[\\\/:*?"<>|#%]+/g, ' ').replace(/\s+/g, ' ').trim(); };
+  return (bersih(siswa.kelas) + ' - ' + bersih(siswa.nama) + ' (' + siswa.id + ').jpg').replace(/^ - /, '').slice(0, 150);
+}
+
+// Mengembalikan {siswa} bila deviceId sah, atau {error}.
+function verifikasiSiswaPerangkat_(data) {
+  var id = String(data.siswaId || '');
+  var deviceId = String(data.deviceId || '');
+  if (!id || !deviceId) return { error: 'Sesi tidak valid. Silakan login ulang.' };
+  var idx = findRowIndexById_(SHEET.SISWA, id);
+  if (idx < 0) return { error: 'Akun siswa tidak ditemukan.' };
+  var headers = headersOf_(SHEET.SISWA);
+  var row = sh_(SHEET.SISWA).getRange(idx, 1, 1, headers.length).getValues()[0];
+  var siswa = {};
+  headers.forEach(function (h, i) { siswa[h] = row[i]; });
+  var tercatat = CacheService.getScriptCache().get('siswa_device_' + id);
+  if (tercatat === null) tercatat = String(siswa.device_id || '');
+  if (String(tercatat) !== deviceId) return { error: 'Sesi login tidak cocok dengan perangkat ini. Silakan login ulang.' };
+  return { siswa: siswa };
+}
+
+function adalahJpeg_(bytes) {
+  return bytes && bytes.length > 600 && bytes[0] === -1 && bytes[1] === -40 && bytes[2] === -1; // FF D8 FF (byte bertanda)
+}
+
+// Pratinjau (data URL) untuk avatar. Cache-first; '-' = siswa belum punya foto.
+function thumbFotoProfil_(siswaId) {
+  if (!siswaId) return '';
+  var cache = CacheService.getScriptCache();
+  var kunci = 'foto_thumb_' + siswaId;
+  var c = cache.get(kunci);
+  if (c !== null) return c === '-' ? '' : c;
+  var thumb = '';
+  try {
+    var idx = cariBarisFoto_(siswaId);
+    if (idx > 0) {
+      var headers = headersOf_(SHEET.FOTO);
+      thumb = String(sh_(SHEET.FOTO).getRange(idx, headers.indexOf('thumb') + 1).getValue() || '');
+    }
+  } catch (e) { return ''; }
+  try { cache.put(kunci, thumb || '-', 21600); } catch (e) {}
+  return thumb;
+}
+
+// data: { siswaId, deviceId, base64 (JPEG 512 px), thumb (data URL JPEG 128 px), filename }
+function actionUploadFotoProfil_(data) {
+  var v = verifikasiSiswaPerangkat_(data);
+  if (v.error) return jsonOut_({ ok: false, error: v.error });
+  var siswa = v.siswa;
+  var cache = CacheService.getScriptCache();
+
+  var kunciJeda = 'foto_jeda_' + siswa.id;
+  if (cache.get(kunciJeda)) return jsonOut_({ ok: false, error: 'Tunggu beberapa detik sebelum mengunggah lagi.' });
+
+  var b64 = String(data.base64 || '');
+  var thumb = String(data.thumb || '');
+  if (!b64 || b64.length > FOTO_MAKS_BASE64) return jsonOut_({ ok: false, error: 'Ukuran foto kosong atau terlalu besar.' });
+  if (!/^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(thumb) || thumb.length > FOTO_MAKS_THUMB) return jsonOut_({ ok: false, error: 'Pratinjau foto tidak valid.' });
+
+  var bytes;
+  try { bytes = Utilities.base64Decode(b64); } catch (e) { return jsonOut_({ ok: false, error: 'Data foto rusak.' }); }
+  var bytesThumb;
+  try { bytesThumb = Utilities.base64Decode(thumb.split(',')[1]); } catch (e) { return jsonOut_({ ok: false, error: 'Pratinjau foto rusak.' }); }
+  if (!adalahJpeg_(bytes) || !adalahJpeg_(bytesThumb)) return jsonOut_({ ok: false, error: 'Berkas bukan gambar JPEG yang valid.' });
+
+  cache.put(kunciJeda, '1', FOTO_JEDA_DETIK);
+
+  var namaBerkas = namaBerkasFoto_(siswa);
+  var file = folderFotoProfil_().createFile(Utilities.newBlob(bytes, 'image/jpeg', namaBerkas));
+  try { file.setDescription('Foto profil siswa ' + siswa.nama + ' (' + siswa.kelas + ') — diunggah ' + new Date().toISOString()); } catch (e) {}
+  if (Number(file.getSize()) !== bytes.length) { // verifikasi: ukuran di Drive harus sama dengan yang dikirim
+    try { file.setTrashed(true); } catch (e) {}
+    return jsonOut_({ ok: false, error: 'Verifikasi berkas gagal (ukuran tidak cocok), silakan coba lagi.' });
+  }
+
+  var waktu = new Date().toISOString();
+  var fileLama = '';
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    try { file.setTrashed(true); } catch (e) {}
+    return jsonOut_({ ok: false, error: 'Server sedang sibuk, silakan coba lagi.' });
+  }
+  try {
+    var headers = headersOf_(SHEET.FOTO);
+    var baris = { id: siswa.id, file_id: file.getId(), nama_berkas: namaBerkas, thumb: thumb, bytes: bytes.length, waktu: waktu };
+    var idx = cariBarisFoto_(siswa.id);
+    if (idx > 0) {
+      fileLama = String(sh_(SHEET.FOTO).getRange(idx, headers.indexOf('file_id') + 1).getValue() || '');
+      updateRowByFields_(SHEET.FOTO, headers, idx, baris);
+    } else {
+      appendObj_(SHEET.FOTO, headers, baris);
+    }
+    SpreadsheetApp.flush();
+  } catch (err) {
+    try { file.setTrashed(true); } catch (e) {} // jangan tinggalkan berkas yatim di Drive
+    return jsonOut_({ ok: false, error: 'Gagal menyimpan foto: ' + String(err) });
+  } finally {
+    lock.releaseLock();
+  }
+  if (fileLama && fileLama !== file.getId()) { try { DriveApp.getFileById(fileLama).setTrashed(true); } catch (e) {} }
+  cache.put('foto_thumb_' + siswa.id, thumb, 21600);
+  return jsonOut_({ ok: true, thumb: thumb, waktu: waktu });
+}
+
+// Hapus foto 1 siswa: berkas Drive ke sampah + baris + cache. Aman dipanggil walau foto tidak ada.
+function hapusFotoProfilSiswa_(siswaId) {
+  var idx = cariBarisFoto_(siswaId);
+  if (idx > 0) {
+    var headers = headersOf_(SHEET.FOTO);
+    var fileId = String(sh_(SHEET.FOTO).getRange(idx, headers.indexOf('file_id') + 1).getValue() || '');
+    sh_(SHEET.FOTO).deleteRow(idx);
+    if (fileId) { try { DriveApp.getFileById(fileId).setTrashed(true); } catch (e) {} }
+  }
+  CacheService.getScriptCache().put('foto_thumb_' + siswaId, '-', 21600);
+}
+
+// data: { siswaId, deviceId } -> siswa menghapus fotonya sendiri
+function actionHapusFotoProfil_(data) {
+  var v = verifikasiSiswaPerangkat_(data);
+  if (v.error) return jsonOut_({ ok: false, error: v.error });
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) return jsonOut_({ ok: false, error: 'Server sedang sibuk, silakan coba lagi.' });
+  try { hapusFotoProfilSiswa_(v.siswa.id); } finally { lock.releaseLock(); }
+  return jsonOut_({ ok: true });
+}
+
+// data: { guruId, siswaId } -> guru menghapus foto siswa (mis. foto tidak pantas)
+function actionHapusFotoProfilGuru_(data) {
+  var guru = readAll_(SHEET.GURU).filter(function (g) { return String(g.id) === String(data.guruId); })[0];
+  if (!guru) return jsonOut_({ ok: false, error: 'Akses guru tidak valid.' });
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) return jsonOut_({ ok: false, error: 'Server sedang sibuk, silakan coba lagi.' });
+  try { hapusFotoProfilSiswa_(data.siswaId); } finally { lock.releaseLock(); }
+  return jsonOut_({ ok: true });
+}
+
 // data: { sesiId, siswaId (opsional utk guru) } -> daftar foto + mode ujian
 function actionGetBuktiOrek_(data) {
   var sesi = ambilSesiState_(data.sesiId);
@@ -1824,6 +2006,7 @@ function actionUpdateSiswa_(data) {
 function actionHapusSiswa_(data) {
   var idx = findRowIndexById_(SHEET.SISWA, data.id);
   if (idx > 0) sh_(SHEET.SISWA).deleteRow(idx);
+  try { hapusFotoProfilSiswa_(data.id); } catch (e) {} // foto di Drive ikut dibersihkan
   return jsonOut_({ ok: true });
 }
 
@@ -1835,10 +2018,11 @@ function actionHapusKelas_(data) {
   var headers = headersOf_(SHEET.SISWA);
   var kelasCol = headers.indexOf('kelas') + 1;
   var values = sheet.getDataRange().getValues();
-  var dihapus = 0;
+  var dihapus = 0, idTerhapus = [];
   for (var i = values.length - 1; i >= 1; i--) {
-    if (String(values[i][kelasCol - 1]) === kelas) { sheet.deleteRow(i + 1); dihapus++; }
+    if (String(values[i][kelasCol - 1]) === kelas) { idTerhapus.push(values[i][0]); sheet.deleteRow(i + 1); dihapus++; }
   }
+  idTerhapus.forEach(function (id) { try { hapusFotoProfilSiswa_(id); } catch (e) {} });
   return jsonOut_({ ok: true, count: dihapus });
 }
 

@@ -2876,7 +2876,7 @@ const LocalBackend = (function () {
           if (deviceLocked) return { ok: false, error: 'Akun ini sedang aktif di perangkat lain. Tutup sesi di perangkat tersebut atau tunggu beberapa menit, lalu coba lagi.' };
           siswa.device_id = deviceId; siswa.last_ping = now.toISOString();
           simpan();
-          return { ok: true, user: { id: siswa.id, nama: siswa.nama, username: siswa.username, kelas: siswa.kelas, role: 'siswa', deviceId, blokir: infoBlokirLokal(siswa), nisn: String(siswa.nisn || ''), jenis_kelamin: siswa.jenis_kelamin || '', tempat_lahir: siswa.tempat_lahir || '', tanggal_lahir: siswa.tanggal_lahir || '' } };
+          return { ok: true, user: { id: siswa.id, nama: siswa.nama, username: siswa.username, kelas: siswa.kelas, role: 'siswa', deviceId, blokir: infoBlokirLokal(siswa), nisn: String(siswa.nisn || ''), jenis_kelamin: siswa.jenis_kelamin || '', tempat_lahir: siswa.tempat_lahir || '', tanggal_lahir: siswa.tanggal_lahir || '', foto: siswa.foto || '' } };
         }
         return { ok: false, error: 'Role tidak valid.' };
       }
@@ -3290,7 +3290,8 @@ const LocalBackend = (function () {
           id: s.id, username: s.username, password: s.password, nama: s.nama, kelas: s.kelas,
           nisn: String(s.nisn || ''), jenis_kelamin: s.jenis_kelamin || '', tempat_lahir: s.tempat_lahir || '', tanggal_lahir: s.tanggal_lahir || '',
           online: !!s.device_id, deviceId: s.device_id || '', lastPing: s.last_ping || '',
-          blokir: infoBlokirLokal(s).aktif, blokirAlasan: s.blokir_alasan || '', blokirSejak: s.blokir_sejak || ''
+          blokir: infoBlokirLokal(s).aktif, blokirAlasan: s.blokir_alasan || '', blokirSejak: s.blokir_sejak || '',
+          foto: s.foto || '', fotoUrl: '', fotoWaktu: s.foto_waktu || ''
         }));
         if (data.kelas) list = list.filter(s => s.kelas === data.kelas);
         return { ok: true, data: list };
@@ -3353,6 +3354,23 @@ const LocalBackend = (function () {
       }
       case 'uploadGambar': {
         return { ok: true, url: `data:${data.mimeType};base64,${data.base64}` };
+      }
+      // ---- Foto profil siswa (Mode Lokal: hanya pratinjau 128 px, disimpan di perangkat ini) ----
+      case 'uploadFotoProfil': {
+        const sw = D.siswa.find(x => x.id === data.siswaId);
+        if (!sw) return { ok: false, error: 'Akun siswa tidak ditemukan.' };
+        const th = String(data.thumb || '');
+        if (!/^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(th) || th.length > 30000) return { ok: false, error: 'Pratinjau foto tidak valid.' };
+        const lama = { foto: sw.foto, foto_waktu: sw.foto_waktu };
+        sw.foto = th; sw.foto_waktu = new Date().toISOString();
+        if (!tulisSekarang()) { sw.foto = lama.foto; sw.foto_waktu = lama.foto_waktu; return { ok: false, error: 'Penyimpanan perangkat penuh, foto tidak tersimpan.' }; }
+        return { ok: true, thumb: th, waktu: sw.foto_waktu };
+      }
+      case 'hapusFotoProfil':
+      case 'hapusFotoProfilGuru': {
+        const sw = D.siswa.find(x => x.id === data.siswaId);
+        if (sw) { delete sw.foto; delete sw.foto_waktu; simpan(); }
+        return { ok: true };
       }
       // ---- Bukti orak-orik jawaban (Mode Lokal: foto disimpan di perangkat ini) ----
       case 'uploadBuktiOrek': {
@@ -6673,8 +6691,9 @@ const Guru = {
     if (saringBlokir && data.length === 0) { cont.innerHTML = '<p class="subtitle">Tidak ada akun siswa yang diblokir' + (filterKelas ? ` di kelas "${escapeHtml_(filterKelas)}"` : '') + '.</p>'; return; }
     if (data.length === 0) { cont.innerHTML = `<p class="subtitle">Tidak ada siswa yang cocok${filterKelas ? ` di kelas "${escapeHtml_(filterKelas)}"` : ''} dengan pencarian ini.</p>`; return; }
     cont.innerHTML = (jmlBlokir ? `<p class="subtitle" style="margin-bottom:.6rem">🚫 <strong>${jmlBlokir}</strong> akun siswa sedang diblokir (tidak bisa mengikuti kuis).</p>` : '') +
-      `<table class="ledger"><thead><tr><th>Username</th><th>Password</th><th>Nama</th><th>NISN</th><th>Kelas</th><th>Status</th><th></th></tr></thead><tbody>` +
+      `<table class="ledger"><thead><tr><th>Foto</th><th>Username</th><th>Password</th><th>Nama</th><th>NISN</th><th>Kelas</th><th>Status</th><th></th></tr></thead><tbody>` +
       data.map(s => `<tr>
+        <td>${typeof FotoProfil !== 'undefined' ? FotoProfil.miniGuru(s) : ''}</td>
         <td style="white-space:nowrap">${escapeHtml_(s.username)} <button type="button" class="btn-salin-token" title="Salin username" aria-label="Salin username ${escapeHtml_(s.nama)}" data-salin="${escapeHtml_(s.username)}" onclick="salinNilai(this, 'Username')">📋</button></td><td style="white-space:nowrap">${escapeHtml_(s.password)} <button type="button" class="btn-salin-token" title="Salin password" aria-label="Salin password ${escapeHtml_(s.nama)}" data-salin="${escapeHtml_(s.password)}" onclick="salinNilai(this, 'Password')">📋</button></td><td>${escapeHtml_(s.nama)}</td><td>${escapeHtml_(s.nisn || '')}</td><td>${escapeHtml_(s.kelas)}</td>
         <td><span class="badge ${s.online ? 'ok' : 'no'}">${s.online ? 'Ada sesi aktif' : 'Tidak ada sesi'}</span>
           ${s.blokir ? `<br><span class="badge no" title="${escapeHtml_(s.blokirAlasan || 'Tanpa alasan')}">🚫 Diblokir</span>${s.blokirAlasan ? `<div style="font-size:.78rem;color:var(--c-muted);margin-top:.2rem">${escapeHtml_(s.blokirAlasan)}</div>` : ''}` : ''}</td>
