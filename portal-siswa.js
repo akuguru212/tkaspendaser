@@ -178,13 +178,17 @@ const PortalSiswa = (function () {
   #sw-screen table.sw-r td::before { content: attr(data-l); font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: #8a96a5; font-weight: 700; text-align: left; flex: 0 0 auto; }
 }
 /* kartu "Akun Saya" di layar konfirmasi peserta */
-.sw-entry { padding: 20px 26px 22px 44px; }
-.sw-entry h3 { margin: 0 0 2px; font: 600 15px/1.3 'Poppins', sans-serif; color: #111; }
-.sw-entry p { margin: 0 0 .7rem; font-size: 12.5px; line-height: 1.55; color: #6c757d; }
-.sw-entry .sw-ent-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .55rem; }
-.sw-entry .sw-ent-grid button { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: .6rem; padding: .6rem .8rem; border-radius: 12px; border: 1px solid #d5dbe3; background: #fff; font: 500 13px/1.25 'Poppins', sans-serif; color: #212529; }
-.sw-entry .sw-ent-grid button:hover { border-color: #0d6efd; background: #eef4ff; }
-.sw-entry .sw-ent-grid button i { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: #0d6efd; color: #fff; font-size: .85rem; flex: 0 0 auto; }
+.sw-entry { padding: 22px 26px 24px 44px; display: flex; flex-direction: column; gap: 1rem; }
+.sw-entry .sw-entry-head { display: flex; align-items: center; gap: .9rem; }
+.sw-entry .sw-entry-ico { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; flex: 0 0 auto; color: #0d6efd; font-size: 1.15rem; background: linear-gradient(145deg, #eaf2ff, #d6e6ff); box-shadow: inset 0 0 0 1px rgba(13,110,253,.14); }
+.sw-entry h3 { margin: 0 0 2px; font: 600 16px/1.3 'Poppins', sans-serif; color: #111; }
+.sw-entry p { margin: 0; font-size: 12.5px; line-height: 1.55; color: #6c757d; }
+.sw-entry .sw-entry-btn { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: .6rem; width: 100%; padding: .8rem 1.1rem; border-radius: 12px; background: linear-gradient(135deg, #1a73ff, #0d5bd8); color: #fff; font: 600 14px/1.2 'Poppins', sans-serif; box-shadow: 0 6px 16px rgba(13,110,253,.28); transition: transform .15s ease, box-shadow .15s ease, filter .15s ease; }
+.sw-entry .sw-entry-btn i { font-size: .85rem; transition: transform .15s ease; }
+.sw-entry .sw-entry-btn:hover { filter: brightness(1.06); box-shadow: 0 8px 20px rgba(13,110,253,.36); transform: translateY(-1px); }
+.sw-entry .sw-entry-btn:hover i { transform: translateX(-3px); }
+.sw-entry .sw-entry-btn:active { transform: translateY(0); box-shadow: 0 3px 10px rgba(13,110,253,.3); }
+.sw-entry .sw-entry-btn:focus-visible { outline: 3px solid rgba(13,110,253,.35); outline-offset: 2px; }
 @media (min-width: 901px) { .anbk-konf { grid-template-rows: auto 1fr; } .anbk-konf .sw-entry { grid-column: 1; grid-row: 2; align-self: start; } .anbk-konf .anbk-card-form { grid-column: 2; grid-row: 1 / span 2; } }
 @media (max-width: 900px) { .sw-entry { padding: 16px 20px 18px; } }`;
     document.head.appendChild(st);
@@ -219,6 +223,7 @@ const PortalSiswa = (function () {
     PS.td = PG.susunTes(PS.items);
     PS.ada = PS.items.length > 0;
     try { AnalisisMateri.setDataSiswa(PS.am, state.user.id); } catch (e) { }
+    try { AnalisisMateri.setRiwayatSiswa(rw); } catch (e) { }
   }
   async function muat(paksa) {
     if (PS.memuat) return;
@@ -433,7 +438,7 @@ const PortalSiswa = (function () {
 
   // ---------------- ANALISIS MATERI ----------------
   function vAnalisis(isi) {
-    isi.innerHTML = `<div class="sw-konten" style="display:grid;gap:1rem">${judulHalaman('Pilih Literasi atau Numerasi untuk melihat materi yang masih kurang. Ketuk satu materi untuk membaca saran belajarnya.')}
+    isi.innerHTML = `<div class="sw-konten" style="display:grid;gap:1rem">${judulHalaman('Pilih Literasi, Numerasi, Survei Karakter, atau Sulingjar untuk melihat bagian yang masih perlu ditingkatkan. Ketuk satu materi atau dimensi untuk membaca sarannya.')}
       <div class="sw-card sw-panel"><div class="am-menu" id="am-s-menu"></div><div id="am-s-isi"></div></div></div>`;
     AnalisisMateri.renderSiswa();
   }

@@ -16,6 +16,8 @@
      sebagian dihitung setengah; soal kosong dihitung 0; uraian yang belum dinilai tidak ikut dihitung).
    * Ambang: < 60% "Perlu diperkuat", 60-79% "Cukup", >= 80% "Sudah baik".
    * Portal siswa tidak menampilkan ujian yang oleh guru dimatikan "Tampilkan detail jawaban".
+   * Portal siswa juga punya submenu Survei Karakter & Sulingjar: nilai 0-100 per DIMENSI dari survei yang sudah diisi
+     (hanya bila guru mengaktifkan tampilan hasil survei ke siswa).
    Butuh Code.gs terbaru (aksi getAnalisisMateri) untuk Mode Server. Dimuat SETELAH app.js & anbk.js.
    ============================================================================ */
 'use strict';
@@ -267,12 +269,12 @@ const AnalisisMateri = (function () {
     const rangkai = T.hist.map(h => `${esc(h.judul)} <b>${bulat(h.persen)}${T.survei ? '' : '%'}</b>`).join(' → ');
     return `<div class="am-fakta">Perkembangan materi ini: ${rangkai} <span class="am-tag ${arah[0] === 'naik' ? 'baik' : (arah[0] === 'turun' ? 'kurang' : 'cukup')}">${arah[1]}</span></div>`;
   }
-  function htmlTopik(T, jenis, terbuka) {
-    const sv = adalahSurvei(jenis);
+  function htmlTopik(T, jenis, terbuka, untuk) {
+    const sv = adalahSurvei(jenis), utk = untuk || 'guru';
     const bar = `<summary><span class="am-tl">${esc(T.label)}</span><span class="am-tag am-pill ${T.level}">${bulat(T.persen)}${sv ? '' : '%'} &middot; ${labelLevel(jenis, T.level)}</span><span class="am-bar"><i class="${T.level}" style="width:${Math.max(2, bulat(T.persen))}%"></i></span></summary>`;
     if (sv) {
-      const saran = (typeof Survei !== 'undefined' && Survei.saranDim && T.level !== 'baik') ? Survei.saranDim(jenis, T.kode, 'guru') : '';
-      const jud = jenis === 'karakter' ? 'Saran pembiasaan untuk siswa' : 'Tindak lanjut sekolah';
+      const saran = (typeof Survei !== 'undefined' && Survei.saranDim && T.level !== 'baik') ? Survei.saranDim(jenis, T.kode, utk) : '';
+      const jud = utk === 'siswa' ? (jenis === 'karakter' ? 'Saran untukmu' : 'Catatan untukmu') : (jenis === 'karakter' ? 'Saran pembiasaan untuk siswa' : 'Tindak lanjut sekolah');
       return `<details class="am-topik ${T.level}"${terbuka ? ' open' : ''}>${bar}
         <div class="am-body"><div class="am-fakta">Nilai dimensi <b>${bulat(T.persen)}</b> dari 100 &middot; rata-rata skor <b>${fmt1(T.rata)}</b> dari 4 (${T.nButir} butir)</div>
         ${htmlHist(T)}
@@ -291,7 +293,7 @@ const AnalisisMateri = (function () {
         <div class="am-saran"><b><i class="fa-solid fa-lightbulb"></i> Saran belajar</b><ul>${saranUntuk(T, jenis).map(x => `<li>${x}</li>`).join('')}</ul></div>
       </div></details>`;
   }
-  function htmlJenis(J) {
+  function htmlJenis(J, untuk) {
     const sv = !!J.survei;
     const lv = levelUntuk(J.key, J.persen);
     const lemah = J.topik.filter(t => t.level !== 'baik');
@@ -309,13 +311,13 @@ const AnalisisMateri = (function () {
     }
     if (lemah.length) {
       h += `<div class="am-h"><i class="fa-solid fa-list-check"></i> ${sv ? 'Dimensi yang perlu ditingkatkan' : 'Materi yang perlu dipelajari lagi'} <small>(${lemah.length} ${bagian} — ketuk untuk melihat saran)</small></div>`;
-      h += lemah.map((t, i) => htmlTopik(t, J.key, i === 0)).join('');
+      h += lemah.map((t, i) => htmlTopik(t, J.key, i === 0, untuk)).join('');
     } else {
       h += `<div class="am-kosongan" style="padding:1rem"><i class="fa-solid fa-circle-check" style="color:var(--am-good);opacity:1"></i><b>Hebat!</b> Semua ${bagian} ${esc(J.nama)} sudah berada pada tingkat baik. Pertahankan ya.</div>`;
     }
     if (baik.length) {
       h += `<div class="am-h"><i class="fa-solid fa-circle-check" style="color:var(--am-good)"></i> ${sv ? 'Dimensi' : 'Materi'} yang sudah baik <small>(${baik.length} ${bagian})</small></div>`;
-      h += baik.map(t => htmlTopik(t, J.key, false)).join('');
+      h += baik.map(t => htmlTopik(t, J.key, false, untuk)).join('');
     }
     if (J.topik.some(t => t.tanpaTopik)) {
       h += `<div class="am-info" style="margin-top:.8rem"><i class="fa-solid fa-circle-info"></i> Sebagian soal belum diberi <b>Topik</b> oleh guru, sehingga dikelompokkan menurut judul tes. Analisis akan lebih rinci setelah topik pada soal diisi.</div>`;
@@ -329,7 +331,8 @@ const AnalisisMateri = (function () {
   // ============================================================================================
   // PORTAL SISWA
   // ============================================================================================
-  const SS = { data: null, jenis: '', tersembunyi: [] };
+  const SS = { data: null, jenis: '', tersembunyi: [], riwayat: [], sv: null };
+  const JENIS_MENU_SISWA = ['literasi', 'numerasi', 'karakter', 'sulingjar'];
 
   function ringkasMenu(J) {
     if (!J) return '<small>Belum ada hasil tes</small>';
@@ -337,12 +340,22 @@ const AnalisisMateri = (function () {
     if (J.nCukup) return `<small>${J.nCukup} materi cukup — tinggal dimantapkan</small>`;
     return '<small class="ok">Semua materi sudah baik</small>';
   }
+  function ringkasMenuSurvei(k, J) {
+    if (J) {
+      if (J.nKurang) return `<small class="bad">${J.nKurang} dimensi perlu perhatian</small>`;
+      if (J.nCukup) return `<small>${J.nCukup} dimensi sedang — tinggal dimantapkan</small>`;
+      return '<small class="ok">Semua dimensi sudah baik</small>';
+    }
+    if (SS.sv && SS.sv.status === 'siap') return SS.sv.ada[k] ? '<small>Hasil belum ditampilkan guru</small>' : '<small>Belum ada hasil survei</small>';
+    return k === 'karakter' ? '<small>Enam dimensi karakter</small>' : '<small>Lingkungan belajar di sekolah</small>';
+  }
   function renderMenuSiswa(wadah, aktif) {
     const sw = SS.data;
-    const daftar = ['literasi', 'numerasi'].concat(sw && sw.jenis.lainnya ? ['lainnya'] : []);
+    const daftar = JENIS_MENU_SISWA.concat(sw && sw.jenis.lainnya ? ['lainnya'] : []);
     wadah.innerHTML = daftar.map(k => {
-      const J = sw ? sw.jenis[k] : null;
-      return `<button type="button" class="am-mbtn${aktif === k ? ' on' : ''}" data-j="${k}" onclick="AnalisisMateri.pilihJenis('${k}')"><span class="am-mi"><i class="fa-solid ${IKON_JENIS[k]}"></i></span><b>${NAMA_JENIS[k]}</b>${ringkasMenu(J)}</button>`;
+      const sv = adalahSurvei(k);
+      const J = sv ? (SS.sv && SS.sv.J ? SS.sv.J[k] : null) : (sw ? sw.jenis[k] : null);
+      return `<button type="button" class="am-mbtn${aktif === k ? ' on' : ''}" data-j="${k}" aria-pressed="${aktif === k}" onclick="AnalisisMateri.pilihJenis('${k}')"><span class="am-mi"><i class="fa-solid ${IKON_JENIS[k]}"></i></span><b>${NAMA_JENIS[k]}</b>${sv ? ringkasMenuSurvei(k, J) : ringkasMenu(J)}</button>`;
     }).join('');
   }
   // dipanggil Portal Siswa (menu Analisis Materi): gambar menu Literasi/Numerasi + isi analisisnya
@@ -354,6 +367,7 @@ const AnalisisMateri = (function () {
       SS.jenis = pertama || 'literasi';
     }
     renderMenuSiswa(menu, SS.jenis);
+    if (adalahSurvei(SS.jenis)) { renderSurveiSiswa(isi); return; }
     let catatan = '';
     const sembunyi = SS.tersembunyi.filter(u => jenisDari(u) === SS.jenis).length;
     if (sembunyi) catatan = `<div class="am-info"><i class="fa-solid fa-circle-info"></i> ${sembunyi} tes ${esc(NAMA_JENIS[SS.jenis])} tidak ikut dianalisis karena guru tidak mengaktifkan tampilan detail jawaban untuk tes tersebut.</div>`;
@@ -368,6 +382,65 @@ const AnalisisMateri = (function () {
     }
     isi.innerHTML = catatan + htmlJenis(J);
   }
+  // ---- Survei Karakter & Sulingjar milik siswa ini (aksi getSurveiSesi per tes yang sudah selesai) ----
+  // Hasil hanya muncul bila guru mengaktifkan "tampilkan hasil survei ke siswa" pada ujian terkait (aturan yang sama
+  // dengan layar Detail Jawaban). Tidak butuh perubahan Code.gs.
+  async function muatSurveiSiswa() {
+    if (SS.sv) return;
+    if (typeof Survei === 'undefined' || typeof state === 'undefined' || !state.user) return;
+    const sv = SS.sv = { status: 'memuat', J: {}, ada: { karakter: 0, sulingjar: 0 }, gagal: 0 };
+    const terbaru = new Map();
+    SS.riwayat.forEach(r => {
+      if (r.status !== 'selesai') return;
+      const w = Date.parse(r.selesai) || 0, p = terbaru.get(r.u);
+      if (!p || w >= p._w) terbaru.set(r.u, Object.assign({ _w: w }, r));
+    });
+    const daftar = [...terbaru.values()].sort((a, b) => b._w - a._w).slice(0, 20);
+    const data = {}; let i = 0;
+    const kerja = async () => {
+      while (i < daftar.length) {
+        const r = daftar[i++]; let info = null;
+        try { info = await api('getSurveiSesi', { sesiId: r.id, siswaId: state.user.id }); } catch (e) { info = null; }
+        if (!info || !info.ok) { sv.gagal++; continue; }
+        if (!info.jenis || !info.sudah || !adalahSurvei(info.jenis)) continue;
+        sv.ada[info.jenis]++;
+        if (!info.tampilHasil || !info.jawaban) continue;
+        let set = null; try { set = Survei.bangunSet(info.jenis, info.set); } catch (e) { set = null; }
+        if (!set) continue;
+        data[r.u] = { u: { id: r.u, judul: r.judul }, jenis: info.jenis, set, rows: [{ siswaId: state.user.id, nama: state.user.nama, kelas: state.user.kelas, waktu: r.selesai, jawaban: info.jawaban, kualitas: info.kualitas }] };
+      }
+    };
+    await Promise.all([kerja(), kerja(), kerja(), kerja()]);
+    const wadah = [{ id: String(state.user.id), nama: state.user.nama, kelas: state.user.kelas, jenis: {} }];
+    try { gabungSurvei(wadah, data); } catch (e) { sv.gagal++; }
+    sv.J = wadah[0].jenis || {};
+    sv.status = 'siap';
+    if (SS.sv === sv && $('am-s-isi') && adalahSurvei(SS.jenis)) renderSiswa();
+  }
+  function renderSurveiSiswa(isi) {
+    const k = SS.jenis, nama = NAMA_JENIS[k];
+    if (!SS.sv || SS.sv.status === 'memuat') {
+      isi.innerHTML = `<div class="am-kosongan"><i class="fa-solid fa-spinner fa-spin"></i>Memuat hasil ${esc(nama)}…</div>`;
+      muatSurveiSiswa();
+      return;
+    }
+    const sv = SS.sv, J = sv.J[k];
+    const asal = k === 'karakter' ? 'tes Numerasi' : 'tes Literasi';
+    let h = '';
+    if (sv.gagal) h += `<div class="am-info"><i class="fa-solid fa-circle-info"></i> Sebagian data survei belum berhasil dimuat. Tekan <b>Segarkan</b> untuk mencoba lagi.</div>`;
+    if (J) {
+      h += `<div class="am-info" style="background:color-mix(in srgb, var(--am-prim) 8%, var(--am-surf));border-color:color-mix(in srgb, var(--am-prim) 30%, var(--am-line))"><i class="fa-solid fa-circle-info"></i> Survei tidak punya jawaban benar atau salah. Nilai 0–100 menggambarkan kebiasaan dan pengalamanmu; <b>75 ke atas = Baik</b>, 50–74 = Sedang, di bawah 50 = Perlu perhatian.</div>`;
+      isi.innerHTML = h + htmlJenis(J, 'siswa');
+      return;
+    }
+    if (sv.ada[k]) {
+      isi.innerHTML = h + `<div class="am-kosongan"><i class="fa-solid fa-eye-slash"></i>Kamu sudah mengisi <b>${esc(nama)}</b>, tetapi guru belum menampilkan hasilnya kepada siswa.</div>`;
+      return;
+    }
+    isi.innerHTML = h + `<div class="am-kosongan"><i class="fa-solid fa-hourglass-half"></i>Belum ada hasil <b>${esc(nama)}</b>. Survei ini muncul setelah kamu menyelesaikan ${asal} dan mengisi surveinya sampai selesai.</div>`;
+  }
+  function setRiwayatSiswa(rw) { SS.riwayat = Array.isArray(rw) ? rw : []; SS.sv = null; }
+
   // data mentah getAnalisisMateri (mode siswa) -> analisis siswa ini
   function setDataSiswa(res, siswaId) {
     const daftar = olah(res || {});
@@ -384,7 +457,7 @@ const AnalisisMateri = (function () {
     return { jenis: sw.jenis, prioritas: semua.filter(t => t.level !== 'baik').slice(0, 5), nKurang: semua.filter(t => t.level === 'kurang').length, nBaik: semua.filter(t => t.level === 'baik').length, nTotal: semua.length };
   }
   function pilihJenis(k) { SS.jenis = k; renderSiswa(); }
-  function resetJenis(k) { SS.jenis = (k === 'literasi' || k === 'numerasi') ? k : ''; }
+  function resetJenis(k) { SS.jenis = JENIS_MENU_SISWA.indexOf(k) >= 0 ? k : ''; }
   function bukaSiswa(jenis) { if (typeof PortalSiswa !== 'undefined') PortalSiswa.buka('analisis', jenis); }
   function kembali() { if (typeof PortalSiswa !== 'undefined') PortalSiswa.buka('dashboard'); }
 
@@ -701,5 +774,5 @@ const AnalisisMateri = (function () {
     _gantiTab.call(UI, tabId);
     if (tabId === 'tab-analisis-materi') buka();
   };
-  return { bukaSiswa, pilihJenis, resetJenis, kembali, setDataSiswa, renderSiswa, ringkasSiswa, jenisDari, htmlJenis, NAMA_JENIS, URUT_JENIS, LABEL_LEVEL, LABEL_LEVEL_SV, labelLevel, levelUntuk, adalahSurvei, kelasList, saranPlain, idDetail: () => G.detailId, dataLaporan: () => ({ siswa: G.siswa, prog: G.prog, tes: G.tesGlobal, kelas: G.kelas, jenis: G.jenis, dimuat: G.dimuat }), muatData: (t) => muat(t), buka, muat, render, pilihJenisGuru, pilihKelas, pilihTampil, detail, pilihDetailJenis, tutupDetail, unduh, cetak, _olah: olah, _saran: saranUntuk };
+  return { bukaSiswa, pilihJenis, resetJenis, kembali, setDataSiswa, setRiwayatSiswa, renderSiswa, ringkasSiswa, jenisDari, htmlJenis, NAMA_JENIS, URUT_JENIS, LABEL_LEVEL, LABEL_LEVEL_SV, labelLevel, levelUntuk, adalahSurvei, kelasList, saranPlain, idDetail: () => G.detailId, dataLaporan: () => ({ siswa: G.siswa, prog: G.prog, tes: G.tesGlobal, kelas: G.kelas, jenis: G.jenis, dimuat: G.dimuat }), muatData: (t) => muat(t), buka, muat, render, pilihJenisGuru, pilihKelas, pilihTampil, detail, pilihDetailJenis, tutupDetail, unduh, cetak, _olah: olah, _saran: saranUntuk };
 })();

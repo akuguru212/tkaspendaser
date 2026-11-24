@@ -3,7 +3,9 @@
 - **Tombol 📋 Salin token** di samping token ujian pada tabel **Kelola Ujian** dan tabel ujian di **Dashboard** guru. Sekali klik, token masuk clipboard (ada cadangan untuk koneksi non-HTTPS).
 - **Token pada kartu Bank Soal dihapus.** Token itu hanya hiasan: diacak dan disimpan di browser tiap perangkat, tidak dipakai untuk validasi apa pun, dan bisa membingungkan karena berbeda dari token ujian sungguhan. Token yang berlaku hanya yang ada di Kelola Ujian.
 - **Tombol 📋 di kolom Username dan Password** pada tabel **Data Siswa** (password disalin apa adanya, termasuk tanda `*` di belakangnya).
-- Hanya file `app.js`, `index.html`, `style.css` yang berubah. `Code.gs` tidak perlu diganti.
+- **Layar Konfirmasi data Peserta:** kartu "Akun Saya" berisi 6 menu diganti kartu **Portal Siswa** yang rapi dengan satu tombol **Kembali ke Dashboard**.
+- **Analisis Materi (portal siswa):** submenu baru **Survei Karakter** dan **Sulingjar** di samping Literasi dan Numerasi. Isinya nilai 0–100 per dimensi, kategori (Baik / Sedang / Perlu perhatian), dan saran. Hasil hanya tampil bila guru mengaktifkan tampilan hasil survei ke siswa pada ujian terkait. Tidak butuh perubahan `Code.gs`.
+- Hanya file `app.js`, `index.html`, `style.css`, `portal-siswa.js`, `analisis-materi.js` yang berubah. `Code.gs` tidak perlu diganti.
 
 # v43z2 — Survei Karakter & Sulingjar pada Analisis Materi + Laporan PDF untuk siswa
 

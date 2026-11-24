@@ -1346,17 +1346,15 @@
       <div class="anbk-token-row">Token : <b id="kd-token-tampil">------</b> <button type="button" class="anbk-btn anbk-btn-primary anbk-btn-xs" id="kd-refresh" onclick="Anbk.segarkanToken(true)">Refresh</button></div>
       <div id="siswa-blokir-banner" class="anbk-blokir hidden" role="alert"><b>Akun Anda sedang diblokir</b><span>Anda belum bisa mengikuti tes selama blokir ini aktif.</span><span id="siswa-blokir-alasan"></span></div>
     </section>
-    <section class="anbk-card sw-entry">
-      <h3><i class="fa-solid fa-gauge-high" style="color:#0d6efd"></i> Akun Saya</h3>
-      <p>Pantau nilai, grafik perkembangan, peringkat, dan materi yang perlu diperkuat dari simulasi yang sudah kamu kerjakan.</p>
-      <div class="sw-ent-grid">
-        <button type="button" onclick="PortalSiswa.buka('dashboard')"><i class="fa-solid fa-gauge-high"></i>Dashboard</button>
-        <button type="button" onclick="PortalSiswa.buka('grafik')"><i class="fa-solid fa-chart-line"></i>Grafik Perkembangan</button>
-        <button type="button" onclick="PortalSiswa.buka('riwayat')"><i class="fa-solid fa-clock-rotate-left"></i>Riwayat Simulasi</button>
-        <button type="button" onclick="PortalSiswa.buka('leaderboard')"><i class="fa-solid fa-trophy"></i>Leaderboard</button>
-        <button type="button" onclick="PortalSiswa.buka('analisis','literasi')"><i class="fa-solid fa-book-open"></i>Analisis Literasi</button>
-        <button type="button" onclick="PortalSiswa.buka('analisis','numerasi')"><i class="fa-solid fa-calculator"></i>Analisis Numerasi</button>
+    <section class="anbk-card sw-entry" aria-labelledby="sw-entry-judul">
+      <div class="sw-entry-head">
+        <span class="sw-entry-ico" aria-hidden="true"><i class="fa-solid fa-house-user"></i></span>
+        <div class="sw-entry-teks">
+          <h3 id="sw-entry-judul">Portal Siswa</h3>
+          <p>Lihat nilai, perkembangan, dan peringkat simulasi yang sudah kamu kerjakan.</p>
+        </div>
       </div>
+      <button type="button" class="sw-entry-btn" onclick="PortalSiswa.buka('dashboard')"><i class="fa-solid fa-arrow-left"></i><span>Kembali ke Dashboard</span></button>
     </section>
     <section class="anbk-card anbk-card-form">
       <h2>Konfirmasi data Peserta</h2>
@@ -1617,9 +1615,9 @@
 <script src="survei.js?v=12"></script>
 <script src="leaderboard.js?v=1"></script>
 <script src="leaderboard-survei.js?v=1"></script>
-<script src="analisis-materi.js?v=3"></script>
+<script src="analisis-materi.js?v=4"></script>
 <script src="perkembangan.js?v=2"></script>
 <script src="laporan-pdf.js?v=1"></script>
-<script src="portal-siswa.js?v=1"></script>
+<script src="portal-siswa.js?v=3"></script>
 </body>
 </html>
