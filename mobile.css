@@ -64,10 +64,16 @@
   #sw-screen.am-scope .sw-hero { border-radius: 20px; padding: 18px 18px 20px; }
   #sw-screen.am-scope .sw-hero h3 { font-size: 21px; }
   #sw-screen.am-scope .sw-hero p { font-size: 13px; }
-  #sw-screen.am-scope .sw-hero small, #sw-screen.am-scope .sw-hero h3 { padding-right: 72px; }
-  #sw-screen.am-scope .sw-hero .fp-hero-av { position: absolute; right: 16px; top: 16px; transform: none; margin: 0; }
-  #sw-screen.am-scope .sw-hero .fp-hero-av .fp-av { width: 56px; height: 56px; font-size: 19px; box-shadow: 0 0 0 3px rgba(255,255,255,.9), 0 8px 18px rgba(10,30,70,.3); }
-  #sw-screen.am-scope .sw-hero .fp-hero-av .fp-cam { width: 22px; height: 22px; font-size: 10px; }
+  /* Banner dashboard: sapaan di kiri, foto profil di kanan (satu baris), kalimat penjelas turun ke baris sendiri
+     dengan garis pemisah tipis, sehingga foto tidak lagi menimpa teks. */
+  #sw-screen.am-scope .sw-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 14px; align-items: center; }
+  #sw-screen.am-scope .sw-hero > small { grid-column: 1; grid-row: 1; align-self: end; padding: 0; font-size: .68rem; }
+  #sw-screen.am-scope .sw-hero > h3 { grid-column: 1; grid-row: 2; align-self: start; padding: 0; margin: 4px 0 0; overflow-wrap: anywhere; }
+  #sw-screen.am-scope .sw-hero .fp-hero-av { grid-column: 2; grid-row: 1 / span 2; position: relative; right: auto; top: auto; transform: none; margin: 0; align-self: center; justify-self: end; }
+  #sw-screen.am-scope .sw-hero .fp-hero-av .fp-av { width: 60px; height: 60px; font-size: 20px; box-shadow: 0 0 0 3px rgba(255,255,255,.9), 0 8px 18px rgba(10,30,70,.3); }
+  #sw-screen.am-scope .sw-hero .fp-hero-av .fp-cam { width: 22px; height: 22px; font-size: 10px; right: -2px; bottom: -2px; }
+  #sw-screen.am-scope .sw-hero > p { grid-column: 1 / -1; grid-row: 3; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.2); line-height: 1.55; }
+  #sw-screen.am-scope .sw-hero > .sw-acts { grid-column: 1 / -1; grid-row: 4; }
   #sw-screen.am-scope .sw-hero .sw-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
   #sw-screen.am-scope .sw-hero .sw-acts .sw-btn { justify-content: center; padding: .7rem .6rem; font-size: 12.5px; white-space: nowrap; }
   #sw-screen.am-scope .sw-hero .sw-acts .sw-btn:first-child { grid-column: 1 / -1; font-size: 14px; padding: .8rem 1rem; }

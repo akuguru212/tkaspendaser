@@ -3191,6 +3191,10 @@ const LocalBackend = (function () {
       }
       case 'getLogPelanggaran': {
         let logs = clone(D.log);
+        if (data.sesiId) { // kronologi satu siswa (Detail Pelanggaran)
+          logs = logs.filter(l => String(l.sesi_id) === String(data.sesiId)).sort((a, b) => new Date(a.waktu) - new Date(b.waktu));
+          return { ok: true, data: logs.map(l => ({ waktu: l.waktu, jenis: l.jenis, detail: l.detail || '' })) };
+        }
         if (data.ujianId) logs = logs.filter(l => l.ujian_id === data.ujianId);
         return { ok: true, data: logs };
       }
@@ -5833,7 +5837,7 @@ const Guru = {
         <td>${r.pelanggaran || 0} ${r.status === 'diblokir' ? '<span class="badge warn">Diblokir</span>' : ''}</td>
         <td style="font-size:.8rem">${formatTanggal(r.selesai)}</td>
         <td style="font-size:.8rem;white-space:nowrap">${formatDurasi_(hitungDurasiDetik_(r.mulai, r.selesai))}</td>
-        <td class="aksi">${r.sesiId ? `<button class="secondary small" title="Lihat soal yang salah, jawaban siswa, dan kunci (untuk evaluasi)" onclick="Guru.bukaDetailSiswa('${escapeHtml_(r.sesiId)}')">🔍 Detail Jawaban</button><button class="danger small" title="Hapus nilai siswa ini (siswa bisa mengikuti ujian ini lagi)" onclick="Guru.hapusNilaiSatu('${escapeHtml_(r.sesiId)}')">🗑 Hapus</button>` : ''}</td>
+        <td class="aksi">${r.sesiId ? `<button class="secondary small" title="Lihat soal yang salah, jawaban siswa, dan kunci (untuk evaluasi)" onclick="Guru.bukaDetailSiswa('${escapeHtml_(r.sesiId)}')">🔍 Detail Jawaban</button><button class="secondary small" title="Lihat penyebab pelanggaran siswa ini dan unduh PDF" onclick="Guru.bukaLogPelanggaran('${escapeHtml_(r.sesiId)}', '${escapeHtml_(r.nama)}', '${escapeHtml_(r.kelas)}', '${escapeHtml_(r.status || '')}')">🛡 Detail Pelanggaran</button><button class="danger small" title="Hapus nilai siswa ini (siswa bisa mengikuti ujian ini lagi)" onclick="Guru.hapusNilaiSatu('${escapeHtml_(r.sesiId)}')">🗑 Hapus</button>` : ''}</td>
       </tr>`).join('') + `</tbody></table>`;
   },
 
@@ -6413,8 +6417,8 @@ const Guru = {
     const data = semua.filter(l => cocokFilterSiswa_(l, 'kelas-log', 'cari-log'));
     tampilkanInfoFilter_('kelas-log-info', new Set(data.map(l => l.siswa_id)).size, new Set(semua.map(l => l.siswa_id)).size, data.length + ' catatan');
     if (data.length === 0) { cont.innerHTML = '<p class="subtitle">Tidak ada pelanggaran yang cocok dengan kelas/pencarian ini.</p>'; return; }
-    cont.innerHTML = `<table class="ledger"><thead><tr><th>Siswa</th><th>Kelas</th><th>Jenis Pelanggaran</th><th>Waktu</th></tr></thead><tbody>` +
-      data.map(l => `<tr><td>${escapeHtml_(l.nama)}</td><td>${escapeHtml_(l.kelas)}</td><td>${labelPelanggaran(l.jenis)}</td><td>${formatTanggal(l.waktu)}</td></tr>`).join('') +
+    cont.innerHTML = `<table class="ledger"><thead><tr><th>Siswa</th><th>Kelas</th><th>Jenis Pelanggaran</th><th>Waktu</th><th></th></tr></thead><tbody>` +
+      data.map(l => `<tr><td>${escapeHtml_(l.nama)}</td><td>${escapeHtml_(l.kelas)}</td><td>${labelPelanggaran(l.jenis)}</td><td>${formatTanggal(l.waktu)}</td><td class="aksi">${l.sesi_id ? `<button class="secondary small" title="Lihat semua penyebab pelanggaran siswa ini dan unduh PDF" onclick="Guru.bukaLogPelanggaran('${escapeHtml_(l.sesi_id)}', '${escapeHtml_(l.nama)}', '${escapeHtml_(l.kelas)}', '')">🛡 Detail</button>` : ''}</td></tr>`).join('') +
       `</tbody></table>`;
   },
 
@@ -6563,7 +6567,7 @@ const Guru = {
           <td><span class="badge ${warnPelanggaran}">${s.pelanggaran} / ${maxPelanggaran}</span></td>
           <td>${s.status === 'berlangsung' ? '-' : (s.nilai === '' || s.nilai === undefined ? '-' : s.nilai)}</td>
           <td class="aksi">
-            <button class="secondary small" title="Lihat kronologi pelanggaran siswa ini" onclick="Guru.bukaLogPelanggaran('${s.sesiId}', '${escapeHtml_(s.nama)}')">🛡 Detail Pelanggaran</button>
+            <button class="secondary small" title="Lihat kronologi pelanggaran siswa ini" onclick="Guru.bukaLogPelanggaran('${s.sesiId}', '${escapeHtml_(s.nama)}', '${escapeHtml_(s.kelas || '')}', '${escapeHtml_(s.status || '')}')">🛡 Detail Pelanggaran</button>
             <button class="secondary small" title="Tambah waktu untuk siswa ini" onclick="Guru.pemantauanTambahWaktu('${s.sesiId}', '${escapeHtml_(s.nama)}')">⏱ Tambah Waktu</button>
             ${s.pelanggaran > 0 ? `<button class="secondary small" title="Pelanggaran jadi 0, siswa lanjut dari soal terakhir tanpa mengulang dari awal" onclick="Guru.pemantauanHapusPelanggaran('${s.sesiId}', '${escapeHtml_(s.nama)}')">🧹 Hapus Pelanggaran</button>` : ''}
             ${s.status !== 'selesai' ? `<button class="secondary small" title="Selesaikan ujian siswa ini sekarang juga memakai jawaban terakhir yang tersimpan" onclick="Guru.pemantauanForceFinish('${s.sesiId}', '${escapeHtml_(s.nama)}')">✅ Selesaikan Paksa</button>` : ''}
@@ -6589,25 +6593,131 @@ const Guru = {
     tombol_terlarang: { ikon: '⌨', label: 'Menekan tombol terlarang (diblokir)', hitung: false }
   },
 
-  async bukaLogPelanggaran(sesiId, nama) {
+  // Penjelasan bahasa awam: siswa dianggap melanggar KARENA apa (tampil di modal dan di PDF).
+  SEBAB_LOG: {
+    keluar_fullscreen: 'Siswa keluar dari mode layar penuh saat ujian berlangsung (mis. menekan tombol kembali/Esc, atau layar penuh ditutup).',
+    pindah_tab: 'Siswa meninggalkan halaman ujian lebih lama dari batas toleransi: pindah tab/aplikasi lain, layar dimatikan, atau membuka aplikasi/panel melayang.',
+    keluar_aplikasi: 'Siswa keluar dari aplikasi ujian (aplikasi ditutup atau dipindah ke latar belakang).',
+    screenshot: 'Terdeteksi pengambilan screenshot saat ujian.'
+  },
+  _logPel: null,
+  _ujianTampil_() {
+    const ids = ['pilih-ujian-rekap', 'pilih-ujian-pemantauan', 'pilih-ujian-log'];
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (el && el.offsetParent !== null && el.selectedIndex >= 0 && el.options[el.selectedIndex]) return el.options[el.selectedIndex].text || '';
+    }
+    return '';
+  },
+  async bukaLogPelanggaran(sesiId, nama, kelas, status) {
     document.getElementById('log-pelanggaran-judul').textContent = 'Detail Pelanggaran — ' + nama;
     const isi = document.getElementById('log-pelanggaran-isi');
+    const btnPdf = document.getElementById('log-pelanggaran-pdf');
+    if (btnPdf) btnPdf.disabled = true;
+    Guru._logPel = null;
     isi.innerHTML = '<p class="subtitle">Memuat...</p>';
     document.getElementById('modal-log-pelanggaran').classList.remove('hidden');
     const res = await api('getLogPelanggaran', { sesiId });
     if (!res.ok) { isi.innerHTML = '<p class="subtitle">Gagal memuat: ' + escapeHtml_(res.error || '') + '</p>'; return; }
     const data = res.data || [];
+    Guru._logPel = { sesiId, nama, kelas: kelas || '-', status: status || '', ujian: Guru._ujianTampil_(), data };
     if (!data.length) { isi.innerHTML = '<div class="log-kosong">✅ Tidak ada pelanggaran atau aktivitas mencurigakan tercatat untuk siswa ini.</div>'; return; }
+    if (btnPdf) btnPdf.disabled = false;
     const info = (jenis) => Guru.JENIS_LOG[jenis] || { ikon: '⚠', label: jenis, hitung: true };
     const total = {};
     data.forEach(l => { if (info(l.jenis).hitung) total[l.jenis] = (total[l.jenis] || 0) + 1; });
-    const ringkas = Object.keys(total).map(k => `<span class="log-chip">${info(k).ikon} ${escapeHtml_(info(k).label)}: <b>${total[k]}×</b></span>`).join('');
+    const kunciTotal = Object.keys(total);
+    const jmlHitung = kunciTotal.reduce((a, k) => a + total[k], 0);
+    const ringkas = kunciTotal.map(k => `<span class="log-chip">${info(k).ikon} ${escapeHtml_(info(k).label)}: <b>${total[k]}×</b></span>`).join('');
+    const sebab = kunciTotal.length
+      ? '<div class="log-sebab"><b>Siswa melanggar karena:</b><ul>' + kunciTotal.map(k => `<li><b>${escapeHtml_(info(k).label)}</b> (${total[k]}×) — ${escapeHtml_(Guru.SEBAB_LOG[k] || 'Aktivitas ini dihitung sebagai pelanggaran.')}</li>`).join('') + '</ul></div>'
+      : '<div class="log-sebab">Tidak ada kejadian yang dihitung sebagai pelanggaran. Catatan di bawah hanya aktivitas yang tidak dihitung.</div>';
     const fmt = (iso) => { const d = new Date(iso); return isNaN(d) ? '-' : d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); };
-    isi.innerHTML = (ringkas ? `<div class="log-ringkas">${ringkas}</div>` : '') +
+    isi.innerHTML = `<div class="log-identitas"><b>${escapeHtml_(nama)}</b> · Kelas ${escapeHtml_(kelas || '-')}${Guru._logPel.ujian ? ' · ' + escapeHtml_(Guru._logPel.ujian) : ''} · <b>${jmlHitung}</b> pelanggaran dihitung</div>` + sebab + (ringkas ? `<div class="log-ringkas">${ringkas}</div>` : '') +
       '<ol class="log-timeline">' + data.map(l => {
         const i = info(l.jenis);
         return `<li class="${i.hitung ? 'log-hitung' : 'log-info'}"><span class="log-waktu">${fmt(l.waktu)}</span><span class="log-ikon">${i.ikon}</span><div><strong>${escapeHtml_(i.label)}</strong>${l.detail ? `<div class="log-detail">${escapeHtml_(l.detail)}</div>` : ''}<span class="log-tag">${i.hitung ? 'Dihitung sebagai pelanggaran' : 'Tidak dihitung'}</span></div></li>`;
       }).join('') + '</ol>';
+  },
+
+  // Unduh PDF detail pelanggaran satu siswa (digambar langsung dengan jsPDF).
+  async unduhPdfPelanggaran() {
+    const L = Guru._logPel; if (!L || !L.data.length) { toast('Belum ada data pelanggaran untuk diunduh.', 'error'); return; }
+    const btn = document.getElementById('log-pelanggaran-pdf'); if (btn) btn.disabled = true;
+    try {
+      await muatPustaka_('jspdf');
+      const { jsPDF } = window.jspdf;
+      const { namaSekolah } = Guru._identitasSekolah_();
+      const A = (t) => String(t == null ? '' : t).replace(/[\u2013\u2014]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/[^\x20-\x7E\u00A0-\u00FF]/g, '');
+      const info = (jenis) => Guru.JENIS_LOG[jenis] || { label: jenis, hitung: true };
+      const fmt = (iso) => { const d = new Date(iso); return isNaN(d) ? '-' : d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); };
+      const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+      doc.setProperties({ title: 'Detail Pelanggaran - ' + A(L.nama), author: A(namaSekolah), creator: A(namaSekolah) });
+      const M = 15, W = 210 - 2 * M; let y = 16;
+      const baris = (txt, x, w) => doc.splitTextToSize(A(txt), w);
+      const butuh = (h) => { if (y + h > 284) { doc.addPage(); y = 16; return true; } return false; };
+
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(31, 42, 55);
+      doc.text(A(namaSekolah), 105, y, { align: 'center' }); y += 6;
+      doc.setFontSize(11); doc.text('LAPORAN DETAIL PELANGGARAN UJIAN', 105, y, { align: 'center' }); y += 3;
+      doc.setDrawColor(31, 42, 55); doc.setLineWidth(0.5); doc.line(M, y, M + W, y); y += 6;
+
+      const total = {}; L.data.forEach(l => { if (info(l.jenis).hitung) total[l.jenis] = (total[l.jenis] || 0) + 1; });
+      const kunci = Object.keys(total); const jml = kunci.reduce((a, k) => a + total[k], 0);
+      const ident = [['Nama siswa', L.nama], ['Kelas', L.kelas], ['Ujian', L.ujian || '-'], ['Pelanggaran dihitung', jml + ' kali' + (L.status === 'diblokir' ? ' (sesi DIBLOKIR)' : '')], ['Tanggal cetak', new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })]];
+      doc.setFontSize(10);
+      ident.forEach(r => {
+        const ls = baris(r[1], 0, W - 45);
+        doc.setFont('helvetica', 'bold'); doc.text(r[0], M, y);
+        doc.setFont('helvetica', 'normal'); doc.text(': ', M + 42, y); doc.text(ls, M + 45, y); y += 5.2 * ls.length;
+      });
+      y += 3;
+
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.text('Siswa melanggar karena:', M, y); y += 5.5;
+      doc.setFontSize(9.5);
+      if (!kunci.length) { doc.setFont('helvetica', 'normal'); doc.text('Tidak ada kejadian yang dihitung sebagai pelanggaran.', M, y); y += 5.5; }
+      kunci.forEach((k, n) => {
+        const judul = (n + 1) + '. ' + info(k).label + ' (' + total[k] + ' kali)';
+        const pen = baris(Guru.SEBAB_LOG[k] || 'Aktivitas ini dihitung sebagai pelanggaran.', 0, W - 6);
+        butuh(5 + pen.length * 4.4);
+        doc.setFont('helvetica', 'bold'); doc.text(A(judul), M, y); y += 4.6;
+        doc.setFont('helvetica', 'normal'); doc.setTextColor(90, 100, 112); doc.text(pen, M + 4, y); y += pen.length * 4.4 + 1.6; doc.setTextColor(31, 42, 55);
+      });
+      y += 3;
+
+      butuh(20);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.text('Kronologi kejadian', M, y); y += 4;
+      const kol = [{ t: 'No', w: 9 }, { t: 'Waktu', w: 36 }, { t: 'Kejadian', w: 56 }, { t: 'Keterangan', w: 53 }, { t: 'Status', w: 26 }];
+      const kepala = () => {
+        doc.setFillColor(29, 79, 140); doc.rect(M, y, W, 6.5, 'F'); doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+        let x = M; kol.forEach(c => { doc.text(c.t, x + 1.5, y + 4.4); x += c.w; }); y += 6.5; doc.setTextColor(31, 42, 55);
+      };
+      kepala();
+      doc.setFontSize(8.8);
+      L.data.forEach((l, n) => {
+        const i = info(l.jenis);
+        const sel = [String(n + 1), fmt(l.waktu), i.label, l.detail || '-', i.hitung ? 'Dihitung' : 'Tidak dihitung'].map((t, k) => baris(t, 0, kol[k].w - 3));
+        const h = Math.max.apply(null, sel.map(a => a.length)) * 4.2 + 2.6;
+        if (butuh(h + 1)) { kepala(); doc.setFontSize(8.8); }
+        if (i.hitung) { doc.setFillColor(253, 236, 239); doc.rect(M, y, W, h, 'F'); }
+        doc.setFont('helvetica', 'normal'); doc.setTextColor(31, 42, 55);
+        let x = M; sel.forEach((a, k) => {
+          if (k === 4 && i.hitung) doc.setFont('helvetica', 'bold');
+          doc.text(a, x + 1.5, y + 4); doc.setFont('helvetica', 'normal'); x += kol[k].w;
+        });
+        doc.setDrawColor(222, 226, 230); doc.setLineWidth(0.2); doc.line(M, y + h, M + W, y + h); y += h;
+      });
+      y += 4; butuh(8);
+      doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(108, 117, 125);
+      doc.text(baris('Catatan: browser tidak dapat membedakan "pindah tab" dari "layar dimatikan", sehingga keduanya tercatat sebagai satu jenis. Kejadian bertanda "Tidak dihitung" hanya sebagai catatan.', 0, W), M, y);
+      const hal = doc.getNumberOfPages();
+      for (let p = 1; p <= hal; p++) { doc.setPage(p); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(108, 117, 125); doc.text('Halaman ' + p + ' dari ' + hal, 105, 291, { align: 'center' }); }
+      const nm = A(L.nama).replace(/[^A-Za-z0-9 _-]/g, '').trim().replace(/\s+/g, '_') || 'siswa';
+      doc.save('Detail_Pelanggaran_' + nm + '.pdf');
+      toast('PDF detail pelanggaran berhasil diunduh.', 'success');
+    } catch (e) {
+      toast('Gagal membuat PDF: ' + (e && e.message ? e.message : e), 'error');
+    } finally { if (btn) btn.disabled = false; }
   },
 
   async pemantauanTambahWaktu(sesiId, nama) {
@@ -7792,6 +7902,9 @@ const Siswa = {
 
   soalSebelumnya() { if (state.idxSoal > 0) { state.idxSoal--; ExamEngine.renderSoal(); } },
   soalBerikutnya() {
+    if (typeof window.soalLengkap === 'function' && !window.soalLengkap(state.soal[state.idxSoal])) {
+      toast('Soal ini wajib dijawab dulu sebelum lanjut.', 'error'); return;
+    }
     if (state.idxSoal < state.soal.length - 1) { state.idxSoal++; ExamEngine.renderSoal(); }
     else Siswa.konfirmasiSubmit(); // soal terakhir: tombol berubah jadi "Selesai"
   },

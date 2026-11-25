@@ -13,7 +13,7 @@
       dan TIDAK berbunyi; hanya dicatat "gangguan singkat". Lebih lama dari itu baru pelanggaran + alarm. Atur: CBT_TOLERANSI_GANGGUAN_DETIK.
    6) WATERMARK IDENTITAS: nama + kelas + jam + kode sesi siswa diulang tipis di SELURUH layar ujian, sehingga setiap
       tangkapan layar / foto layar bisa dilacak ke pemiliknya (penangkal utama untuk screenshot yang tak terdeteksi).
-      Matikan: CBT_WATERMARK_IDENTITAS = false; atur kepekatan: CBT_WM_OPACITY (0.05 - 0.4, bawaan 0.15).
+      Matikan: CBT_WATERMARK_IDENTITAS = false; atur kepekatan: CBT_WM_OPACITY (0.03 - 0.4, bawaan 0.06).
    CATATAN JUJUR: browser/PWA TIDAK PUNYA event "screenshot", jadi screenshot lewat tombol fisik (Power+Volume) atau aplikasi
    melayang yang tidak mengambil fokus TIDAK bisa dideteksi/diblokir oleh halaman web. Itu hanya bisa dicegah lewat aplikasi
    Android native (FLAG_SECURE -> hasil screenshot hitam) atau Safe Exam Browser. Watermark di atas adalah penangkalnya.
@@ -226,9 +226,9 @@
         return [nama + (u.kelas ? ' \u00B7 ' + u.kelas : ''), tgl + ' ' + jam + (sesi ? ' \u00B7 ' + sesi : '')];
       },
       gambar() {
-        const [a, b] = K.WM.baris(), op = Math.min(0.4, Math.max(0.05, Number(window.CBT_WM_OPACITY) || 0.15));
-        const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="190"><g transform="rotate(-24 150 95)" font-family="Arial,Helvetica,sans-serif" font-weight="700" fill="#64748b" fill-opacity="' + op + '" text-anchor="middle">' +
-          '<text x="150" y="88" font-size="15">' + K.WM.xml(a) + '</text><text x="150" y="108" font-size="12">' + K.WM.xml(b) + '</text></g></svg>';
+        const [a, b] = K.WM.baris(), op = Math.min(0.4, Math.max(0.03, Number(window.CBT_WM_OPACITY) || 0.06));
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="340" height="220"><g transform="rotate(-24 170 110)" font-family="Arial,Helvetica,sans-serif" font-weight="600" fill="#64748b" fill-opacity="' + op + '" text-anchor="middle">' +
+          '<text x="170" y="103" font-size="14">' + K.WM.xml(a) + '</text><text x="170" y="122" font-size="11">' + K.WM.xml(b) + '</text></g></svg>';
         return 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")';
       },
       terapkan() {

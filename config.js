@@ -15,7 +15,7 @@ window.CBT_API_URL = 'https://script.google.com/macros/s/AKfycbwYGCTFwSJ6w9qvdV_
 // OPSI KEAMANAN UJIAN (opsional; hapus tanda // untuk mengubah)
 //   Watermark identitas (nama + kelas + jam + kode sesi, diulang tipis di seluruh layar ujian):
 //     window.CBT_WATERMARK_IDENTITAS = false;   // matikan
-//     window.CBT_WM_OPACITY = 0.15;              // kepekatan 0.05 - 0.4
+//     window.CBT_WM_OPACITY = 0.06;              // kepekatan 0.03 - 0.4 (bawaan 0.06 = samar)
 //   MASA TOLERANSI GANGGUAN: notifikasi / pesan WA / telepon / alarm yang mengganggu sesaat (selesai sendiri dalam beberapa detik)
 //   TIDAK dihitung pelanggaran dan tidak berbunyi (hanya dicatat "gangguan singkat"). Lebih lama dari itu = pelanggaran + alarm.
 //     window.CBT_TOLERANSI_GANGGUAN_DETIK = 8;   // 0 - 60 detik (0 = langsung dihitung)

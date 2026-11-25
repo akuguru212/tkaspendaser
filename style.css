@@ -1854,3 +1854,9 @@ details.tm-det > summary { cursor: pointer; font-weight: 700; font-size: .88rem;
 .btn-salin-token { display: inline-flex; align-items: center; justify-content: center; width: 1.9rem; height: 1.9rem; padding: 0; margin-left: .3rem; vertical-align: middle; border-radius: 8px; border: 1px solid var(--c-line); background: var(--c-surface); color: var(--c-text); font-size: .85rem; cursor: pointer; box-shadow: none; }
 .btn-salin-token:hover { background: color-mix(in srgb, var(--c-primary) 14%, var(--c-surface)); border-color: var(--c-primary); }
 .btn-salin-token.tersalin { background: var(--c-ok-bg, #e3f6ec); color: var(--c-ok, #16a97e); border-color: currentColor; }
+
+/* Detail pelanggaran: identitas + penyebab */
+.log-identitas { font-size: .88rem; margin: 0 0 .6rem; color: var(--c-text); }
+.log-sebab { margin: 0 0 .7rem; padding: .7rem .85rem; border-radius: 12px; background: var(--c-no-bg); font-size: .86rem; line-height: 1.5; }
+.log-sebab ul { margin: .35rem 0 0; padding-left: 1.1rem; }
+.log-sebab li { margin-bottom: .3rem; }

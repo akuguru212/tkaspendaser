@@ -3008,6 +3008,12 @@ function actionCatatAktivitas_(data) {
 
 // Daftar kejadian (pelanggaran & aktivitas) satu sesi, urut waktu, untuk layar guru.
 function actionGetLogPelanggaran_(data) {
+  // Tanpa sesiId = daftar log satu ujian (tab Log Pelanggaran). Dengan sesiId = kronologi satu siswa.
+  if (!data.sesiId) {
+    var semua = readAll_(SHEET.LOG);
+    if (data.ujianId) semua = semua.filter(function (l) { return l.ujian_id === data.ujianId; });
+    return jsonOut_({ ok: true, data: semua });
+  }
   var list = readAll_(SHEET.LOG).filter(function (l) { return String(l.sesi_id) === String(data.sesiId); });
   list.sort(function (a, b) { return new Date(a.waktu) - new Date(b.waktu); });
   return jsonOut_({ ok: true, data: list.map(function (l) { return { waktu: l.waktu, jenis: l.jenis, detail: l.detail || '' }; }) });

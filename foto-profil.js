@@ -21,6 +21,8 @@ const FotoProfil = (function () {
   const CSS = `
 .fp-av { display: inline-grid; place-items: center; overflow: hidden; border-radius: 50%; background: linear-gradient(135deg, #326698, #0d6efd); color: #fff; font-weight: 700; letter-spacing: .03em; flex: none; }
 .fp-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fp-emo { font-size: 1.55em; line-height: 1; font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; letter-spacing: 0; user-select: none; -webkit-user-select: none; }
+.fp-av.fp-kar { color: inherit; }
 .anbk-user-ico.fp-has { background: none; border-radius: 50%; overflow: hidden; padding: 0; box-shadow: 0 0 0 2px rgba(255,255,255,.85); }
 .anbk-user-ico.fp-has img { width: 100%; height: 100%; object-fit: cover; display: block; }
 #sw-screen .sw-av.fp-has { background: #e9eef6; overflow: hidden; padding: 0; }
@@ -91,8 +93,19 @@ const FotoProfil = (function () {
   // ---------------- avatar ----------------
   const inisial = (n) => String(n || '?').trim().split(/\s+/).slice(0, 2).map(x => x[0] || '').join('').toUpperCase() || '?';
   const fotoUser = () => (state.user && state.user.role === 'siswa' && state.user.foto) ? state.user.foto : '';
-  function avatarHtml(nama, foto, kelas) {
-    return `<span class="fp-av ${kelas || ''}">${foto ? `<img src="${esc(foto)}" alt="" decoding="async">` : esc(inisial(nama))}</span>`;
+  // Avatar bawaan (belum ada foto): karakter lucu (hewan, bunga, dll.) + warna pastel. Dipilih otomatis dari ID siswa,
+  // jadi tiap siswa punya karakter sendiri yang SAMA di semua perangkat (tanpa perlu disimpan di server).
+  const KARAKTER = ['🐱', '🐶', '🐼', '🐨', '🦊', '🐰', '🐯', '🦁', '🐸', '🐵', '🐧', '🐥', '🦄', '🐙', '🐳', '🐬', '🦋', '🐝', '🐞', '🐢', '🐹', '🐻', '🐷', '🐮', '🦉', '🦒', '🐘', '🦕', '🌸', '🌻', '🌼', '🌷', '🌺', '🍀', '🍓', '🍉', '⭐', '🌈', '🚀', '🤖'];
+  function hashStr(t) { let h = 2166136261; t = String(t); for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+  function karakter(seed) {
+    const h = hashStr(seed || '?');
+    return { emo: KARAKTER[h % KARAKTER.length], bg: 'linear-gradient(135deg, hsl(' + ((h >>> 8) % 360) + ' 90% 91%), hsl(' + ((h >>> 8) % 360) + ' 80% 79%))' };
+  }
+  const bukaSeed = (u) => String((u && (u.id || u.username || u.nama)) || '?');
+  function avatarHtml(nama, foto, kelas, seed) {
+    if (foto) return `<span class="fp-av ${kelas || ''}"><img src="${esc(foto)}" alt="" decoding="async"></span>`;
+    const k = karakter(seed || nama);
+    return `<span class="fp-av fp-kar ${kelas || ''}" style="background:${k.bg}"><span class="fp-emo" aria-hidden="true">${k.emo}</span></span>`;
   }
 
   function terapkanAvatar() {
@@ -116,8 +129,12 @@ const FotoProfil = (function () {
       btn.insertAdjacentHTML('beforeend', '<span class="fp-cam" aria-hidden="true"><i class="fa-solid fa-camera"></i></span>');
     }
     if (av) {
-      if (foto) { if (av.dataset.fpSrc !== foto) { av.innerHTML = `<img src="${esc(foto)}" alt="Foto profil" decoding="async">`; av.dataset.fpSrc = foto; } av.classList.add('fp-has'); }
-      else if (av.classList.contains('fp-has')) { av.classList.remove('fp-has'); delete av.dataset.fpSrc; av.textContent = inisial(u.nama); }
+      if (foto) { if (av.dataset.fpSrc !== foto) { av.innerHTML = `<img src="${esc(foto)}" alt="Foto profil" decoding="async">`; av.dataset.fpSrc = foto; } av.classList.add('fp-has'); av.style.background = ''; delete av.dataset.fpKar; }
+      else {
+        if (av.classList.contains('fp-has')) { av.classList.remove('fp-has'); delete av.dataset.fpSrc; }
+        const sd = bukaSeed(u);
+        if (av.dataset.fpKar !== sd) { const k = karakter(sd); av.style.background = k.bg; av.style.fontSize = '22px'; av.innerHTML = `<span class="fp-emo" aria-hidden="true">${k.emo}</span>`; av.dataset.fpKar = sd; }
+      }
     }
     // avatar besar di banner Dashboard
     const hero = document.querySelector('#sw-isi .sw-hero');
@@ -128,8 +145,8 @@ const FotoProfil = (function () {
         h.setAttribute('aria-label', 'Ubah foto profil'); h.title = 'Ubah foto profil'; h.addEventListener('click', (e) => buka(e.currentTarget));
         hero.insertBefore(h, hero.firstChild);
       }
-      const kunci = foto || ('i:' + inisial(u.nama));
-      if (h.dataset.fpSrc !== kunci) { h.innerHTML = avatarHtml(u.nama, foto) + '<span class="fp-cam" aria-hidden="true"><i class="fa-solid fa-camera"></i></span>'; h.dataset.fpSrc = kunci; }
+      const kunci = foto || ('k:' + bukaSeed(u));
+      if (h.dataset.fpSrc !== kunci) { h.innerHTML = avatarHtml(u.nama, foto, '', bukaSeed(u)) + '<span class="fp-cam" aria-hidden="true"><i class="fa-solid fa-camera"></i></span>'; h.dataset.fpSrc = kunci; }
     }
   }
 
@@ -401,10 +418,10 @@ const FotoProfil = (function () {
 
   // ---------------- sisi guru: Data Siswa ----------------
   function miniGuru(s) {
-    const av = avatarHtml(s.nama, s.foto, 'fp-mini');
+    const av = avatarHtml(s.nama, s.foto, 'fp-mini', s.id || s.username || s.nama);
     return s.foto
       ? `<button type="button" class="fp-mini-btn" onclick="FotoProfil.lihatGuru('${esc(s.id)}')" title="Lihat foto ${esc(s.nama)}" aria-label="Lihat foto ${esc(s.nama)}">${av}</button>`
-      : `<span title="Belum ada foto">${av}</span>`;
+      : `<span title="Belum ada foto (memakai karakter bawaan)">${av}</span>`;
   }
   function lihatGuru(id) {
     const s = (state.guru.daftarSiswa || []).find(x => x.id === id); if (!s || !s.foto || $('fp-overlay')) return;

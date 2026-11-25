@@ -210,6 +210,32 @@ const Anbk = (function () {
   };
   UI.kembaliKeBerandaSiswa = function () { tampilKonfirmasiData(); };
 
+  // Soal wajib dijawab lengkap sebelum lanjut (sama seperti halaman survei)
+  function soalLengkap(so) {
+    if (!so) return true;
+    const v = state.jawaban[so.id];
+    if (v === undefined || v === null) return false;
+    if (so.tipe === 'checkbox') return Array.isArray(v) && v.length > 0;
+    if (so.tipe === 'menjodohkan') {
+      const n = ((so.opsi && so.opsi.kiri) || []).length;
+      if (typeof v !== 'object') return false;
+      for (let r = 0; r < n; r++) { if (v[r] === undefined || v[r] === null || v[r] === '') return false; }
+      return n > 0;
+    }
+    if (so.tipe === 'uraian') return String(v).trim() !== '';
+    return v !== '';
+  }
+  window.soalLengkap = soalLengkap;
+  function perbaruiNext() {
+    const nx = $('btn-soal-next'); if (!nx) return;
+    const ok = soalLengkap(state.soal[state.idxSoal]);
+    nx.disabled = !ok;
+    nx.title = ok ? '' : 'Jawab soal ini terlebih dahulu';
+  }
+  const _grid = ExamEngine.renderGridSoal;
+  ExamEngine.renderGridSoal = function () { _grid.apply(this, arguments); perbaruiNext(); };
+  ExamEngine.perbaruiNext = perbaruiNext;
+
   ExamEngine.renderSoal = function () {
     const idx = state.idxSoal, soal = state.soal[idx], card = $('question-card');
     card.innerHTML = renderKontenSoal(soal, { nomor: idx + 1, total: state.soal.length, interaktif: true, jawaban: state.jawaban, pecah: true, anbk: true });
@@ -222,7 +248,7 @@ const Anbk = (function () {
     nx.classList.toggle('selesai', terakhir);
     nx.querySelector('span').textContent = terakhir ? 'Selesai' : 'Soal berikutnya';
     nx.querySelector('i').style.display = terakhir ? 'none' : '';
-    SkalaSoal.terapkan(); ExamEngine.renderGridSoal();
+    SkalaSoal.terapkan(); ExamEngine.renderGridSoal(); perbaruiNext();
     $('modal-daftar').classList.add('hidden'); $('modal-info').classList.add('hidden');
   };
   ExamEngine.pilihJawabanTunggal = function (id, i) {
