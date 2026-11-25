@@ -300,11 +300,11 @@
 #kunci-overlay.alarm h3 { color: #c62828; }
 #kunci-overlay.alarm button { background: #c62828; }
 @keyframes kunci-kedip { from { background: rgba(120,10,10,.97); } to { background: rgba(200,20,20,.97); } }
-body.kunci-tutup #ujian-screen { visibility: hidden; }
+body.kunci-tutup #ujian-screen, body.kunci-tutup #survei-screen { visibility: hidden; }
 /* isi soal disembunyikan saat halaman kehilangan fokus (hasil tangkapan layar / app switcher jadi kosong) */
-body.kunci-blur #ujian-screen { visibility: hidden !important; }
-body.kunci-aktif #ujian-screen { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-body.kunci-aktif #ujian-screen img { -webkit-user-drag: none; pointer-events: auto; }
+body.kunci-blur #ujian-screen, body.kunci-blur #survei-screen { visibility: hidden !important; }
+body.kunci-aktif #ujian-screen, body.kunci-aktif #survei-screen { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+body.kunci-aktif #ujian-screen img, body.kunci-aktif #survei-screen img { -webkit-user-drag: none; pointer-events: auto; }
 @media print { body.kunci-aktif * { display: none !important; } }
 
 /* ============================================================================

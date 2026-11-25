@@ -358,6 +358,7 @@ function route_(action, data) {
     case 'simpanJawaban': return actionSimpanJawaban_(data);
     case 'lapor': return actionLapor_(data);
     case 'catatAktivitas': return actionCatatAktivitas_(data);
+    case 'laporSurvei': return actionLaporSurvei_(data);
     case 'getLogPelanggaran': return actionGetLogPelanggaran_(data);
     case 'submitUjian': return actionSubmitUjian_(data);
     case 'getHasil': return actionGetHasil_(data);
@@ -1662,19 +1663,40 @@ function actionSimpanSurvei_(data) {
 }
 
 // data: { ujianId } -> { jenis, data:[{sesiId, siswaId, nama, kelas, waktu, durasi, jawaban, kualitas}], belum }
+// Ringkasan kejadian anti-nyontek SAAT SURVEI per sesi (dari LOG yang berawalan "[Survei]"). Hanya untuk tampilan guru:
+//   pelanggaran = keluar layar penuh / pindah tab / keluar aplikasi / screenshot (jenis yang "dihitung" pada ujian)
+//   percobaan   = salin/tempel/potong/klik kanan/tombol terlarang/alarm (sudah diblokir)
+//   gangguan    = gangguan singkat dalam masa toleransi (notifikasi/telepon)
+// Angka ini TERPISAH dari kolom `pelanggaran` sesi ujian dan tidak memengaruhi apa pun.
+function ringkasLogSurvei_(ujianId) {
+  var HITUNG = { keluar_fullscreen: 1, pindah_tab: 1, keluar_aplikasi: 1, screenshot: 1 };
+  var PERCOBAAN = { salin_teks: 1, tempel_teks: 1, potong_teks: 1, klik_kanan: 1, tombol_terlarang: 1, alarm_keluar: 1 };
+  var peta = {};
+  readAll_(SHEET.LOG).forEach(function (l) {
+    if (String(l.ujian_id) !== String(ujianId) || String(l.detail || '').indexOf('[Survei]') !== 0) return;
+    var k = String(l.sesi_id);
+    var o = peta[k] || (peta[k] = { pelanggaran: 0, percobaan: 0, gangguan: 0, total: 0 });
+    var j = String(l.jenis || '');
+    if (HITUNG[j]) o.pelanggaran++; else if (PERCOBAAN[j]) o.percobaan++; else if (j === 'gangguan_singkat') o.gangguan++; else return;
+    o.total++;
+  });
+  return peta;
+}
+
 function actionGetRekapSurvei_(data) {
   var ujian = readAll_(SHEET.UJIAN).filter(function (u) { return u.id === data.ujianId; })[0];
   if (!ujian) return jsonOut_({ ok: false, error: 'Ujian tidak ditemukan.' });
   var siswaMap = {};
   readAll_(SHEET.SISWA).forEach(function (x) { siswaMap[x.id] = x; });
   var sudah = {};
+  var logSv = ringkasLogSurvei_(ujian.id);
   var baris = readAll_(SHEET.SURVEI).filter(function (r) { return String(r.ujian_id) === String(ujian.id); }).map(function (r) {
     sudah[String(r.sesi_id)] = true;
     var sw = siswaMap[r.siswa_id] || {};
     var jw = {}, kq = {};
     try { jw = JSON.parse(r.jawaban_json || '{}'); } catch (e) {}
     try { kq = JSON.parse(r.kualitas_json || '{}'); } catch (e) {}
-    return { sesiId: r.sesi_id, siswaId: r.siswa_id, nama: sw.nama || '(tidak dikenal)', kelas: sw.kelas || '-', waktu: r.waktu, durasi: Number(r.durasi_detik) || 0, jawaban: jw, kualitas: kq };
+    return { sesiId: r.sesi_id, siswaId: r.siswa_id, nama: sw.nama || '(tidak dikenal)', kelas: sw.kelas || '-', waktu: r.waktu, durasi: Number(r.durasi_detik) || 0, jawaban: jw, kualitas: kq, logSurvei: logSv[String(r.sesi_id)] || { pelanggaran: 0, percobaan: 0, gangguan: 0, total: 0 } };
   }).sort(function (a, b) { return String(a.kelas).localeCompare(String(b.kelas)) || String(a.nama).localeCompare(String(b.nama)); });
   var belum = bacaSesiGabunganUntukUjian_(ujian.id)
     .map(function (b) { return ambilSesiState_(b.id) || b; })
@@ -3029,6 +3051,25 @@ function skorSoal_(soal, jwb, idxOrder) {
 // Mencatat aktivitas mencurigakan/informatif yang TIDAK menambah hitungan pelanggaran
 // (mis. percobaan salin/tempel yang sudah diblokir, atau siswa kembali ke halaman ujian
 // beserta lama ia pergi). Best-effort: bila kunci tidak didapat, catatan dilewati.
+// Kejadian anti-nyontek saat SURVEI (setelah ujian terkirim). Hanya dicatat ke LOG dengan awalan "[Survei]";
+// TIDAK menambah hitungan pelanggaran sesi dan tidak memblokir. data: { sesiId, siswaId, jenis, detail }
+function actionLaporSurvei_(data) {
+  var JENIS_OK = ['keluar_fullscreen', 'pindah_tab', 'keluar_aplikasi', 'kembali', 'salin_teks', 'tempel_teks', 'potong_teks', 'klik_kanan', 'screenshot', 'alarm_keluar', 'gangguan_singkat', 'tombol_terlarang'];
+  if (JENIS_OK.indexOf(String(data.jenis || '')) < 0) return jsonOut_({ ok: true });
+  var state = ambilSesiState_(data.sesiId);
+  if (!state || state.status === 'berlangsung' || String(state.siswa_id) !== String(data.siswaId || '')) return jsonOut_({ ok: true });
+  var lockLog = LockService.getScriptLock();
+  if (lockLog.tryLock(5000)) {
+    try {
+      appendObj_(SHEET.LOG, headersOf_(SHEET.LOG), {
+        id: genId_('LOG'), sesi_id: data.sesiId, siswa_id: state.siswa_id, ujian_id: state.ujian_id,
+        waktu: new Date().toISOString(), jenis: String(data.jenis), detail: '[Survei] ' + String(data.detail || '').slice(0, 110)
+      });
+    } finally { lockLog.releaseLock(); }
+  }
+  return jsonOut_({ ok: true });
+}
+
 function actionCatatAktivitas_(data) {
   var state = ambilSesiState_(data.sesiId);
   if (!state || state.status !== 'berlangsung') return jsonOut_({ ok: true });

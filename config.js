@@ -22,4 +22,7 @@ window.CBT_API_URL = 'https://script.google.com/macros/s/AKfycbwYGCTFwSJ6w9qvdV_
 //   Kehilangan fokus layar yang lebih lama dari masa toleransi (aplikasi melayang, panel notifikasi, jendela lain) dihitung PELANGGARAN.
 //   Bila di perangkat tertentu terlalu sensitif, jadikan hanya alarm (tanpa hitungan):
 //     window.CBT_FOKUS_PELANGGARAN = false;
+//   Anti-nyontek yang sama (layar penuh, alarm, screenshot, watermark, blokir salin) juga aktif di halaman SURVEI Karakter & Sulingjar.
+//   Kejadiannya dicatat ke Detail Pelanggaran guru dengan awalan "[Survei]" (tidak menambah hitungan pelanggaran ujian). Matikan:
+//     window.CBT_ANTICHEAT_SURVEI = false;
 // ----------------------------------------------------------------------------

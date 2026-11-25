@@ -1,3 +1,22 @@
+# v43z22 — Ringkasan "Pelanggaran Survei" di Hasil Survei guru
+
+- **Kolom baru "Pelanggaran Survei"** di tabel **Hasil Survei** (per siswa), plus ringkasan di atas tabel: *"n siswa ada pelanggaran survei"*. Guru tidak perlu lagi membuka Detail Pelanggaran satu per satu.
+- **Yang dihitung sebagai pelanggaran survei:** keluar layar penuh, pindah tab/aplikasi (melewati masa toleransi), dan screenshot. Di bawah angka ditampilkan keterangan kecil bila ada: *percobaan diblokir* (salin/tempel/potong/klik kanan/tombol terlarang/alarm) dan *gangguan singkat* (notifikasi/telepon dalam masa toleransi). Kejadian "kembali" tidak dihitung.
+- **Terpisah dari ujian:** angka ini diambil dari log berawalan **[Survei]** dan **tidak** menambah kolom pelanggaran sesi ujian, tidak memblokir, dan tidak memengaruhi nilai.
+- **Unduhan Excel** Hasil Survei menambah 3 kolom: *Pelanggaran Survei*, *Percobaan Diblokir (Survei)*, *Gangguan Singkat (Survei)*.
+- **Rekap Nilai** (bila survei ditampilkan di samping nilai tes): muncul baris kecil *"Pelanggaran survei n"* hanya untuk siswa yang punya pelanggaran.
+- **Mode Server:** tempel `Code.gs` terbaru (fungsi baru `ringkasLogSurvei_`, aksi `getRekapSurvei` kini mengembalikan `logSurvei`) lalu deploy versi baru. Tanpa itu kolom tetap tampil dengan nilai 0. Mode Lokal langsung berfungsi.
+- File berubah: `survei.js`, `app.js`, `Code.gs`, `index.html` & `sw.js` (versi cache), `README.md`.
+
+# v43z21 — Anti-nyontek juga aktif di halaman Survei Karakter & Sulingjar
+
+- **Sama seperti halaman soal Numerasi/Literasi**, selama siswa mengisi survei berlaku: wajib layar penuh, alarm sirine + getar bila keluar (pindah aplikasi, layar mati, keluar layar penuh, tombol Kembali), deteksi screenshot (PrintScreen, Win+Shift+S, Cmd+Shift+3/4/5), isi layar disembunyikan saat kehilangan fokus, **watermark identitas** (nama · kelas · jam · kode sesi), salin/tempel/klik kanan/cetak diblokir, serta layar HP tetap menyala. Masa toleransi gangguan singkat (notifikasi/telepon, bawaan 8 detik) berlaku sama.
+- **Dicatat untuk guru:** semua kejadian masuk **Detail Pelanggaran** dengan awalan **[Survei]** pada keterangannya. Survei dikerjakan setelah ujian terkirim, jadi kejadian ini **tidak menambah hitungan pelanggaran ujian dan tidak memblokir**; siswa cukup menekan **Kembali ke Survei** untuk melanjutkan.
+- **Berakhir otomatis** saat survei terkirim (sebelum layar *Lihat Hasil Tes*), sehingga halaman hasil tidak terkunci.
+- **Matikan bila perlu** di `config.js`: `window.CBT_ANTICHEAT_SURVEI = false;`
+- **Mode Server:** tempel `Code.gs` terbaru (aksi baru `laporSurvei`) lalu deploy versi baru. Tanpa itu anti-nyontek tetap berjalan di sisi siswa, hanya catatan [Survei] belum masuk log guru. Mode Lokal langsung berfungsi.
+- File berubah: `survei.js`, `app.js`, `kunci-ujian.js`, `mobile.css`, `config.js` (hanya komentar opsi), `Code.gs`, `index.html` & `sw.js` (versi cache), `README.md`. Fitur pilih karakter v43z20 tetap ikut.
+
 # v43z20 — Pilih karakter lucu (animasi) untuk avatar siswa
 
 - **Menu baru:** pojok kanan atas → **Foto & Karakter** (atau ketuk avatar di Portal Siswa / banner Dashboard). Dialog kini punya dua tab: **Foto** (seperti sebelumnya) dan **Karakter Lucu**. Siswa tanpa foto langsung dibuka di tab Karakter.

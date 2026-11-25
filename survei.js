@@ -611,9 +611,21 @@ const Survei = (function () {
     UI.tampilkan('survei-screen');
     const anticheat = $('anticheat-warning'); if (anticheat) anticheat.classList.add('hidden');
     render();
+    // Anti-nyontek yang sama dengan halaman soal (layar penuh, alarm, screenshot, watermark, blokir salin) aktif selama survei.
+    // Kejadian dicatat ke log guru dengan awalan "[Survei]" dan TIDAK menambah hitungan pelanggaran ujian / tidak memblokir.
+    // Matikan lewat config.js: window.CBT_ANTICHEAT_SURVEI = false;
+    const kunciSurvei = window.CBT_ANTICHEAT_SURVEI !== false && typeof AntiCheat !== 'undefined';
+    const akhiriKunci = () => {
+      if (!kunciSurvei || !AntiCheat.modeSurvei) return;
+      try { AntiCheat.nonaktifkan(); } catch (e) { /* abaikan */ }
+      AntiCheat.modeSurvei = false;
+      const w = $('anticheat-warning'); if (w) w.classList.add('hidden');
+    };
+    if (kunciSurvei) { try { AntiCheat.modeSurvei = true; AntiCheat.aktifkan(); } catch (e) { AntiCheat.modeSurvei = false; } }
     await new Promise(resolve => {
       S.selesai = async (res) => {
         S.selesai = null;
+        akhiriKunci();
         await tampilRingkasanSiswa(); // Nilai Kesungguhan selalu tampil; indeks per dimensi hanya bila diaktifkan di Kelola Ujian
         resolve();
       };
@@ -675,8 +687,17 @@ const Survei = (function () {
     return G.data.filter(r => (!kls || r.kelas === kls) && (!q || String(r.nama).toLowerCase().indexOf(q) >= 0));
   }
 
+  // Ringkasan kejadian anti-nyontek saat survei (dari log "[Survei]"). TERPISAH dari hitungan pelanggaran ujian.
+  function lgSurvei(x) { x = x || {}; return { pelanggaran: Number(x.pelanggaran) || 0, percobaan: Number(x.percobaan) || 0, gangguan: Number(x.gangguan) || 0, total: Number(x.total) || 0 }; }
+  function selLgSurvei(lg) {
+    lg = lgSurvei(lg);
+    const rinci = [lg.percobaan ? lg.percobaan + ' percobaan diblokir' : '', lg.gangguan ? lg.gangguan + ' gangguan singkat' : ''].filter(Boolean).join(', ');
+    const tip = 'Pelanggaran survei (keluar layar penuh/pindah tab/aplikasi/screenshot): ' + lg.pelanggaran + (rinci ? '. Selain itu: ' + rinci : '') + '. Tidak menambah hitungan pelanggaran ujian.';
+    return `<span class="badge ${lg.pelanggaran ? 'no' : 'ok'}" title="${esc(tip)}">${lg.pelanggaran}</span>${rinci ? `<div class="sv-kes-mini" title="${esc(tip)}">${esc(rinci)}</div>` : ''}`;
+  }
+
   function hitungBaris(r) {
-    if (!r._h) { r._h = hitung(G.jenis, r.jawaban, G.set); const q = r.kualitas || {}; r._q = { baik: q.baik !== false, alasan: Array.isArray(q.alasan) ? q.alasan : [] }; }
+    if (!r._h) { r._h = hitung(G.jenis, r.jawaban, G.set); const q = r.kualitas || {}; r._q = { baik: q.baik !== false, alasan: Array.isArray(q.alasan) ? q.alasan : [] }; r._lg = lgSurvei(r.logSurvei); }
     return r;
   }
 
@@ -693,12 +714,12 @@ const Survei = (function () {
     const butir = J.butir.map(b => { const v = rows.map(r => r._h.butir[b[0]]).filter(x => x !== undefined); return { b, m: v.length ? bulat2(((v.reduce((a, c) => a + c, 0) / v.length) - 1) / 3 * 100) : null }; }).filter(x => x.m !== null).sort((a, c) => a.m - c.m).slice(0, 5);
     const lemah = `<div class="sv-lemah"><b>5 butir dengan nilai terendah (bahan perbaikan)</b><ol>${butir.map(x => `<li><span>${esc(x.b[4])}</span> <em>${esc(J.dimNama[x.b[1]])}</em> <b style="color:${kategoriIndeks(x.m).warna}">${fmt(x.m)}</b></li>`).join('')}</ol></div>`;
     const perhatian = G.jenis === 'sulingjar' ? rows.filter(r => BUTIR_PERHATIAN.some(id => Number(r.jawaban[id]) >= 3)).length : 0;
-    ring.innerHTML = `<div class="sv-info"><span><b>${rows.length}</b> siswa mengisi</span>${G.belum ? `<span><b>${G.belum}</b> belum mengisi</span>` : ''}<span><b>${rows.filter(r => !r._q.baik).length}</b> pengisian perlu dicek</span>${(() => { const v = rows.map(r => r.kualitas && r.kualitas.nilai).filter(x => x !== undefined && x !== null); return v.length ? `<span>Rata-rata Nilai Kesungguhan <b>${fmt(bulat2(v.reduce((a, c) => a + c, 0) / v.length))}</b></span>` : ''; })()}<span>Rata-rata nilai survei <b>${fmt(totalKelas)}</b></span>${perhatian ? `<span class="sv-warn"><i class="fa-solid fa-circle-exclamation"></i> <b>${perhatian}</b> siswa melaporkan pengalaman tidak aman (beberapa kali/sering)</span>` : ''}</div><div class="sv-kartu-wrap">${kartu}</div>${htmlEvaluasi(rows, J, rata)}${htmlPerKelas(rows, J)}${lemah}<p class="subtitle" style="margin:.4rem 0">Nilai survei skala 0–100 (makin tinggi makin baik; jawaban terbaik = skor 4). Kategori Baik ≥ 75, Sedang 50–74,99, Perlu perhatian &lt; 50 hanyalah acuan latihan.</p>`;
+    ring.innerHTML = `<div class="sv-info"><span><b>${rows.length}</b> siswa mengisi</span>${G.belum ? `<span><b>${G.belum}</b> belum mengisi</span>` : ''}<span><b>${rows.filter(r => !r._q.baik).length}</b> pengisian perlu dicek</span><span title="Siswa yang keluar layar penuh/pindah tab/aplikasi/screenshot saat mengisi survei"><b>${rows.filter(r => r._lg.pelanggaran > 0).length}</b> siswa ada pelanggaran survei</span>${(() => { const v = rows.map(r => r.kualitas && r.kualitas.nilai).filter(x => x !== undefined && x !== null); return v.length ? `<span>Rata-rata Nilai Kesungguhan <b>${fmt(bulat2(v.reduce((a, c) => a + c, 0) / v.length))}</b></span>` : ''; })()}<span>Rata-rata nilai survei <b>${fmt(totalKelas)}</b></span>${perhatian ? `<span class="sv-warn"><i class="fa-solid fa-circle-exclamation"></i> <b>${perhatian}</b> siswa melaporkan pengalaman tidak aman (beberapa kali/sering)</span>` : ''}</div><div class="sv-kartu-wrap">${kartu}</div>${htmlEvaluasi(rows, J, rata)}${htmlPerKelas(rows, J)}${lemah}<p class="subtitle" style="margin:.4rem 0">Nilai survei skala 0–100 (makin tinggi makin baik; jawaban terbaik = skor 4). Kategori Baik ≥ 75, Sedang 50–74,99, Perlu perhatian &lt; 50 hanyalah acuan latihan.</p>`;
     const th = J.dim.map(d => `<th title="${esc(d[1])}">${esc(d[1].length > 22 ? d[1].slice(0, 20) + '…' : d[1])}</th>`).join('');
-    cont.innerHTML = `<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>Nama</th><th>Kelas</th>${th}<th>${G.jenis === 'karakter' ? 'Nilai Survei Karakter' : 'Nilai Sulingjar'}</th><th>Waktu</th><th>Nilai Kesungguhan</th><th>Kualitas Pengisian</th>${G.jenis === 'sulingjar' ? '<th>Catatan</th>' : ''}</tr></thead><tbody>${rows.map((r, i) => {
+    cont.innerHTML = `<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>Nama</th><th>Kelas</th>${th}<th>${G.jenis === 'karakter' ? 'Nilai Survei Karakter' : 'Nilai Sulingjar'}</th><th>Waktu</th><th>Nilai Kesungguhan</th><th>Kualitas Pengisian</th><th title="Kejadian anti-nyontek saat survei (tidak menambah pelanggaran ujian)">Pelanggaran Survei</th>${G.jenis === 'sulingjar' ? '<th>Catatan</th>' : ''}</tr></thead><tbody>${rows.map((r, i) => {
       const sel = J.dim.map(d => { const x = r._h.dim[d[0]].indeks; const k = kategoriIndeks(x); return `<td><span class="sv-lencana" style="background:${k.latar};color:${k.warna}">${fmt(x)}</span></td>`; }).join('');
       const cat = G.jenis === 'sulingjar' ? `<td>${BUTIR_PERHATIAN.filter(id => Number(r.jawaban[id]) >= 3).length ? '<span class="badge no" title="Menjawab Beberapa kali/Sering pada butir pengalaman tidak aman. Tindak lanjuti secara rahasia.">Perlu tindak lanjut</span>' : '-'}</td>` : '';
-      return `<tr><td>${i + 1}</td><td>${esc(r.nama)}</td><td>${esc(r.kelas)}</td>${sel}<td><b>${fmt(r._h.total)}</b></td><td>${r.durasi ? Math.floor(r.durasi / 60) + ' mnt ' + (r.durasi % 60) + ' dtk' : '-'}</td><td>${r.kualitas && r.kualitas.nilai !== undefined ? `<span class="sv-lencana" style="background:${kategoriKesungguhan(r.kualitas.nilai).latar};color:${kategoriKesungguhan(r.kualitas.nilai).warna}" title="${kategoriKesungguhan(r.kualitas.nilai).label}">${r.kualitas.nilai}</span>` : '-'}</td><td>${r._q.baik ? '<span class="badge ok">Baik</span>' : `<span class="badge no" title="${esc(r._q.alasan.join('; '))}">Perlu dicek</span>`}</td>${cat}</tr>`;
+      return `<tr><td>${i + 1}</td><td>${esc(r.nama)}</td><td>${esc(r.kelas)}</td>${sel}<td><b>${fmt(r._h.total)}</b></td><td>${r.durasi ? Math.floor(r.durasi / 60) + ' mnt ' + (r.durasi % 60) + ' dtk' : '-'}</td><td>${r.kualitas && r.kualitas.nilai !== undefined ? `<span class="sv-lencana" style="background:${kategoriKesungguhan(r.kualitas.nilai).latar};color:${kategoriKesungguhan(r.kualitas.nilai).warna}" title="${kategoriKesungguhan(r.kualitas.nilai).label}">${r.kualitas.nilai}</span>` : '-'}</td><td>${r._q.baik ? '<span class="badge ok">Baik</span>' : `<span class="badge no" title="${esc(r._q.alasan.join('; '))}">Perlu dicek</span>`}</td><td>${selLgSurvei(r._lg)}</td>${cat}</tr>`;
     }).join('')}</tbody></table></div>`;
   }
 
@@ -738,8 +759,8 @@ const Survei = (function () {
   async function guruUnduh() {
     const J = G.set; if (!J) { toast('Pilih ujian dulu.', 'error'); return; }
     const rows = guruSaring().map(hitungBaris); if (!rows.length) { toast('Belum ada data untuk diunduh.', 'error'); return; }
-    const head = ['No', 'Nama', 'Kelas'].concat(J.dim.map(d => 'Nilai ' + d[1])).concat(G.jenis === 'karakter' ? ['Nilai Survei Karakter'] : ['Nilai Sulingjar (rata-rata)']).concat(['Durasi (detik)', 'Nilai Kesungguhan', 'Kualitas Pengisian', 'Keterangan']).concat(J.butir.map(b => b[0]));
-    const data = rows.map((r, i) => [i + 1, r.nama, r.kelas].concat(J.dim.map(d => r._h.dim[d[0]].indeks)).concat([r._h.total]).concat([r.durasi || '', (r.kualitas && r.kualitas.nilai !== undefined) ? r.kualitas.nilai : '', r._q.baik ? 'Baik' : 'Perlu dicek', r._q.alasan.join('; ')]).concat(J.butir.map(b => r.jawaban[b[0]] || '')));
+    const head = ['No', 'Nama', 'Kelas'].concat(J.dim.map(d => 'Nilai ' + d[1])).concat(G.jenis === 'karakter' ? ['Nilai Survei Karakter'] : ['Nilai Sulingjar (rata-rata)']).concat(['Durasi (detik)', 'Nilai Kesungguhan', 'Kualitas Pengisian', 'Keterangan', 'Pelanggaran Survei', 'Percobaan Diblokir (Survei)', 'Gangguan Singkat (Survei)']).concat(J.butir.map(b => b[0]));
+    const data = rows.map((r, i) => [i + 1, r.nama, r.kelas].concat(J.dim.map(d => r._h.dim[d[0]].indeks)).concat([r._h.total]).concat([r.durasi || '', (r.kualitas && r.kualitas.nilai !== undefined) ? r.kualitas.nilai : '', r._q.baik ? 'Baik' : 'Perlu dicek', r._q.alasan.join('; '), r._lg.pelanggaran, r._lg.percobaan, r._lg.gangguan]).concat(J.butir.map(b => r.jawaban[b[0]] || '')));
     // baris rata-rata (semua & per kelas) di bagian bawah lembar
     const kolKosong = (n) => new Array(Math.max(0, n)).fill('');
     const barisRata = (label, sub) => { const m = rataDim(sub, J); return ['', label, ''].concat(J.dim.map(d => m[d[0]])).concat([m._total]).concat(kolKosong(head.length - 3 - J.dim.length - 1)); };
@@ -842,7 +863,7 @@ const Survei = (function () {
     if (!res || !res.ok || !res.jenis) return '';
     const set = bangunSet(res.jenis, res.set); const peta = {};
     (res.data || []).forEach(x => { peta[String(x.sesiId)] = x; });
-    data.forEach(r => { const x = peta[String(r.sesiId)]; r.survei = x ? { set, jenis: res.jenis, jawaban: x.jawaban, kualitas: x.kualitas, durasi: x.durasi } : null; });
+    data.forEach(r => { const x = peta[String(r.sesiId)]; r.survei = x ? { set, jenis: res.jenis, jawaban: x.jawaban, kualitas: x.kualitas, durasi: x.durasi, logSurvei: x.logSurvei } : null; });
     state.guru._rekapSurveiJenis = res.jenis; state.guru._rekapSurveiSet = set;
     return res.jenis;
   }
@@ -857,7 +878,9 @@ const Survei = (function () {
     const tip = x.set.dim.map(d => d[1] + ': ' + fmt(x.h.dim[d[0]].indeks)).join('\n');
     const q = r.survei.kualitas || {}; const kk = kategoriKesungguhan(q.nilai);
     const kes = (q.nilai === undefined || q.nilai === null) ? '' : `<div class="sv-kes-mini" title="Nilai Kesungguhan mengisi survei (0-100)">Kesungguhan <b style="color:${kk.warna}">${q.nilai}</b> · ${kk.label}</div>`;
-    return `<span class="sv-lencana" style="background:${x.kat.latar};color:${x.kat.warna}" title="${esc(tip)}">${fmt(x.nilai)} · ${x.kat.label}</span>${x.baik ? '' : ' <span class="badge no" title="Kualitas pengisian perlu dicek">⚠ dicek</span>'}${kes}`;
+    const lg = lgSurvei(r.survei.logSurvei);
+    const lgTxt = lg.pelanggaran ? `<div class="sv-kes-mini" title="Kejadian anti-nyontek saat survei (tidak menambah pelanggaran ujian)">Pelanggaran survei <b style="color:#b42318">${lg.pelanggaran}</b></div>` : '';
+    return `<span class="sv-lencana" style="background:${x.kat.latar};color:${x.kat.warna}" title="${esc(tip)}">${fmt(x.nilai)} · ${x.kat.label}</span>${x.baik ? '' : ' <span class="badge no" title="Kualitas pengisian perlu dicek">⚠ dicek</span>'}${kes}${lgTxt}`;
   }
 
   // =====================================================================================

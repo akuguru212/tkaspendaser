@@ -35,7 +35,8 @@
       try { return Promise.resolve(r.call(e)).then(() => true).catch(() => false); } catch (x) { return Promise.resolve(false); }
     },
     catat(j, d) { try { AntiCheat.catat(j, d || ''); } catch (e) { /* abaikan */ } },
-    pesanAktif() { return !!(typeof state !== 'undefined' && state.sesiId && !state.submitting); },
+    pesanAktif() { return !!(typeof state !== 'undefined' && state.sesiId && (!state.submitting || AntiCheat.modeSurvei)); },
+    kata() { return AntiCheat.modeSurvei ? 'survei' : 'ujian'; },
     // Pelanggaran yang DIHITUNG (sama seperti keluar layar penuh). Satu kejadian = satu hitungan (dijaga AntiCheat._insiden).
     laporHitung(jenis, pesan) {
       try {
@@ -116,7 +117,8 @@
     },
     tampilPenutup(pesan, alarm) {
       const ov = K.penutup();
-      ov.querySelector('#kunci-judul').textContent = alarm ? 'PERINGATAN! Jangan Keluar dari Ujian' : 'Wajib Layar Penuh';
+      ov.querySelector('#kunci-judul').textContent = alarm ? 'PERINGATAN! Jangan Keluar dari ' + (K.kata() === 'survei' ? 'Survei' : 'Ujian') : 'Wajib Layar Penuh';
+      const tb = ov.querySelector('#kunci-tombol span'); if (tb) tb.textContent = K.kata() === 'survei' ? 'Kembali ke Survei' : 'Kembali ke Ujian';
       ov.querySelector('#kunci-pesan').textContent = pesan;
       ov.classList.toggle('alarm', !!alarm);
       ov.classList.remove('hidden'); document.body.classList.add('kunci-tutup');
@@ -135,8 +137,8 @@
     periksaFs() {
       if (!K.aktif || !K.pesanAktif() || !K.fsDidukung()) return;
       if (K.adaFs()) { K.pernahFs = true; if (!K.alarmOn) K.sembunyiPenutup(); return; }
-      if (K.pernahFs) K.alarmNyala('Anda keluar dari layar penuh. Tekan tombol di bawah untuk kembali ke ujian.');
-      else K.tampilPenutup('Ketuk tombol di bawah untuk memulai ujian dalam layar penuh. Layar ujian diberi watermark nama Anda, dan screenshot dihitung sebagai pelanggaran.', false);
+      if (K.pernahFs) K.alarmNyala('Anda keluar dari layar penuh. Tekan tombol di bawah untuk kembali ke ' + K.kata() + '.');
+      else K.tampilPenutup('Ketuk tombol di bawah untuk memulai ' + K.kata() + ' dalam layar penuh. Layar diberi watermark nama Anda, dan screenshot dicatat sebagai pelanggaran.', false);
     },
 
     // ---------- event ----------

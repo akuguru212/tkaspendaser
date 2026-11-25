@@ -3545,6 +3545,14 @@ const LocalBackend = (function () {
         }
         return { ok: true, blokir: false, pelanggaran: sesi.pelanggaran };
       }
+      case 'laporSurvei': { // catatan kejadian saat survei (setelah ujian terkirim): hanya log, tanpa hitungan/blokir
+        const sesi = D.sesi.find(s => s.id === data.sesiId);
+        const JENIS_OK = ['keluar_fullscreen', 'pindah_tab', 'keluar_aplikasi', 'kembali', 'salin_teks', 'tempel_teks', 'potong_teks', 'klik_kanan', 'screenshot', 'alarm_keluar', 'gangguan_singkat', 'tombol_terlarang'];
+        if (!sesi || String(sesi.siswa_id) !== String(data.siswaId) || sesi.status === 'berlangsung' || JENIS_OK.indexOf(data.jenis) < 0) return { ok: true };
+        D.log.push({ id: genId('LOG'), sesi_id: sesi.id, siswa_id: sesi.siswa_id, ujian_id: sesi.ujian_id, waktu: new Date().toISOString(), jenis: data.jenis, detail: '[Survei] ' + String(data.detail || '').slice(0, 110) });
+        simpan();
+        return { ok: true };
+      }
       case 'catatAktivitas': {
         const sesi = D.sesi.find(s => s.id === data.sesiId);
         if (sesi && sesi.status === 'berlangsung') {
@@ -3635,10 +3643,18 @@ const LocalBackend = (function () {
         if (!ujS) return { ok: false, error: 'Ujian tidak ditemukan.' };
         const rsS = Survei.setUntukUjian(ujS, D.paketSurvei); const jenisS = rsS.jenis;
         const smap = {}; D.siswa.forEach(x => { smap[x.id] = x; });
+        // ringkasan kejadian anti-nyontek saat survei (log berawalan "[Survei]"), terpisah dari hitungan pelanggaran ujian
+        const logSv = {}; const HIT_SV = ['keluar_fullscreen', 'pindah_tab', 'keluar_aplikasi', 'screenshot']; const PERC_SV = ['salin_teks', 'tempel_teks', 'potong_teks', 'klik_kanan', 'tombol_terlarang', 'alarm_keluar'];
+        (D.log || []).forEach(l => {
+          if (l.ujian_id !== ujS.id || String(l.detail || '').indexOf('[Survei]') !== 0) return;
+          const o = logSv[l.sesi_id] || (logSv[l.sesi_id] = { pelanggaran: 0, percobaan: 0, gangguan: 0, total: 0 });
+          if (HIT_SV.indexOf(l.jenis) >= 0) o.pelanggaran++; else if (PERC_SV.indexOf(l.jenis) >= 0) o.percobaan++; else if (l.jenis === 'gangguan_singkat') o.gangguan++; else return;
+          o.total++;
+        });
         const baris = (D.survei || []).filter(x => x.ujian_id === ujS.id).map(x => {
           const sw = smap[x.siswa_id] || {};
           let jw = {}, kq = {}; try { jw = JSON.parse(x.jawaban_json || '{}'); } catch (e) { } try { kq = JSON.parse(x.kualitas_json || '{}'); } catch (e) { }
-          return { sesiId: x.sesi_id, siswaId: x.siswa_id, nama: sw.nama || '(tidak dikenal)', kelas: sw.kelas || '-', waktu: x.waktu, durasi: Number(x.durasi_detik) || 0, jawaban: jw, kualitas: kq };
+          return { sesiId: x.sesi_id, siswaId: x.siswa_id, nama: sw.nama || '(tidak dikenal)', kelas: sw.kelas || '-', waktu: x.waktu, durasi: Number(x.durasi_detik) || 0, jawaban: jw, kualitas: kq, logSurvei: logSv[x.sesi_id] || { pelanggaran: 0, percobaan: 0, gangguan: 0, total: 0 } };
         }).sort((a, b) => String(a.kelas).localeCompare(String(b.kelas)) || String(a.nama).localeCompare(String(b.nama)));
         const sudahSet = new Set((D.survei || []).filter(x => x.ujian_id === ujS.id).map(x => x.sesi_id));
         const belum = D.sesi.filter(x => x.ujian_id === ujS.id && x.status !== 'berlangsung' && !sudahSet.has(x.id)).length;
@@ -9449,6 +9465,7 @@ function hapusCacheLokal(sesiId) { localStorage.removeItem('cbt_cache_' + sesiId
 // ============================================================================
 const AntiCheat = {
   aktif: false,
+  modeSurvei: false, // true selama siswa mengisi Survei Karakter / Sulingjar (setelah ujian terkirim)
 
   aktifkan() {
     AntiCheat.aktif = true;
@@ -9497,7 +9514,11 @@ const AntiCheat = {
   },
 
   catat(jenis, detail) {
-    if (!state.sesiId || state.submitting) return;
+    if (!state.sesiId) return;
+    if (state.submitting) {
+      if (AntiCheat.modeSurvei) api('laporSurvei', { sesiId: state.sesiId, siswaId: state.user && state.user.id, jenis, detail: String(detail || '').slice(0, 110) }).catch(() => {});
+      return;
+    }
     api('catatAktivitas', { sesiId: state.sesiId, jenis, detail: detail || '' }).catch(() => {});
   },
 
@@ -9563,11 +9584,18 @@ const AntiCheat = {
   // selesai saat siswa menekan tombol "Kembali ke Ujian" (Siswa.kembaliKeUjian).
   _insiden: false,
   async laporPelanggaran(jenis, pesan) {
-    if (!state.sesiId || state.submitting || AntiCheat._insiden) return;
+    const srv = !!AntiCheat.modeSurvei;
+    if (!state.sesiId || (state.submitting && !srv) || AntiCheat._insiden) return;
     AntiCheat._insiden = true;
     document.getElementById('anticheat-pesan').textContent = pesan;
     document.getElementById('anticheat-sisa').textContent = '';
+    const tbKembali = document.querySelector('#anticheat-warning button'); if (tbKembali) tbKembali.textContent = srv ? 'Kembali ke Survei (Layar Penuh)' : 'Kembali ke Ujian (Layar Penuh)';
     document.getElementById('anticheat-warning').classList.remove('hidden');
+    if (srv) { // survei: cukup dicatat untuk guru (tidak menambah hitungan pelanggaran ujian, tidak memblokir)
+      document.getElementById('anticheat-sisa').textContent = 'Kejadian ini dicatat dan dapat dilihat guru. Tekan tombol di bawah untuk melanjutkan survei.';
+      api('laporSurvei', { sesiId: state.sesiId, siswaId: state.user && state.user.id, jenis, detail: String(pesan || '').slice(0, 110) }).catch(() => {});
+      return;
+    }
     const res = await api('lapor', { sesiId: state.sesiId, jenis, detail: String(pesan || '').slice(0, 120), jawaban: JSON.stringify(state.jawaban) });
     if (res.ok) {
       state.pelanggaran = res.pelanggaran;
