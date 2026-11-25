@@ -1,3 +1,11 @@
+# v43z24 — Tombol "Muat Ulang" soal di layar ujian siswa
+
+- **Masalah:** di jaringan lemah, gambar pada satu soal kadang belum tampil (muncul kotak "Gambar tidak dapat dimuat"), dan siswa tidak punya cara memuat ulang tanpa me-refresh browser.
+- **Tombol baru "MUAT ULANG"** (ikon putar) di bar atas layar ujian, di samping Informasi Soal. Menekannya merender ulang soal yang sedang dibuka dan mengambil ulang gambarnya. **Jawaban, ragu-ragu, nomor soal, dan timer tidak berubah** (tidak reload halaman, tidak ke Awal, tidak menghapus jawaban).
+- Bila internet mati, muncul pesan peringatan; bila gambar masih gagal setelah ~6 detik, muncul petunjuk untuk menekan lagi.
+- **Otomatis:** begitu koneksi kembali dan ada gambar yang gagal, soal dimuat ulang sendiri tanpa notifikasi.
+- File berubah: `anbk.js`, `anbk.css`, `mobile.css`, `index.html`, `sw.js` (versi cache), `README.md`. `Code.gs` tidak berubah (tidak perlu deploy ulang).
+
 # v43z23 — Login, Mulai Ujian & Kirim Jawaban jauh lebih cepat (Mode Server)
 
 **Penyebab lambat:** hampir setiap aksi siswa membaca *seluruh* sheet dari Google Sheets (Siswa, Sesi, Bank Soal, Ujian), padahal satu pembacaan saja butuh 0,5-3 detik dan makin lambat saat data bertambah. Selain itu setiap autosave berebut satu kunci global yang juga dipegang proses penyimpanan berkala, sehingga ratusan siswa saling menunggu.

@@ -195,6 +195,41 @@ const Anbk = (function () {
     return '<div class="soal-kiri">' + kiri + '</div><div class="soal-kanan">' + kanan + '</div>';
   }
 
+
+  // ---------------- muat ulang soal (gambar belum tampil karena jaringan) ----------------
+  // Hanya merender ulang kartu soal yang sedang dibuka dari state di memori. state.jawaban, ragu-ragu,
+  // nomor soal, timer, dan data di server TIDAK disentuh, jadi jawaban siswa tetap aman.
+  let _muatTimer = null;
+  function muatUlangSoal(senyap) {
+    const card = $('question-card');
+    if (!card || !state.soal || !state.soal.length || !state.soal[state.idxSoal]) return;
+    const btn = document.getElementById('btn-muat-ulang');
+    if (btn) { if (btn.classList.contains('memuat')) return; btn.classList.add('memuat'); setTimeout(() => btn.classList.remove('memuat'), 1000); }
+    const idx = state.idxSoal, y = window.scrollY;
+    ExamEngine.renderSoal();
+    // paksa browser mengambil ulang gambar non-Drive (Drive sudah punya rantai percobaan sendiri)
+    card.querySelectorAll('img').forEach(img => {
+      const s = img.getAttribute('src');
+      if (!s || /^(data|blob):/i.test(s) || img.dataset.driveId) return;
+      img.src = s + (s.indexOf('?') < 0 ? '?' : '&') + '_r=' + Date.now();
+    });
+    try { window.scrollTo(0, y); } catch (e) { /* abaikan */ }
+    const offline = navigator.onLine === false;
+    if (!senyap) toast(offline ? 'Tidak ada koneksi internet. Periksa sinyal/Wi-Fi, lalu tekan Muat Ulang lagi. Jawaban Anda tetap aman.' : 'Soal dimuat ulang. Jawaban Anda tetap tersimpan.', offline ? 'error' : 'success');
+    // cek hasil beberapa detik kemudian: bila gambar masih gagal, beri petunjuk
+    clearTimeout(_muatTimer);
+    _muatTimer = setTimeout(() => {
+      if (state.idxSoal !== idx) return;
+      const c = $('question-card');
+      if (c && c.querySelector('.gambar-gagal-muat')) toast('Gambar masih belum bisa dimuat. Pastikan sinyal bagus, lalu tekan tombol Muat Ulang lagi.', 'error');
+    }, 6000);
+  }
+  // Begitu koneksi kembali dan ada gambar yang gagal, muat ulang otomatis (tanpa notifikasi).
+  window.addEventListener('online', () => {
+    const u = document.getElementById('ujian-screen');
+    if (u && !u.classList.contains('hidden') && document.querySelector('#question-card .gambar-gagal-muat')) muatUlangSoal(true);
+  });
+
   // ---------------- hook ke mesin ujian ----------------
   Siswa.cekToken = async function () {
     const inp = $('input-token-ujian'), err = $('token-error'), btn = $('btn-cari-ujian');
@@ -489,6 +524,6 @@ const Anbk = (function () {
   });
 
   return { setUser, isoTgl, tglPanjang, tampilKonfirmasiData, segarkanToken, salinTokenAktif, tampilKonfirmasiTes, kembaliKeKonfirmasiData, menuUser, toggleSandi, pilihPortal,
-    bukaDaftar, bukaInfo, tutupModal, renderSoal, qrMatrix, qrSvg, bukaKartuLogin, cetakKartuLogin, simpanTampilToken };
+    bukaDaftar, bukaInfo, muatUlangSoal, tutupModal, renderSoal, qrMatrix, qrSvg, bukaKartuLogin, cetakKartuLogin, simpanTampilToken };
 })();
 window.Anbk = Anbk;

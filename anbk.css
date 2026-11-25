@@ -465,3 +465,8 @@ html[data-skin="anbk"] #guru-portal .dash-hero, html[data-skin="anbk"] #guru-por
 .anbk-btn-dash:focus-visible { outline: 3px solid rgba(13,110,253,.35); outline-offset: 2px; }
 .anbk-dash-ket { margin: 10px 2px 0; font-size: 11.5px; line-height: 1.55; color: #6c757d; text-align: center; }
 .anbk-dash-ket i { color: #0d6efd; margin-right: .25rem; }
+
+/* tombol Muat Ulang Soal: ikon berputar sebentar saat ditekan */
+#btn-muat-ulang .anbk-ic { display: inline-block; }
+#btn-muat-ulang.memuat .anbk-ic { animation: anbk-putar .8s linear infinite; }
+@keyframes anbk-putar { to { transform: rotate(360deg); } }

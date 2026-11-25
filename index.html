@@ -33,8 +33,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
-<link rel="stylesheet" href="anbk.css?v=65">
-<link rel="stylesheet" href="mobile.css?v=6">
+<link rel="stylesheet" href="anbk.css?v=66">
+<link rel="stylesheet" href="mobile.css?v=7">
 <!-- Font Awesome: ikon sidebar & tombol (gaya dashboard modern) -->
 <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
 <!-- KaTeX: render persamaan matematika (LaTeX) di dalam soal -->
@@ -1414,6 +1414,7 @@
         <div class="anbk-u-tools">
           <span id="pelanggaran-indikator" class="pelanggaran-indikator"></span>
           <button type="button" class="anbk-pill anbk-pill-blue" onclick="Anbk.bukaInfo()" title="Informasi Soal" aria-label="Informasi Soal"><i class="fa-solid fa-info anbk-ic"></i><span class="anbk-tx">INFORMASI SOAL</span></button>
+          <button type="button" id="btn-muat-ulang" class="anbk-pill anbk-pill-blue" onclick="Anbk.muatUlangSoal()" title="Muat ulang soal &amp; gambar (jawaban tidak hilang)" aria-label="Muat ulang soal"><i class="fa-solid fa-rotate anbk-ic"></i><span class="anbk-tx">MUAT ULANG</span></button>
           <span class="anbk-pill anbk-pill-timer" title="Sisa waktu">Sisa Waktu : <b id="timer-display">--:--:--</b></span>
           <button type="button" class="anbk-pill anbk-pill-blue" onclick="Anbk.bukaDaftar()" title="Daftar Soal" aria-label="Daftar Soal"><span class="anbk-tx">Daftar Soal</span> <i class="fa-solid fa-table-cells-large"></i></button>
         </div>
@@ -1622,7 +1623,7 @@
 
 <script src="config.js"></script>
 <script src="app.js?v=78"></script>
-<script src="anbk.js?v=64"></script>
+<script src="anbk.js?v=65"></script>
 <script src="survei.js?v=16"></script>
 <script src="kunci-ujian.js?v=6"></script>
 <script src="leaderboard.js?v=1"></script>
