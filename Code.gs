@@ -159,11 +159,16 @@ var CACHE = CacheService.getScriptCache();
 // ada perubahan (1x baca properti skrip), dan hanya benar-benar menyentuh
 // Sheets kalau isi SCHEMA di atas berubah sejak deploy terakhir.
 function pastikanSkemaTerbaru_() {
-  var props = PropertiesService.getScriptProperties();
   var versiSaatIni = hashSkema_();
-  if (props.getProperty('schema_version') === versiSaatIni) return; // tidak ada perubahan skema, lewati
-  terapkanSkema_();
-  props.setProperty('schema_version', versiSaatIni);
+  // CacheService (~beberapa ms) jauh lebih cepat daripada PropertiesService (~puluhan ms) -> dicek lebih dulu.
+  var cache = CacheService.getScriptCache();
+  if (cache.get('schema_ok_' + versiSaatIni) === '1') return;
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('schema_version') !== versiSaatIni) {
+    terapkanSkema_();
+    props.setProperty('schema_version', versiSaatIni);
+  }
+  try { cache.put('schema_ok_' + versiSaatIni, '1', 21600); } catch (e) { /* abaikan */ }
 }
 
 // Hash otomatis dari isi SCHEMA — berubah sendiri begitu ada kolom/sheet baru
@@ -180,6 +185,7 @@ function terapkanSkema_() {
   Object.keys(SCHEMA).forEach(function (nama) {
     pastikanSheetDanKolom_(ss, nama, SCHEMA[nama]);
   });
+  naikkanVersiData_(); // kolom bisa berubah -> cache baca-sheet lama jadi basi
 }
 
 function pastikanSheetDanKolom_(ss, nama, headers) {
@@ -264,7 +270,13 @@ function doPost(e) {
   }
 }
 
+var _aksiSaatIni_ = '';
+// Aksi guru yang TIDAK menyentuh Ujian/Bank Soal/Config/Siswa-login: tidak perlu membuang cache baca-sheet
+// (sering dipakai saat ujian berlangsung, jadi jangan sampai memaksa semua siswa membaca ulang sheet).
+var AKSI_TANPA_BUMP_ = { pemantauanTambahWaktu: 1, pemantauanForceFinish: 1, pemantauanHapusPelanggaran: 1, pemantauanReset: 1, hapusNilaiSiswa: 1, resetDevice: 1, resetDeviceKelas: 1, blokirSiswa: 1 };
+
 function route_(action, data) {
+  _aksiSaatIni_ = String(action || '');
   pastikanSkemaTerbaru_(); // self-healing: tambahkan kolom baru dari SCHEMA jika belum ada
   var lock = LockService.getScriptLock();
   switch (action) {
@@ -374,6 +386,7 @@ function withLock_(lock, fn) {
   try {
     return fn();
   } finally {
+    if (!AKSI_TANPA_BUMP_.hasOwnProperty(_aksiSaatIni_)) naikkanVersiData_(); // data guru berubah -> cache baca-sheet siswa dibuang
     lock.releaseLock();
   }
 }
@@ -407,6 +420,111 @@ function readAll_(name) {
     headers.forEach(function (h, i) { obj[h] = row[i]; });
     return obj;
   });
+}
+
+// ----------------------------------------------------------------------------
+// BACA SHEET BERCACHE -- khusus jalur SISWA (cekToken, mulaiUjian, hitung nilai, token aktif)
+// Sebelumnya tiap request siswa membaca SELURUH sheet Ujian + Bank Soal (+ Sesi) dari Google Sheets
+// (0,5-3 detik per baca, makin lambat saat soal/sesi bertambah). Sekarang hasilnya dicache bersama
+// "versi data" yang dinaikkan otomatis tiap kali guru mengubah data (lihat withLock_), jadi guru tetap
+// melihat perubahan seketika. Sheet yang diubah MANUAL langsung di Spreadsheet paling lama ~5 menit.
+// Jalur guru TIDAK memakai cache ini (tetap membaca langsung).
+// ----------------------------------------------------------------------------
+var READ_CACHE_TTL = 300;       // detik
+var READ_CACHE_CHUNK = 30000;   // karakter/potongan (batas CacheService 100 KB per nilai; aman utk UTF-8)
+var READ_CACHE_MAKS = 2000000;  // total karakter; lebih besar dari ini tidak dicache (tetap baca langsung)
+
+function naikkanVersiData_() {
+  try { CacheService.getScriptCache().put('data_ver', Date.now() + '' + Math.floor(Math.random() * 1000), CACHE_TTL_DETIK); } catch (e) { /* abaikan */ }
+}
+
+function cachePutBesar_(cache, kunci, teks, ttl) {
+  if (teks.length > READ_CACHE_MAKS) return false;
+  var n = Math.ceil(teks.length / READ_CACHE_CHUNK), potong = {};
+  for (var i = 0; i < n; i++) potong[kunci + '_' + i] = teks.substr(i * READ_CACHE_CHUNK, READ_CACHE_CHUNK);
+  if (n > 0) cache.putAll(potong, ttl);
+  cache.put(kunci, String(n), ttl); // penanda ditulis TERAKHIR: ada penanda = semua potongan sudah ada
+  return true;
+}
+
+function cacheGetBesar_(cache, kunci) {
+  var meta = cache.get(kunci);
+  if (meta === null) return null;
+  var n = Number(meta) || 0, keys = [], i;
+  for (i = 0; i < n; i++) keys.push(kunci + '_' + i);
+  if (n === 0) return '';
+  var bag = cache.getAll(keys), teks = '';
+  for (i = 0; i < n; i++) {
+    var p = bag[keys[i]];
+    if (p === undefined || p === null) return null; // ada potongan yang hilang -> anggap tidak ada
+    teks += p;
+  }
+  return teks;
+}
+
+function readAllCached_(name) {
+  var cache = CacheService.getScriptCache();
+  var kunci = 'rc_' + name + '_' + (cache.get('data_ver') || '0');
+  try {
+    var teks = cacheGetBesar_(cache, kunci);
+    if (teks !== null) return JSON.parse(teks);
+  } catch (e) { /* jatuh ke baca langsung */ }
+  var rows = readAll_(name);
+  try { cachePutBesar_(cache, kunci, JSON.stringify(rows), READ_CACHE_TTL); } catch (e) { /* abaikan */ }
+  return rows;
+}
+
+// Daftar login ringkas [id, username, password, nomorBaris] -- hanya 3 kolom dibaca, bukan seluruh sheet Siswa.
+function rosterLogin_(paksa) {
+  var cache = CacheService.getScriptCache();
+  var kunci = 'roster_login_' + (cache.get('data_ver') || '0');
+  if (!paksa) {
+    try { var teks = cacheGetBesar_(cache, kunci); if (teks !== null) return JSON.parse(teks); } catch (e) { /* bangun ulang */ }
+  }
+  var sh = sh_(SHEET.SISWA), n = sh.getLastRow() - 1, out = [];
+  if (n >= 1) {
+    var h = headersOf_(SHEET.SISWA);
+    var cI = h.indexOf('id') + 1, cU = h.indexOf('username') + 1, cP = h.indexOf('password') + 1;
+    var ids = sh.getRange(2, cI, n, 1).getValues(), us = sh.getRange(2, cU, n, 1).getValues(), pw = sh.getRange(2, cP, n, 1).getValues();
+    for (var i = 0; i < n; i++) out.push([String(ids[i][0]), String(us[i][0]).trim().toLowerCase(), String(pw[i][0]).trim(), i + 2]);
+  }
+  try { cachePutBesar_(cache, kunci, JSON.stringify(out), READ_CACHE_TTL); } catch (e) { /* abaikan */ }
+  return out;
+}
+
+// Cari baris Sesi seorang siswa pada satu ujian dengan membaca 2 KOLOM saja (bukan seluruh sheet
+// yang berisi jawaban/urutan JSON semua siswa), lalu 1 baris hasilnya.
+function cariBarisSesiSiswa_(ujianId, siswaId) {
+  var sh = sh_(SHEET.SESI), n = sh.getLastRow() - 1;
+  if (n < 1) return null;
+  var headers = headersOf_(SHEET.SESI);
+  var cU = headers.indexOf('ujian_id'), cS = headers.indexOf('siswa_id');
+  if (cU < 0 || cS < 0) return null;
+  var u = sh.getRange(2, cU + 1, n, 1).getValues(), sw = sh.getRange(2, cS + 1, n, 1).getValues();
+  for (var i = 0; i < n; i++) {
+    if (String(u[i][0]) === String(ujianId) && String(sw[i][0]) === String(siswaId)) {
+      var row = sh.getRange(i + 2, 1, 1, headers.length).getValues()[0], obj = {};
+      headers.forEach(function (h, k) { obj[h] = row[k]; });
+      return obj;
+    }
+  }
+  return null;
+}
+
+// State sesi seorang siswa pada satu ujian: cache dulu, baru pemindaian 2 kolom. `abaikanKosong` dipakai
+// mulaiUjian (tidak boleh percaya catatan "belum ada sesi" agar tidak pernah membuat sesi ganda).
+function cariSesiSiswa_(ujianId, siswaId, abaikanKosong) {
+  var cache = CacheService.getScriptCache();
+  var kunciMap = 'map_sesi_' + ujianId + '_' + siswaId;
+  var sesiId = cache.get(kunciMap);
+  var state = sesiId ? ambilSesiState_(sesiId) : null;
+  if (state) return state;
+  var kunciKosong = 'map_sesi_kosong_' + ujianId + '_' + siswaId;
+  if (!abaikanKosong && cache.get(kunciKosong) !== null) return null;
+  var baris = cariBarisSesiSiswa_(ujianId, siswaId);
+  if (baris) { cache.put(kunciMap, baris.id, CACHE_TTL_DETIK); return ambilSesiState_(baris.id) || baris; }
+  try { cache.put(kunciKosong, '1', 60); } catch (e) { /* abaikan */ }
+  return null;
 }
 
 function findRowIndexById_(name, id) {
@@ -471,16 +589,26 @@ function actionLogin_(data) {
   }
 
   if (role === 'siswa') {
-    var rows = readAll_(SHEET.SISWA);
-    var idx = -1, siswa = null;
     // Toleran: abaikan huruf besar/kecil & spasi pinggir pada username (mis. keyboard HP
     // yang otomatis menulis huruf besar), username/password yang tersimpan sbg angka di
     // Sheets, dan akun dengan username ganda (dicocokkan lewat password-nya).
+    // CEPAT: daftar login (id, username, password, nomor baris) diambil dari cache; yang dibaca dari
+    // Sheets hanya SATU baris milik siswa itu (bukan seluruh sheet Siswa). Data cache diverifikasi ke
+    // baris aslinya, dan bila tidak cocok (mis. guru mengubah akun langsung di Spreadsheet) daftar
+    // dibangun ulang sekali dari Sheets sebelum menyimpulkan "salah".
     var uLogin = username.toLowerCase();
     var pLogin = password.trim();
-    for (var i = 0; i < rows.length; i++) {
-      if (String(rows[i].username).trim().toLowerCase() === uLogin && String(rows[i].password).trim() === pLogin) {
-        siswa = rows[i]; idx = i + 2; break;
+    var shS = sh_(SHEET.SISWA), headersS = headersOf_(SHEET.SISWA);
+    var idx = -1, siswa = null;
+    for (var pass = 0; pass < 2 && !siswa; pass++) {
+      var roster = rosterLogin_(pass === 1);
+      for (var i = 0; i < roster.length; i++) {
+        if (roster[i][1] !== uLogin || roster[i][2] !== pLogin) continue;
+        var rowS = shS.getRange(roster[i][3], 1, 1, headersS.length).getValues()[0], objS = {};
+        headersS.forEach(function (h, k) { objS[h] = rowS[k]; });
+        if (String(objS.id) === roster[i][0] && String(objS.username).trim().toLowerCase() === uLogin && String(objS.password).trim() === pLogin) {
+          siswa = objS; idx = roster[i][3]; break;
+        }
       }
     }
     if (!siswa) {
@@ -488,22 +616,37 @@ function actionLogin_(data) {
     }
 
     // --- single device session lock (bisa dinonaktifkan lewat tab Status Login) ---
+    // Sumber terbaru = cache (ditulis login & ping); Sheets baru menyusul <=1 menit lewat flushPingBerkala().
+    var cacheL = CacheService.getScriptCache();
     var now = new Date();
-    var lastPing = siswa.last_ping ? new Date(siswa.last_ping) : null;
+    var devCache = cacheL.get('siswa_device_' + siswa.id);
+    var devTercatat = devCache !== null ? devCache : String(siswa.device_id || '');
+    var pingRaw = cacheL.get(pingCacheKey_(siswa.id)), pingSt = null;
+    try { pingSt = pingRaw ? JSON.parse(pingRaw) : null; } catch (e) { pingSt = null; }
+    var lastPingRaw = (pingSt && pingSt.last_ping) ? pingSt.last_ping : siswa.last_ping;
+    var lastPing = lastPingRaw ? new Date(lastPingRaw) : null;
     var staleMs = DEVICE_STALE_MINUTES * 60 * 1000;
-    var deviceLocked = deviceLockAktif_() && siswa.device_id && lastPing && (now - lastPing) < staleMs && siswa.device_id !== deviceId;
+    var deviceLocked = deviceLockAktif_() && devTercatat && lastPing && (now - lastPing) < staleMs && devTercatat !== deviceId;
     if (deviceLocked) {
       return jsonOut_({ ok: false, error: 'Akun ini sedang aktif di perangkat lain. Tutup sesi di perangkat tersebut atau tunggu beberapa menit, lalu coba lagi.' });
     }
 
-    var headers = headersOf_(SHEET.SISWA);
-    updateRowByFields_(SHEET.SISWA, headers, idx, { device_id: deviceId, last_ping: now.toISOString() });
-    // Login jarang terjadi (sekali per sesi ujian, bukan tiap 20-60 detik
-    // seperti autosave/ping) jadi tulis langsung ke Sheets di sini aman &
-    // tidak jadi bottleneck. Cache device_id juga di-tulis di sini supaya
-    // ping berikutnya (yang cache-first) langsung konsisten, tidak perlu
-    // fallback baca Sheets dulu.
-    CacheService.getScriptCache().put('siswa_device_' + siswa.id, deviceId, CACHE_TTL_DETIK);
+    // Tidak lagi menulis ke Sheets saat login (baca-ubah-tulis baris = ~0,5-1 detik dan berebut dengan
+    // flush). Cukup cache + antrean ping, persis seperti heartbeat; flushPingBerkala() menulisnya ke Sheets.
+    cacheL.put('siswa_device_' + siswa.id, deviceId, CACHE_TTL_DETIK);
+    tandaiPendingPing_(siswa.id, { device_id: deviceId, last_ping: now.toISOString() });
+    // Status blokir sudah ada di baris yang baru dibaca -> isi cache-nya sekarang supaya statusBlokirSiswa_
+    // di bawah tidak perlu mencari & membaca baris yang sama lagi dari Sheets.
+    if (cacheL.get('siswa_blokir_' + siswa.id) === null) {
+      var sjB = siswa.blokir_sejak;
+      try {
+        cacheL.put('siswa_blokir_' + siswa.id, JSON.stringify({
+          aktif: String(siswa.blokir || '').toLowerCase() === 'ya',
+          alasan: String(siswa.blokir_alasan || ''),
+          sejak: sjB ? (Object.prototype.toString.call(sjB) === '[object Date]' ? sjB.toISOString() : String(sjB)) : ''
+        }), BLOKIR_CACHE_TTL);
+      } catch (e) { /* abaikan */ }
+    }
 
     // Akun yang diblokir TETAP boleh login (supaya siswa melihat pesan & alasannya di portal),
     // tetapi tidak bisa mengikuti ujian -- ditegakkan di cekToken & mulaiUjian.
@@ -519,6 +662,7 @@ function actionLogout_(data) {
     var idx = findRowIndexById_(SHEET.SISWA, data.siswaId);
     if (idx > 0) updateRowByFields_(SHEET.SISWA, headersOf_(SHEET.SISWA), idx, { device_id: '', last_ping: '' });
     CacheService.getScriptCache().remove('siswa_device_' + data.siswaId);
+    CacheService.getScriptCache().remove(pingCacheKey_(data.siswaId)); // jangan sampai ping tertunda menulis device lama kembali
   }
   return jsonOut_({ ok: true });
 }
@@ -809,6 +953,7 @@ function actionGetRekapNilai_(data) {
 // BERUBAH -- aman dipanggil berkali-kali tanpa efek samping tambahan, dan
 // TIDAK menyentuh jawaban_json/urutan_json/status/tanggal selesai sama sekali.
 function actionHitungUlangNilaiUjian_(data) {
+  naikkanVersiData_(); // pastikan kunci jawaban/bobot terbaru yang dipakai (bukan cache lama)
   var sesiList = bacaSesiGabunganUntukUjian_(data.ujianId)
     .map(function (baris) { return ambilSesiState_(baris.id) || baris; })
     .filter(function (s) { return s.status !== 'berlangsung'; });
@@ -1721,7 +1866,7 @@ function modeBuktiUjian_(ujian) {
 }
 
 function modeBuktiDariSesi_(sesiState) {
-  var ujian = readAll_(SHEET.UJIAN).filter(function (u) { return u.id === sesiState.ujian_id; })[0];
+  var ujian = readAllCached_(SHEET.UJIAN).filter(function (u) { return u.id === sesiState.ujian_id; })[0];
   return modeBuktiUjian_(ujian);
 }
 
@@ -2253,20 +2398,26 @@ function tglIso_(v) {
 
 // ---- Tampilkan token di layar peserta (mode latihan, seperti simulasi TKA) ----
 function tokenSiswaAktif_() {
+  var cache = CacheService.getScriptCache();
+  var c = cache.get('tampil_token_siswa_c');
+  if (c !== null) return c !== '0';
   var v = getConfigValue_('tampil_token_siswa');
-  return !(v === '0' || v === 'false'); // default Aktif
+  var aktif = !(v === '0' || v === 'false'); // default Aktif
+  cache.put('tampil_token_siswa_c', aktif ? '1' : '0', 300);
+  return aktif;
 }
 function actionGetPengaturanTokenSiswa_(data) { return jsonOut_({ ok: true, aktif: tokenSiswaAktif_() }); }
 function actionSimpanPengaturanTokenSiswa_(data) {
   var aktif = data.aktif === true || String(data.aktif).toLowerCase() === 'true';
   setConfigValue_('tampil_token_siswa', aktif ? '1' : '0');
+  CacheService.getScriptCache().remove('tampil_token_siswa_c');
   return jsonOut_({ ok: true, aktif: aktif });
 }
 // Daftar ujian yang sedang dibuka. Token HANYA disertakan bila guru mengaktifkan opsi di atas.
 function actionGetTokenAktif_(data) {
   var tampil = tokenSiswaAktif_();
   var now = new Date();
-  var list = readAll_(SHEET.UJIAN).filter(function (u) {
+  var list = readAllCached_(SHEET.UJIAN).filter(function (u) {
     if (u.status !== 'aktif') return false;
     if (u.mulai && now < new Date(u.mulai)) return false;
     var batas = u.selesai ? new Date(new Date(u.selesai).getTime() + (Number(u.toleransi_menit) || 0) * 60000) : null;
@@ -2380,10 +2531,16 @@ function bacaSesiGabunganUntukUjian_(ujianId) {
 // (mis. autosave berikutnya 20 detik kemudian) -- jadi self-healing, tidak
 // ada data yang hilang, cuma mungkin telat 1 siklus flush.
 function tandaiPendingSesi_(sesiId) {
+  var cache = CacheService.getScriptCache();
+  // JALUR CEPAT (tanpa kunci global): bila sesi ini sudah ada di antrean, tidak ada yang perlu dilakukan.
+  // Aman karena simpanSesiState_ menulis state ke cache SEBELUM memanggil fungsi ini, sedangkan
+  // flushSesiBerkala menghapus antrean dulu baru membaca state -> perubahan ini pasti ikut tertulis.
+  // Dulu SETIAP autosave (tiap ~20 detik x ratusan siswa) berebut kunci global yang juga dipegang flush.
+  var cepat = cache.get('pending_sesi_ids');
+  if (cepat && cepat.indexOf('"' + sesiId + '"') !== -1) return;
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(5000)) return;
   try {
-    var cache = CacheService.getScriptCache();
     var raw = cache.get('pending_sesi_ids');
     var ids = raw ? JSON.parse(raw) : [];
     if (ids.indexOf(sesiId) === -1) ids.push(sesiId);
@@ -2452,6 +2609,10 @@ function tandaiPendingPing_(siswaId, perubahan) {
   Object.assign(obj, perubahan);
   cache.put(pingCacheKey_(siswaId), JSON.stringify(obj), CACHE_TTL_DETIK);
 
+  // Jalur cepat tanpa kunci global (alasan sama dengan tandaiPendingSesi_): sudah di antrean -> selesai.
+  var cepat = cache.get('pending_ping_ids');
+  if (cepat && cepat.indexOf('"' + siswaId + '"') !== -1) return;
+
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(3000)) return; // best-effort, self-healing lewat ping berikutnya (60 detik lagi)
   try {
@@ -2465,37 +2626,39 @@ function tandaiPendingPing_(siswaId, perubahan) {
 }
 
 function flushPingBerkala() {
-  var cache = CacheService.getScriptCache();
-  var raw = cache.get('pending_ping_ids');
-  if (!raw) return;
-  var ids = JSON.parse(raw);
-  cache.remove('pending_ping_ids');
-  if (!ids || ids.length === 0) return;
-
   var lock = LockService.getScriptLock();
-  if (!lock.tryLock(15000)) return;
+  if (!lock.tryLock(15000)) return; // antrean TIDAK dihapus bila kunci gagal -> dicoba lagi 1 menit berikutnya
   try {
+    var cache = CacheService.getScriptCache();
+    var raw = cache.get('pending_ping_ids');
+    if (!raw) return;
+    var ids = JSON.parse(raw);
+    cache.remove('pending_ping_ids');
+    if (!ids || ids.length === 0) return;
+
     var sh = sh_(SHEET.SISWA);
     var headers = headersOf_(SHEET.SISWA);
-    var lastRow = sh.getLastRow();
-    var jumlahBaris = Math.max(lastRow - 1, 0);
-    var data = jumlahBaris > 0 ? sh.getRange(2, 1, jumlahBaris, headers.length).getValues() : [];
-    var idCol = headers.indexOf('id');
-    var deviceCol = headers.indexOf('device_id');
-    var pingCol = headers.indexOf('last_ping');
+    var n = Math.max(sh.getLastRow() - 1, 0);
+    var idCol = headers.indexOf('id'), deviceCol = headers.indexOf('device_id'), pingCol = headers.indexOf('last_ping');
+    if (n < 1 || idCol < 0 || deviceCol < 0 || pingCol < 0) return;
+    // Hanya 3 kolom yang dibaca & 2 kolom yang ditulis (dulu seluruh sheet Siswa dibaca lalu ditulis ulang
+    // tiap menit -> lambat, menahan kunci global, dan bisa menimpa kolom lain).
+    var idVals = sh.getRange(2, idCol + 1, n, 1).getValues();
+    var devVals = sh.getRange(2, deviceCol + 1, n, 1).getValues();
+    var pingVals = sh.getRange(2, pingCol + 1, n, 1).getValues();
     var peta = {};
-    data.forEach(function (row, i) { peta[String(row[idCol])] = i; });
+    idVals.forEach(function (r, i) { peta[String(r[0])] = i; });
 
-    var berubah = false;
+    var bDev = false, bPing = false;
     ids.forEach(function (id) {
       var stateRaw = cache.get(pingCacheKey_(id));
       if (!stateRaw || !peta.hasOwnProperty(id)) return;
-      var obj = JSON.parse(stateRaw);
-      var i = peta[id];
-      if (obj.hasOwnProperty('device_id')) { data[i][deviceCol] = obj.device_id; berubah = true; }
-      if (obj.hasOwnProperty('last_ping')) { data[i][pingCol] = obj.last_ping; berubah = true; }
+      var obj = JSON.parse(stateRaw), i = peta[id];
+      if (obj.hasOwnProperty('device_id')) { devVals[i][0] = obj.device_id; bDev = true; }
+      if (obj.hasOwnProperty('last_ping')) { pingVals[i][0] = obj.last_ping; bPing = true; }
     });
-    if (berubah) sh.getRange(2, 1, data.length, headers.length).setValues(data);
+    if (bDev) sh.getRange(2, deviceCol + 1, n, 1).setValues(devVals);
+    if (bPing) sh.getRange(2, pingCol + 1, n, 1).setValues(pingVals);
   } finally {
     lock.releaseLock();
   }
@@ -2697,7 +2860,7 @@ function pilihUjianByToken_(list, token) {
 function actionCekToken_(data) {
   var blokirCek = data.siswaId ? statusBlokirSiswa_(data.siswaId) : null;
   if (blokirCek && blokirCek.aktif) return jsonOut_({ ok: false, error: pesanBlokir_(blokirCek) });
-  var ujian = pilihUjianByToken_(readAll_(SHEET.UJIAN), data.token);
+  var ujian = pilihUjianByToken_(readAllCached_(SHEET.UJIAN), data.token);
   if (!ujian) return jsonOut_({ ok: false, error: 'Token ujian tidak ditemukan.' });
   var now = new Date();
   if (ujian.mulai && now < new Date(ujian.mulai)) return jsonOut_({ ok: false, error: 'Ujian belum dibuka.' });
@@ -2706,7 +2869,7 @@ function actionCekToken_(data) {
   if (ujian.status !== 'aktif') return jsonOut_({ ok: false, error: 'Ujian ini sedang tidak aktif.' });
   var lanjutan = false;
   try {
-    if (data.siswaId) lanjutan = readAll_(SHEET.SESI).some(function (s) { return s.ujian_id === ujian.id && s.siswa_id === data.siswaId && s.status !== 'selesai' && s.status !== 'diblokir'; });
+    if (data.siswaId) { var stSes = cariSesiSiswa_(ujian.id, data.siswaId, false); lanjutan = !!(stSes && stSes.status !== 'selesai' && stSes.status !== 'diblokir'); }
   } catch (e) { lanjutan = false; }
   if (!lanjutan) { var izin = cekIzinKelas_(ujian, data.siswaId); if (!izin.ok) return jsonOut_({ ok: false, error: izin.error }); }
   return jsonOut_({ ok: true, ujian: { id: ujian.id, judul: ujian.judul, durasiMenit: ujian.durasi_menit, kategori: ujian.kategori, lanjutan: lanjutan } });
@@ -2718,26 +2881,16 @@ function actionMulaiUjian_(data) {
   // Penegakan utama fitur Blokir Akun: siswa yang diblokir tidak bisa memulai ATAUPUN melanjutkan ujian.
   var blokirMulai = statusBlokirSiswa_(data.siswaId);
   if (blokirMulai.aktif) return jsonOut_({ ok: false, error: pesanBlokir_(blokirMulai) });
-  var ujian = readAll_(SHEET.UJIAN).filter(function (u) { return u.id === data.ujianId; })[0];
+  var ujian = readAllCached_(SHEET.UJIAN).filter(function (u) { return u.id === data.ujianId; })[0];
   if (!ujian) return jsonOut_({ ok: false, error: 'Ujian tidak ditemukan.' });
 
-  // Cache-first: kunci "siswa+ujian -> sesiId" supaya TIDAK perlu baca ulang
-  // SELURUH sheet Sesi (readAll_) setiap kali siswa membuka/reload halaman
-  // ujian -- penting saat banyak siswa mulai/reload bersamaan.
+  // Cache-first: kunci "siswa+ujian -> sesiId" supaya TIDAK perlu membaca sheet Sesi setiap kali siswa
+  // membuka/reload halaman ujian. Jalur dingin hanya memindai 2 kolom (bukan seluruh sheet) -- lihat
+  // cariSesiSiswa_. Catatan "belum ada sesi" TIDAK dipercaya di sini agar tidak pernah membuat sesi ganda.
   var cache = CacheService.getScriptCache();
   var kunciMap = 'map_sesi_' + data.ujianId + '_' + data.siswaId;
-  var sesiId = cache.get(kunciMap);
-  var existing = sesiId ? ambilSesiState_(sesiId) : null;
-
-  if (!existing) {
-    // Belum ada di cache -> baru cek Sheets (jalur dingin: hanya kejadian
-    // pertama kali per siswa per ujian, atau kalau cache sempat kadaluarsa).
-    var sesiList = readAll_(SHEET.SESI);
-    for (var i = 0; i < sesiList.length; i++) {
-      if (sesiList[i].ujian_id === data.ujianId && sesiList[i].siswa_id === data.siswaId) { existing = sesiList[i]; sesiId = existing.id; break; }
-    }
-    if (sesiId) cache.put(kunciMap, sesiId, CACHE_TTL_DETIK);
-  }
+  var existing = cariSesiSiswa_(data.ujianId, data.siswaId, true);
+  var sesiId = existing ? existing.id : null;
 
   if (existing && existing.status === 'selesai') {
     // PEMULIHAN: bukti orak-orik WAJIB tapi belum ada satu foto pun (mis. siswa menutup halaman / HP mati
@@ -2757,7 +2910,7 @@ function actionMulaiUjian_(data) {
   if (!existing) { var izinK = cekIzinKelas_(ujian, data.siswaId); if (!izinK.ok) return jsonOut_({ ok: false, error: izinK.error }); }
 
   var soalIds = String(ujian.soal_ids || '').split(',').filter(Boolean);
-  var bankSoal = readAll_(SHEET.BANK_SOAL);
+  var bankSoal = readAllCached_(SHEET.BANK_SOAL);
   var soalMap = {}; bankSoal.forEach(function (s) { soalMap[s.id] = s; });
 
   var urutan, jawaban, ragu, mulai, opsiAcakMap;
@@ -2801,6 +2954,7 @@ function actionMulaiUjian_(data) {
       nilai: '', lulus: '', last_ping: mulai
     });
     cache.put(kunciMap, sesiId, CACHE_TTL_DETIK);
+    cache.remove('map_sesi_kosong_' + data.ujianId + '_' + data.siswaId);
   }
 
   // Susun soal untuk dikirim ke klien TANPA kunci jawaban
@@ -2937,8 +3091,8 @@ function actionSubmitUjian_(data) {
 function hitungNilai_(sesiState, jawaban) {
   var urutan = JSON.parse(sesiState.urutan_json || '{}');
   var opsiAcakMap = urutan.opsiAcak || {};
-  var ujian = readAll_(SHEET.UJIAN).filter(function (u) { return u.id === sesiState.ujian_id; })[0];
-  var bankSoal = readAll_(SHEET.BANK_SOAL);
+  var ujian = readAllCached_(SHEET.UJIAN).filter(function (u) { return u.id === sesiState.ujian_id; })[0];
+  var bankSoal = readAllCached_(SHEET.BANK_SOAL);
   var soalMap = {}; bankSoal.forEach(function (s) { soalMap[s.id] = s; });
 
   var totalBobot = 0, totalDapat = 0, detail = [];

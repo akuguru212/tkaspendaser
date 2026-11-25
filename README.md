@@ -1,3 +1,16 @@
+# v43z23 — Login, Mulai Ujian & Kirim Jawaban jauh lebih cepat (Mode Server)
+
+**Penyebab lambat:** hampir setiap aksi siswa membaca *seluruh* sheet dari Google Sheets (Siswa, Sesi, Bank Soal, Ujian), padahal satu pembacaan saja butuh 0,5-3 detik dan makin lambat saat data bertambah. Selain itu setiap autosave berebut satu kunci global yang juga dipegang proses penyimpanan berkala, sehingga ratusan siswa saling menunggu.
+
+- **Login:** daftar login disimpan di cache dan hanya **1 baris** siswa yang dibaca (dulu seluruh sheet Siswa + 1 tulis ke Sheets). Login tidak lagi menulis ke Sheets; status perangkat dicatat lewat antrean ping yang masuk ke Sheets ≤1 menit. Kunci satu-perangkat tetap berlaku. Akun yang diubah langsung di Spreadsheet tetap bisa login (daftar dibangun ulang otomatis bila tidak cocok).
+- **Cek Token / Mulai Ujian / Reload / Kirim Jawaban:** sheet Ujian & Bank Soal kini dicache (dibuang otomatis begitu guru menyimpan perubahan). Mencari sesi siswa hanya membaca 2 kolom, bukan seluruh sheet Sesi. Reload halaman ujian dan tombol Selesai tidak lagi membaca Sheets sama sekali.
+- **Autosave:** tidak lagi memakai kunci global bila sesi sudah ada di antrean (sebelumnya setiap ~20 detik per siswa).
+- **Penyimpanan ping berkala:** hanya 3 kolom dibaca & 2 kolom ditulis (dulu seluruh sheet Siswa ditulis ulang tiap menit), dan antrean tidak lagi hilang bila kunci sedang dipakai.
+- **Setiap request:** pengecekan skema memakai cache, bukan PropertiesService.
+- **Catatan:** perubahan yang dibuat guru lewat aplikasi langsung terlihat. Perubahan yang dibuat **langsung di Spreadsheet** (soal/ujian/siswa) terlihat paling lama ~5 menit; tombol simpan/hitung ulang di aplikasi selalu memperbarui lebih cepat.
+- **Cara pasang:** tempel `Code.gs` terbaru → Deploy → Manage deployments → New version. Pastikan trigger `pasangTriggerFlush_` sudah terpasang (tanpa trigger itu ping/login tidak masuk ke Sheets).
+- File berubah: `Code.gs`, `README.md`. Mode Lokal tidak terpengaruh.
+
 # v43z22 — Ringkasan "Pelanggaran Survei" di Hasil Survei guru
 
 - **Kolom baru "Pelanggaran Survei"** di tabel **Hasil Survei** (per siswa), plus ringkasan di atas tabel: *"n siswa ada pelanggaran survei"*. Guru tidak perlu lagi membuka Detail Pelanggaran satu per satu.
