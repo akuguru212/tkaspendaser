@@ -3520,7 +3520,7 @@ const LocalBackend = (function () {
         if (!sesi) return { ok: false, error: 'Sesi tidak ditemukan.' };
         if (sesi.status !== 'berlangsung') return { ok: true, blokir: false };
         sesi.pelanggaran = (Number(sesi.pelanggaran) || 0) + 1;
-        D.log.push({ id: genId('LOG'), sesi_id: data.sesiId, siswa_id: sesi.siswa_id, ujian_id: sesi.ujian_id, waktu: new Date().toISOString(), jenis: data.jenis || 'tidak diketahui' });
+        D.log.push({ id: genId('LOG'), sesi_id: data.sesiId, siswa_id: sesi.siswa_id, ujian_id: sesi.ujian_id, waktu: new Date().toISOString(), jenis: data.jenis || 'tidak diketahui', detail: String(data.detail || '').slice(0, 120) });
         const ujian = D.ujian.find(u => u.id === sesi.ujian_id);
         const maxPelanggaran = ujian ? Number(ujian.max_pelanggaran) || 999 : 999;
         simpan();
@@ -6583,8 +6583,9 @@ const Guru = {
     tempel_teks: { ikon: '📥', label: 'Mencoba menempel teks (diblokir)', hitung: false },
     potong_teks: { ikon: '✂', label: 'Mencoba memotong teks (diblokir)', hitung: false },
     klik_kanan: { ikon: '🖱', label: 'Mencoba klik kanan (diblokir)', hitung: false },
-    screenshot: { ikon: '📸', label: 'Mencoba screenshot (terdeteksi)', hitung: false },
+    screenshot: { ikon: '📸', label: 'Screenshot terdeteksi (dihitung pelanggaran)', hitung: true },
     alarm_keluar: { ikon: '🚨', label: 'Alarm peringatan dibunyikan (mencoba keluar)', hitung: false },
+    gangguan_singkat: { ikon: '🔔', label: 'Gangguan singkat (notifikasi/telepon/alarm) — tidak dihitung', hitung: false },
     tombol_terlarang: { ikon: '⌨', label: 'Menekan tombol terlarang (diblokir)', hitung: false }
   },
 
@@ -9394,20 +9395,44 @@ const AntiCheat = {
   },
 
   _hiddenSejak: 0,
+  // MASA TOLERANSI GANGGUAN: notifikasi / pesan WA / telepon / alarm yang membuat halaman ujian tersembunyi atau kehilangan
+  // fokus SESAAT (selesai sendiri dalam beberapa detik) TIDAK dihitung pelanggaran dan tidak membunyikan alarm; hanya dicatat
+  // sebagai "gangguan singkat" untuk guru. Bila gangguan berlangsung LEBIH LAMA dari masa toleransi, baru dihitung pelanggaran + alarm.
+  // Atur di config.js: window.CBT_TOLERANSI_GANGGUAN_DETIK = 8;  (0 = tanpa toleransi, maks 60)
+  toleransiMs() {
+    const d = Number(window.CBT_TOLERANSI_GANGGUAN_DETIK);
+    return (isNaN(d) ? 8 : Math.max(0, Math.min(60, d))) * 1000;
+  },
+  _tolTimer: null, _hidLapor: false, _lapor: null,
   onVisibilityChange() {
     if (!AntiCheat.aktif) return;
+    const tol = AntiCheat.toleransiMs();
     if (document.hidden) {
       AntiCheat._hiddenSejak = Date.now();
-      AntiCheat.laporPelanggaran('pindah_tab', 'Layar Anda mati atau Anda meninggalkan halaman ujian (pindah tab/aplikasi).');
+      AntiCheat._hidLapor = false;
+      clearTimeout(AntiCheat._tolTimer);
+      AntiCheat._lapor = () => {
+        if (!AntiCheat.aktif || AntiCheat._hidLapor) return;
+        AntiCheat._hidLapor = true;
+        AntiCheat.laporPelanggaran('pindah_tab', 'Layar Anda mati atau Anda meninggalkan halaman ujian (pindah tab/aplikasi).');
+      };
+      if (tol <= 0) AntiCheat._lapor(); else AntiCheat._tolTimer = setTimeout(AntiCheat._lapor, tol);
     } else if (AntiCheat._hiddenSejak) {
-      const detik = Math.round((Date.now() - AntiCheat._hiddenSejak) / 1000);
+      clearTimeout(AntiCheat._tolTimer);
+      const ms = Date.now() - AntiCheat._hiddenSejak;
+      // pewaktu bisa tertahan sistem saat layar mati: bila pergi lebih lama dari toleransi, hitung sekarang
+      if (!AntiCheat._hidLapor && ms > tol && AntiCheat._lapor) AntiCheat._lapor();
+      const detik = Math.round(ms / 1000);
+      const lama = detik >= 60 ? Math.floor(detik / 60) + ' menit ' + (detik % 60) + ' detik' : detik + ' detik';
       AntiCheat._hiddenSejak = 0;
-      AntiCheat.catat('kembali', 'Pergi selama ' + (detik >= 60 ? Math.floor(detik / 60) + ' menit ' + (detik % 60) + ' detik' : detik + ' detik'));
+      if (AntiCheat._hidLapor) AntiCheat.catat('kembali', 'Pergi selama ' + lama);
+      else AntiCheat.catat('gangguan_singkat', 'Halaman terganggu ± ' + lama + ' (mis. notifikasi/telepon/alarm). Tidak dihitung pelanggaran.');
     }
   },
 
   onBlur() {
-    if (AntiCheat.aktif && document.hidden) AntiCheat.laporPelanggaran('keluar_aplikasi', 'Anda keluar dari aplikasi ujian.');
+    // Hilang fokus saat halaman tersembunyi sudah ditangani onVisibilityChange (dengan masa toleransi).
+    if (AntiCheat.aktif && document.hidden && AntiCheat.toleransiMs() <= 0) AntiCheat.laporPelanggaran('keluar_aplikasi', 'Anda keluar dari aplikasi ujian.');
   },
 
   // Satu "kejadian" (mis. satu kali layar mati) cuma dihitung SATU pelanggaran, walau browser
@@ -9420,7 +9445,7 @@ const AntiCheat = {
     document.getElementById('anticheat-pesan').textContent = pesan;
     document.getElementById('anticheat-sisa').textContent = '';
     document.getElementById('anticheat-warning').classList.remove('hidden');
-    const res = await api('lapor', { sesiId: state.sesiId, jenis, jawaban: JSON.stringify(state.jawaban) });
+    const res = await api('lapor', { sesiId: state.sesiId, jenis, detail: String(pesan || '').slice(0, 120), jawaban: JSON.stringify(state.jawaban) });
     if (res.ok) {
       state.pelanggaran = res.pelanggaran;
       document.getElementById('pelanggaran-indikator').textContent = `Pelanggaran: ${state.pelanggaran}/${state.maxPelanggaran}`;

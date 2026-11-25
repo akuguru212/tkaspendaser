@@ -1,3 +1,23 @@
+# v43z14 — Masa toleransi: notifikasi / WA / telepon / alarm sesaat TIDAK dihitung pelanggaran
+
+- **Gangguan singkat tidak dihitung dan tidak berbunyi.** Notifikasi pesan (WA, chat), telepon, alarm, atau pop-up sistem yang membuat halaman ujian tersembunyi / kehilangan fokus **sesaat** dan **selesai sendiri dalam ≤ 8 detik** tidak menambah pelanggaran dan tidak membunyikan alarm. Isi soal tetap disembunyikan sesaat (privasi), lalu terbuka kembali sendiri.
+- **Tetap tercatat untuk guru** sebagai *🔔 Gangguan singkat (notifikasi/telepon/alarm) — tidak dihitung* (dengan lama gangguannya) di Detail Pelanggaran, jadi bisa ditinjau bila ada pola mencurigakan.
+- **Gangguan yang lebih lama dari 8 detik** (mis. benar-benar membuka aplikasi lain) baru dihitung **pelanggaran + alarm**. Bila HP menahan pewaktu saat layar mati, hitungan diberlakukan saat siswa kembali (berdasarkan lama perginya).
+- **Atur lamanya** di `config.js`: `window.CBT_TOLERANSI_GANGGUAN_DETIK = 8;` (0–60 detik; 0 = langsung dihitung seperti sebelumnya).
+- **Tidak berubah:** screenshot lewat keyboard tetap **langsung** dihitung + alarm; keluar dari layar penuh tetap seperti semula; watermark identitas tetap aktif.
+- **Perbaikan:** setelah alarm dan menekan *Kembali ke Ujian*, isi soal kini selalu dibuka kembali (tidak tertinggal tertutup blur).
+- **Batas teknis:** ujian tidak bisa membedakan "alarm HP yang berdering" dari "siswa membuka aplikasi lain" selain dari **lamanya**. Karena itu toleransi dibuat singkat; terlalu panjang bisa dimanfaatkan untuk mengintip pesan.
+- File berubah: `app.js`, `kunci-ujian.js`, `config.js`, `index.html` (versi cache), `README.md`. **Code.gs tidak berubah.**
+
+# v43z13 — Screenshot & kehilangan fokus dihitung pelanggaran + alarm, watermark identitas siswa
+
+- **Screenshot lewat keyboard** (PrintScreen, Win+Shift+S, Ctrl+Shift+S, Cmd+Shift+3/4/5) kini **dihitung sebagai pelanggaran** (sebelumnya hanya dicatat) dan membunyikan **alarm sirine + getar** seperti keluar layar penuh. Isi soal disembunyikan sesaat, papan klip dikosongkan. Muncul di Detail Pelanggaran guru sebagai *Screenshot terdeteksi (dihitung pelanggaran)*.
+- **Kehilangan fokus layar ujian** (aplikasi melayang, panel notifikasi, jendela lain di atas ujian) kini **dihitung pelanggaran + alarm**. Dideteksi lewat event `blur` dan **pemeriksaan fokus berkala** (cadangan bila `blur` tidak terpicu), minimal ~2 detik kehilangan fokus. Satu kejadian = satu hitungan sampai siswa menekan *Kembali ke Ujian*. Bila di perangkat tertentu terlalu sensitif: `window.CBT_FOKUS_PELANGGARAN = false;` di `config.js` (hanya alarm, tanpa hitungan).
+- **Watermark identitas** (nama · kelas · tanggal-jam · kode sesi) diulang tipis di **seluruh layar ujian**. Setiap tangkapan/foto layar bisa dilacak ke pemiliknya — penangkal utama untuk screenshot yang **tidak bisa dideteksi**. Dipulihkan otomatis bila dihapus/disembunyikan lewat DevTools (dan dicatat di log). Atur: `CBT_WATERMARK_IDENTITAS = false` (matikan), `CBT_WM_OPACITY = 0.05–0.4` (bawaan 0.15).
+- Keterangan tiap pelanggaran kini ikut tersimpan di log (kolom detail).
+- **Batas teknis (jujur):** browser/PWA **tidak punya event screenshot**. Screenshot lewat **tombol fisik (Power+Volume)** atau **aplikasi melayang yang tidak mengambil fokus** tidak bisa dideteksi atau diblokir oleh halaman web. Pencegahan sungguhan hanya lewat aplikasi Android native (`FLAG_SECURE` → hasil screenshot hitam) atau Safe Exam Browser.
+- File berubah: `kunci-ujian.js`, `app.js`, `config.js`, `index.html` (versi cache), `README.md`. **Code.gs tidak berubah.**
+
 # v43z5 — Foto profil siswa (tersimpan di Google Drive)
 
 - **Siswa dapat mengunggah foto profil** dari menu pengguna (pojok kanan atas → **Foto Profil**) atau dengan mengetuk avatar di Portal Siswa / banner Dashboard. Foto tampil sebagai avatar di header, sisi kiri Portal Siswa, dan banner Dashboard. Tanpa foto, avatar menampilkan inisial nama seperti sebelumnya.

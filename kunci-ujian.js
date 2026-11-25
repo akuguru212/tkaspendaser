@@ -6,8 +6,17 @@
       tombol Kembali). Alarm berhenti hanya setelah siswa menekan "Kembali ke Ujian".
    4) Pembatas screenshot (SEBAGIAN — lihat catatan): isi soal disembunyikan saat halaman kehilangan fokus,
       tombol PrintScreen / Win+Shift+S / Cmd+Shift+3-4-5 terdeteksi & dicatat, tidak bisa cetak/simpan/seleksi.
-   CATATAN JUJUR: browser/PWA TIDAK BISA memblokir screenshot tombol fisik (Power+Volume) di Android ataupun
-   menahan tombol Home. Itu hanya bisa lewat aplikasi Android native (FLAG_SECURE + screen pinning).
+   5) Screenshot TERDETEKSI (tombol PrintScreen / Win+Shift+S / Ctrl+Shift+S / Cmd+Shift+3-4-5) = PELANGGARAN yang dihitung
+      + alarm. Kehilangan fokus layar (aplikasi melayang, panel notifikasi, jendela lain) juga dihitung pelanggaran + alarm
+      (dicek lewat event blur DAN pemeriksaan fokus berkala). Bisa dimatikan lewat config.js: CBT_FOKUS_PELANGGARAN = false.
+      MASA TOLERANSI: notifikasi / pesan WA / telepon / alarm yang mengganggu SESAAT (selesai sendiri dalam <= 8 detik) TIDAK dihitung
+      dan TIDAK berbunyi; hanya dicatat "gangguan singkat". Lebih lama dari itu baru pelanggaran + alarm. Atur: CBT_TOLERANSI_GANGGUAN_DETIK.
+   6) WATERMARK IDENTITAS: nama + kelas + jam + kode sesi siswa diulang tipis di SELURUH layar ujian, sehingga setiap
+      tangkapan layar / foto layar bisa dilacak ke pemiliknya (penangkal utama untuk screenshot yang tak terdeteksi).
+      Matikan: CBT_WATERMARK_IDENTITAS = false; atur kepekatan: CBT_WM_OPACITY (0.05 - 0.4, bawaan 0.15).
+   CATATAN JUJUR: browser/PWA TIDAK PUNYA event "screenshot", jadi screenshot lewat tombol fisik (Power+Volume) atau aplikasi
+   melayang yang tidak mengambil fokus TIDAK bisa dideteksi/diblokir oleh halaman web. Itu hanya bisa dicegah lewat aplikasi
+   Android native (FLAG_SECURE -> hasil screenshot hitam) atau Safe Exam Browser. Watermark di atas adalah penangkalnya.
    ============================================================================ */
 (function () {
   'use strict';
@@ -15,7 +24,7 @@
 
   const K = {
     aktif: false, wake: null, alarmEl: null, alarmOn: false, pernahFs: false, getarTimer: null,
-    blurTimer: null, audioSiap: false, url: null,
+    blurTimer: null, audioSiap: false, url: null, missFokus: 0, pernahFokus: false, fokusTimer: null, visTimer: null, hiddenT0: 0, blurT0: 0,
 
     // ---------- util ----------
     fsDidukung() { const e = document.documentElement; return !!(e.requestFullscreen || e.webkitRequestFullscreen); },
@@ -27,6 +36,15 @@
     },
     catat(j, d) { try { AntiCheat.catat(j, d || ''); } catch (e) { /* abaikan */ } },
     pesanAktif() { return !!(typeof state !== 'undefined' && state.sesiId && !state.submitting); },
+    // Pelanggaran yang DIHITUNG (sama seperti keluar layar penuh). Satu kejadian = satu hitungan (dijaga AntiCheat._insiden).
+    laporHitung(jenis, pesan) {
+      try {
+        if (AntiCheat && typeof AntiCheat.laporPelanggaran === 'function' && !AntiCheat._insiden) { AntiCheat.laporPelanggaran(jenis, pesan); return true; }
+      } catch (e) { /* abaikan */ }
+      K.catat(jenis, pesan); return false;
+    },
+    hitungFokus() { return window.CBT_FOKUS_PELANGGARAN !== false; },
+    tol() { try { return AntiCheat.toleransiMs(); } catch (e) { return 8000; } },
 
     // ---------- 1) layar tetap menyala ----------
     async minta() {
@@ -108,6 +126,7 @@
       K.bukaKunciAudio();
       if (K.fsDidukung() && !K.adaFs()) { const ok = await K.masukFs(); if (!ok && K.fsDidukung()) { /* gagal: tetap tampilkan penutup */ } }
       K.alarmMati();
+      if (!document.hidden) K.sembunyiIsi(false);   // isi soal dibuka lagi setelah siswa menekan Kembali
       if (!K.fsDidukung() || K.adaFs()) K.sembunyiPenutup();
       K.minta();
       const w = document.getElementById('anticheat-warning');
@@ -117,22 +136,56 @@
       if (!K.aktif || !K.pesanAktif() || !K.fsDidukung()) return;
       if (K.adaFs()) { K.pernahFs = true; if (!K.alarmOn) K.sembunyiPenutup(); return; }
       if (K.pernahFs) K.alarmNyala('Anda keluar dari layar penuh. Tekan tombol di bawah untuk kembali ke ujian.');
-      else K.tampilPenutup('Ketuk tombol di bawah untuk memulai ujian dalam layar penuh.', false);
+      else K.tampilPenutup('Ketuk tombol di bawah untuk memulai ujian dalam layar penuh. Layar ujian diberi watermark nama Anda, dan screenshot dihitung sebagai pelanggaran.', false);
     },
 
     // ---------- event ----------
+    // Notifikasi / WA / telepon / alarm sesaat: isi soal disembunyikan LANGSUNG (privasi), tetapi alarm & hitungan baru berlaku
+    // bila gangguan lebih lama dari masa toleransi (CBT_TOLERANSI_GANGGUAN_DETIK, bawaan 8 detik).
     onVis() {
       if (!K.aktif) return;
-      if (document.hidden) { K.sembunyiIsi(true); K.alarmNyala('Anda meninggalkan halaman ujian atau layar mati.'); }
-      else { K.sembunyiIsi(false); K.lepasWake(); K.minta(); K.periksaFs(); }
+      const tol = K.tol();
+      if (document.hidden) {
+        K.sembunyiIsi(true); K.hiddenT0 = Date.now(); clearTimeout(K.visTimer);
+        const nyala = () => { if (K.aktif && document.hidden) K.alarmNyala('Anda meninggalkan halaman ujian atau layar mati.'); };
+        if (tol <= 0) nyala(); else K.visTimer = setTimeout(nyala, tol);
+      } else {
+        clearTimeout(K.visTimer);
+        const ms = K.hiddenT0 ? Date.now() - K.hiddenT0 : 0; K.hiddenT0 = 0;
+        if (ms > tol && !K.alarmOn) K.alarmNyala('Anda meninggalkan halaman ujian atau layar mati.'); // pewaktu tertahan saat layar mati
+        else K.sembunyiIsi(false);
+        K.lepasWake(); K.minta(); K.periksaFs();
+      }
     },
     onBlur() {
       if (!K.aktif) return;
       K.sembunyiIsi(true);
-      clearTimeout(K.blurTimer);
-      K.blurTimer = setTimeout(() => { if (K.aktif && !document.hasFocus()) K.alarmNyala('Anda keluar dari aplikasi ujian.'); }, 400);
+      clearTimeout(K.blurTimer); K.blurT0 = Date.now();
+      K.blurTimer = setTimeout(() => {
+        if (!K.aktif || document.hasFocus()) return;
+        if (K.hitungFokus()) K.laporHitung('keluar_aplikasi', 'Fokus layar ujian hilang lebih dari ' + Math.round(K.tol() / 1000) + ' detik (aplikasi/jendela lain di atas ujian).');
+        K.alarmNyala('Anda keluar dari aplikasi ujian.');
+      }, Math.max(400, K.tol()));
     },
-    onFokus() { clearTimeout(K.blurTimer); if (K.aktif && !document.hidden) K.sembunyiIsi(false); },
+    onFokus() {
+      clearTimeout(K.blurTimer); K.pernahFokus = true; K.missFokus = 0;
+      const ms = K.blurT0 ? Date.now() - K.blurT0 : 0; K.blurT0 = 0;
+      if (ms > 600 && !K.alarmOn && K.aktif && K.pesanAktif()) K.catat('gangguan_singkat', 'Fokus layar terganggu ± ' + Math.max(1, Math.round(ms / 1000)) + ' detik (mis. notifikasi/pesan). Tidak dihitung pelanggaran.');
+      if (K.aktif && !document.hidden) K.sembunyiIsi(false);
+    },
+    // Cadangan untuk event blur yang tidak terpicu (sebagian aplikasi melayang / panel sistem mengambil fokus diam-diam).
+    // Syarat: halaman PERNAH berfokus, lalu kehilangan fokus >= ~2 detik berturut-turut (agar tidak sensitif).
+    periksaFokus() {
+      if (!K.aktif || !K.pesanAktif() || document.hidden) { K.missFokus = 0; return; }
+      if (document.hasFocus()) { K.pernahFokus = true; if (K.missFokus >= 2 && !K.alarmOn) K.sembunyiIsi(false); K.missFokus = 0; return; }
+      if (!K.pernahFokus) return;
+      K.missFokus++;
+      if (K.missFokus === 2) K.sembunyiIsi(true);
+      if (K.missFokus >= Math.max(4, Math.ceil(K.tol() / 500) + 1) && !K.alarmOn) {
+        if (K.hitungFokus()) K.laporHitung('keluar_aplikasi', 'Fokus layar ujian hilang lebih dari ' + Math.round(K.tol() / 1000) + ' detik (kemungkinan aplikasi melayang / tangkapan layar / panel sistem).');
+        K.alarmNyala('Fokus layar ujian hilang. Kembali ke ujian dan jangan membuka aplikasi lain.');
+      }
+    },
     sembunyiIsi(b) { document.body.classList.toggle('kunci-blur', !!b); },
     onFsChange() { setTimeout(K.periksaFs, 150); },
     onTap() { if (!K.aktif) return; K.bukaKunciAudio(); if (K.fsDidukung() && !K.adaFs() && !K.alarmOn) K.masukFs().then(K.periksaFs); },
@@ -142,12 +195,13 @@
     onKey(e) {
       if (!K.aktif) return;
       const k = String(e.key || '').toLowerCase();
-      const ss = k === 'printscreen' || k === 'snapshot' || (e.metaKey && e.shiftKey && ['3', '4', '5'].indexOf(k) >= 0) || (e.metaKey && e.shiftKey && (k === 's')) || (e.shiftKey && (e.metaKey || e.getModifierState && e.getModifierState('OS')) && k === 's');
+      const ss = k === 'printscreen' || k === 'snapshot' || (e.metaKey && e.shiftKey && ['3', '4', '5'].indexOf(k) >= 0) || (e.metaKey && e.shiftKey && (k === 's')) || (e.shiftKey && (e.metaKey || e.getModifierState && e.getModifierState('OS')) && k === 's') || (e.ctrlKey && e.shiftKey && k === 's');
       if (ss) {
-        e.preventDefault(); K.sembunyiIsi(true); K.catat('screenshot', 'Percobaan screenshot (tombol ' + e.key + ')');
+        e.preventDefault(); K.sembunyiIsi(true);
         try { navigator.clipboard && navigator.clipboard.writeText(' '); } catch (x) { /* abaikan */ }
-        setTimeout(() => { if (!document.hidden) K.sembunyiIsi(false); }, 1500);
-        K.alarmNyala('Screenshot dilarang selama ujian.');
+        setTimeout(() => { if (!document.hidden && document.hasFocus()) K.sembunyiIsi(false); }, 1500);
+        K.laporHitung('screenshot', 'Screenshot terdeteksi (tombol ' + e.key + '). Ini dihitung sebagai pelanggaran.');
+        K.alarmNyala('Screenshot dilarang selama ujian. Percobaan ini dicatat sebagai pelanggaran.');
         return;
       }
       const blok = k === 'f12' || ((e.ctrlKey || e.metaKey) && ['s', 'p', 'u'].indexOf(k) >= 0) || ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j', 'c'].indexOf(k) >= 0);
@@ -156,11 +210,63 @@
     onKeyUp(e) { if (K.aktif && String(e.key).toLowerCase() === 'printscreen') { try { navigator.clipboard && navigator.clipboard.writeText(' '); } catch (x) { /* abaikan */ } } },
     blokir(e) { if (K.aktif) e.preventDefault(); },
 
+
+    // ---------- 6) watermark identitas siswa (penangkal screenshot yang tidak terdeteksi) ----------
+    WM: {
+      el: null, timer: null, guard: null, obs: null, css: '', ulang: 0,
+      aktif() { return window.CBT_WATERMARK_IDENTITAS !== false; },
+      xml(t) { return String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c])); },
+      baris() {
+        const u = (typeof state !== 'undefined' && state.user) || {};
+        const nama = String(u.nama || 'PESERTA').toUpperCase().slice(0, 30);
+        const sesi = String((typeof state !== 'undefined' && state.sesiId) || '').replace(/[^A-Za-z0-9]/g, '').slice(-6).toUpperCase();
+        const d = new Date();
+        const jam = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(':', '.');
+        const tgl = d.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: '2-digit' });
+        return [nama + (u.kelas ? ' \u00B7 ' + u.kelas : ''), tgl + ' ' + jam + (sesi ? ' \u00B7 ' + sesi : '')];
+      },
+      gambar() {
+        const [a, b] = K.WM.baris(), op = Math.min(0.4, Math.max(0.05, Number(window.CBT_WM_OPACITY) || 0.15));
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="190"><g transform="rotate(-24 150 95)" font-family="Arial,Helvetica,sans-serif" font-weight="700" fill="#64748b" fill-opacity="' + op + '" text-anchor="middle">' +
+          '<text x="150" y="88" font-size="15">' + K.WM.xml(a) + '</text><text x="150" y="108" font-size="12">' + K.WM.xml(b) + '</text></g></svg>';
+        return 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")';
+      },
+      terapkan() {
+        const W = K.WM; if (!W.el) return;
+        W.css = 'position:fixed!important;inset:0!important;z-index:9450!important;pointer-events:none!important;user-select:none!important;-webkit-user-select:none!important;display:block!important;visibility:visible!important;opacity:1!important;background-repeat:repeat!important;background-image:' + W.gambar() + '!important;';
+        W.el.style.cssText = W.css;
+      },
+      pasang() {
+        const W = K.WM; if (W.el && document.body.contains(W.el)) return;
+        const el = document.createElement('div'); el.id = 'wm-identitas'; el.setAttribute('aria-hidden', 'true'); W.el = el;
+        W.terapkan(); document.body.appendChild(el);
+      },
+      lapor(d) { const t = Date.now(); if (t - K.WM.ulang > 20000) { K.WM.ulang = t; K.catat('tombol_terlarang', d); } },
+      periksa() {
+        const W = K.WM; if (!K.aktif) return;
+        if (!W.el || !document.body.contains(W.el)) { W.lapor('Watermark identitas dihapus (dipasang ulang)'); W.el = null; W.pasang(); return; }
+        if (W.el.style.cssText.indexOf('z-index') < 0 || getComputedStyle(W.el).display === 'none' || getComputedStyle(W.el).visibility === 'hidden' || Number(getComputedStyle(W.el).opacity) < 0.9) { W.lapor('Watermark identitas diubah (dipulihkan)'); W.terapkan(); }
+      },
+      mulai() {
+        const W = K.WM; if (!W.aktif()) return;
+        W.pasang();
+        clearInterval(W.timer); W.timer = setInterval(() => { if (K.aktif) W.terapkan(); }, 30000);   // perbarui jam
+        clearInterval(W.guard); W.guard = setInterval(W.periksa, 2500);
+        try { W.obs = new MutationObserver(() => { if (K.aktif) W.periksa(); }); W.obs.observe(document.body, { childList: true }); } catch (e) { /* abaikan */ }
+      },
+      henti() {
+        const W = K.WM; clearInterval(W.timer); clearInterval(W.guard);
+        try { if (W.obs) W.obs.disconnect(); } catch (e) { /* abaikan */ } W.obs = null;
+        try { if (W.el) W.el.remove(); } catch (e) { /* abaikan */ } W.el = null;
+      }
+    },
+
     // ---------- hidup / mati ----------
     on() {
       if (K.aktif) return;
-      K.aktif = true; K.pernahFs = K.adaFs();
-      K.siapAudio(); K.minta();
+      K.aktif = true; K.pernahFs = K.adaFs(); K.pernahFokus = false; K.missFokus = 0;
+      K.siapAudio(); K.minta(); K.WM.mulai();
+      clearInterval(K.fokusTimer); K.fokusTimer = setInterval(K.periksaFokus, 500);
       document.body.classList.add('kunci-aktif');
       document.addEventListener('visibilitychange', K.onVis);
       window.addEventListener('blur', K.onBlur); window.addEventListener('focus', K.onFokus); window.addEventListener('pagehide', K.onBlur);
@@ -174,7 +280,7 @@
     },
     off() {
       if (!K.aktif) return;
-      K.aktif = false; clearTimeout(K.tampilPenutupAwal); clearTimeout(K.blurTimer);
+      K.aktif = false; clearTimeout(K.tampilPenutupAwal); clearTimeout(K.blurTimer); clearTimeout(K.visTimer); clearInterval(K.fokusTimer); K.WM.henti();
       K.alarmMati(); K.sembunyiPenutup(); K.sembunyiIsi(false); K.lepasWake();
       document.body.classList.remove('kunci-aktif');
       document.removeEventListener('visibilitychange', K.onVis);
