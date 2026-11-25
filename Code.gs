@@ -315,6 +315,7 @@ function route_(action, data) {
     case 'getDaftarSiswa': return actionGetDaftarSiswa_(data);
     case 'blokirSiswa': return withLock_(lock, function () { return actionBlokirSiswa_(data); });
     case 'uploadFotoProfil': return actionUploadFotoProfil_(data); // kunci dipegang sebentar di dalam (hanya saat menulis baris)
+    case 'simpanKarakterProfil': return actionSimpanKarakterProfil_(data);
     case 'hapusFotoProfil': return actionHapusFotoProfil_(data);
     case 'hapusFotoProfilGuru': return actionHapusFotoProfilGuru_(data);
     case 'uploadBuktiOrek': return actionUploadBuktiOrek_(data); // kunci dipegang sebentar di dalam (hanya saat menulis baris)
@@ -1936,6 +1937,43 @@ function actionUploadFotoProfil_(data) {
   if (fileLama && fileLama !== file.getId()) { try { DriveApp.getFileById(fileLama).setTrashed(true); } catch (e) {} }
   cache.put('foto_thumb_' + siswa.id, thumb, 21600);
   return jsonOut_({ ok: true, thumb: thumb, waktu: waktu });
+}
+
+// Karakter profil pilihan siswa (v43z20): teks 'kar:E:<emoji>:<latar>:<gerak>' atau 'kar:F:<gen>:<latar>:<gerak>'.
+// Disimpan di kolom thumb sheet FotoProfil (file_id kosong), jadi tanpa perubahan struktur sheet.
+// data: { siswaId, deviceId, karakter }
+function actionSimpanKarakterProfil_(data) {
+  var v = verifikasiSiswaPerangkat_(data);
+  if (v.error) return jsonOut_({ ok: false, error: v.error });
+  var siswa = v.siswa;
+  var spec = String(data.karakter || '');
+  if (!/^kar:[EF]:[^\s:<>"'`\\&]{1,40}:\d{1,3}:\d{1,2}$/.test(spec)) return jsonOut_({ ok: false, error: 'Karakter tidak valid.' });
+  var cache = CacheService.getScriptCache();
+  if (cache.get('kar_jeda_' + siswa.id)) return jsonOut_({ ok: false, error: 'Tunggu beberapa detik sebelum menyimpan lagi.' });
+  cache.put('kar_jeda_' + siswa.id, '1', 2);
+  var waktu = new Date().toISOString();
+  var fileLama = '';
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) return jsonOut_({ ok: false, error: 'Server sedang sibuk, silakan coba lagi.' });
+  try {
+    var headers = headersOf_(SHEET.FOTO);
+    var baris = { id: siswa.id, file_id: '', nama_berkas: '', thumb: spec, bytes: 0, waktu: waktu };
+    var idx = cariBarisFoto_(siswa.id);
+    if (idx > 0) {
+      fileLama = String(sh_(SHEET.FOTO).getRange(idx, headers.indexOf('file_id') + 1).getValue() || '');
+      updateRowByFields_(SHEET.FOTO, headers, idx, baris);
+    } else {
+      appendObj_(SHEET.FOTO, headers, baris);
+    }
+    SpreadsheetApp.flush();
+  } catch (err) {
+    return jsonOut_({ ok: false, error: 'Gagal menyimpan karakter: ' + String(err) });
+  } finally {
+    lock.releaseLock();
+  }
+  if (fileLama) { try { DriveApp.getFileById(fileLama).setTrashed(true); } catch (e) {} } // foto lama (bila ada) dibuang
+  cache.put('foto_thumb_' + siswa.id, spec, 21600);
+  return jsonOut_({ ok: true, thumb: spec, waktu: waktu });
 }
 
 // Hapus foto 1 siswa: berkas Drive ke sampah + baris + cache. Aman dipanggil walau foto tidak ada.

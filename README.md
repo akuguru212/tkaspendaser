@@ -1,3 +1,15 @@
+# v43z20 — Pilih karakter lucu (animasi) untuk avatar siswa
+
+- **Menu baru:** pojok kanan atas → **Foto & Karakter** (atau ketuk avatar di Portal Siswa / banner Dashboard). Dialog kini punya dua tab: **Foto** (seperti sebelumnya) dan **Karakter Lucu**. Siswa tanpa foto langsung dibuka di tab Karakter.
+- **320 karakter siap pakai** dalam 7 kategori: Hewan, Laut & Serangga, Fantasi, Wajah, Makanan, Alam, Hobi & Kendaraan.
+- **Buat Sendiri (generator wajah kawaii):** warna badan (16), bentuk (3), telinga (10: kucing, beruang, kelinci, anjing, tikus, tanduk, antena, tunas, rubah), mata (8), mulut (8), pipi (4), aksesori (12: pita, bunga, mahkota, kacamata, topi pesta, headphone, hati, halo, bintang, topi, plester). Ditambah 24 warna latar dan 9 gerakan, jadi **lebih dari 353 juta kombinasi**. Tombol **Acak** memilih kejutan.
+- **Gerakan:** Loncat, Goyang, Melayang, Detak, Ayun, Jeli, Putar, Kedip, Tada. Karakter bergerak di banner Dashboard dan sisi kiri Portal Siswa; ikon kecil (header, tabel guru) hanya bergerak saat disentuh kursor, agar layar ujian tidak terganggu. Pengguna yang mengaktifkan *reduce motion* di perangkatnya tidak melihat gerakan.
+- **Tersimpan lintas perangkat (Mode Server):** pilihan disimpan sebagai teks pendek (mis. `kar:F:0.0.2.1.5.1.1:3:2`) di kolom `thumb` sheet **FotoProfil**, tanpa mengubah struktur sheet. Mengunggah foto sungguhan menggantikan karakter, dan sebaliknya (foto lama di Drive dibuang ke sampah). Tombol **Reset karakter** mengembalikan ke karakter bawaan otomatis.
+- **Portal Guru → Data Siswa:** kolom Foto menampilkan karakter pilihan siswa (tanpa tombol buka/hapus Drive karena bukan foto).
+- **Mode Lokal:** langsung berfungsi (disimpan di perangkat), tanpa langkah tambahan.
+- **WAJIB untuk Mode Server:** tempel `Code.gs` terbaru ke Apps Script lalu **Deploy → Kelola deployment → Edit → Versi baru → Deploy**. Tanpa ini siswa melihat pesan *Server belum diperbarui* saat menyimpan karakter. Foto biasa tetap jalan.
+- File berubah: `foto-profil.js`, `Code.gs` (aksi baru `simpanKarakterProfil`), `app.js` (Mode Lokal), `index.html` (versi cache), `sw.js` (versi cache), `README.md`.
+
 # v43z14 — Masa toleransi: notifikasi / WA / telepon / alarm sesaat TIDAK dihitung pelanggaran
 
 - **Gangguan singkat tidak dihitung dan tidak berbunyi.** Notifikasi pesan (WA, chat), telepon, alarm, atau pop-up sistem yang membuat halaman ujian tersembunyi / kehilangan fokus **sesaat** dan **selesai sendiri dalam ≤ 8 detik** tidak menambah pelanggaran dan tidak membunyikan alarm. Isi soal tetap disembunyikan sesaat (privasi), lalu terbuka kembali sendiri.

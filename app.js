@@ -3370,6 +3370,16 @@ const LocalBackend = (function () {
         if (!tulisSekarang()) { sw.foto = lama.foto; sw.foto_waktu = lama.foto_waktu; return { ok: false, error: 'Penyimpanan perangkat penuh, foto tidak tersimpan.' }; }
         return { ok: true, thumb: th, waktu: sw.foto_waktu };
       }
+      case 'simpanKarakterProfil': {
+        const sw = D.siswa.find(x => x.id === data.siswaId);
+        if (!sw) return { ok: false, error: 'Akun siswa tidak ditemukan.' };
+        const spk = String(data.karakter || '');
+        if (!/^kar:[EF]:[^\s:<>"'`\\&]{1,40}:\d{1,3}:\d{1,2}$/.test(spk)) return { ok: false, error: 'Karakter tidak valid.' };
+        const lamaK = { foto: sw.foto, foto_waktu: sw.foto_waktu };
+        sw.foto = spk; sw.foto_waktu = new Date().toISOString();
+        if (!tulisSekarang()) { sw.foto = lamaK.foto; sw.foto_waktu = lamaK.foto_waktu; return { ok: false, error: 'Penyimpanan perangkat penuh, karakter tidak tersimpan.' }; }
+        return { ok: true, thumb: spk, waktu: sw.foto_waktu };
+      }
       case 'hapusFotoProfil':
       case 'hapusFotoProfilGuru': {
         const sw = D.siswa.find(x => x.id === data.siswaId);
