@@ -298,7 +298,7 @@
 
   // Pasang di atas AntiCheat yang ada: nyala bersama ujian, mati bersama ujian.
   const aktifAsli = AntiCheat.aktifkan, matiAsli = AntiCheat.nonaktifkan;
-  AntiCheat.aktifkan = function () { const r = aktifAsli.apply(this, arguments); try { K.on(); } catch (e) { console.warn('KunciUjian', e); } return r; };
+  AntiCheat.aktifkan = function () { const r = aktifAsli.apply(this, arguments); if (!AntiCheat.aktif) return r; /* anti-curang dinonaktifkan guru untuk ujian ini */ try { K.on(); } catch (e) { console.warn('KunciUjian', e); } return r; };
   AntiCheat.nonaktifkan = function () { try { K.off(); } catch (e) { /* abaikan */ } return matiAsli.apply(this, arguments); };
   window.KunciUjian = K;
 })();

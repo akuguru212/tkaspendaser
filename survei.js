@@ -614,7 +614,7 @@ const Survei = (function () {
     // Anti-nyontek yang sama dengan halaman soal (layar penuh, alarm, screenshot, watermark, blokir salin) aktif selama survei.
     // Kejadian dicatat ke log guru dengan awalan "[Survei]" dan TIDAK menambah hitungan pelanggaran ujian / tidak memblokir.
     // Matikan lewat config.js: window.CBT_ANTICHEAT_SURVEI = false;
-    const kunciSurvei = window.CBT_ANTICHEAT_SURVEI !== false && typeof AntiCheat !== 'undefined';
+    const kunciSurvei = window.CBT_ANTICHEAT_SURVEI !== false && typeof AntiCheat !== 'undefined' && !(AntiCheat.dimatikan && AntiCheat.dimatikan()); // ikut pengaturan anti-curang ujian
     const akhiriKunci = () => {
       if (!kunciSurvei || !AntiCheat.modeSurvei) return;
       try { AntiCheat.nonaktifkan(); } catch (e) { /* abaikan */ }

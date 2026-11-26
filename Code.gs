@@ -121,7 +121,7 @@ var SCHEMA = {
   // soal, mis. untuk soal listening/video) ditambahkan lewat mekanisme skema otomatis
   // yang sama -- lihat README bag. "Menambah kolom baru" & tampilan "Kelola Soal".
   BankSoal: ['id', 'guru_id', 'kategori', 'subkategori', 'tipe', 'topik', 'pertanyaan', 'gambar', 'audio', 'video', 'opsi_json', 'kunci_json', 'bobot', 'tingkat_kesulitan', 'pembahasan', 'status', 'dibuat'],
-  Ujian: ['id', 'guru_id', 'judul', 'kategori', 'subkategori', 'soal_ids', 'durasi_menit', 'token', 'mulai', 'selesai', 'toleransi_menit', 'max_pelanggaran', 'acak_soal', 'acak_opsi', 'nilai_lulus', 'status', 'instruksi_remedial', 'pesan_nilai', 'tampil_detail', 'tampil_pembahasan', 'bukti_orek', 'survei', 'survei_tampil', 'survei_butir', 'token_kelas', 'tampil_token'],
+  Ujian: ['id', 'guru_id', 'judul', 'kategori', 'subkategori', 'soal_ids', 'durasi_menit', 'token', 'mulai', 'selesai', 'toleransi_menit', 'max_pelanggaran', 'acak_soal', 'acak_opsi', 'nilai_lulus', 'status', 'instruksi_remedial', 'pesan_nilai', 'tampil_detail', 'tampil_pembahasan', 'bukti_orek', 'survei', 'survei_tampil', 'survei_butir', 'token_kelas', 'tampil_token', 'anti_curang'],
   // 'tambahan_detik' dipakai fitur "Pemantauan Ujian" (tombol "Tambah Waktu") --
   // jumlah detik ekstra yang diberikan guru ke satu sesi siswa tertentu, di luar
   // durasi_menit standar ujian. Kosong/0 berarti tidak ada tambahan.
@@ -333,6 +333,7 @@ function route_(action, data) {
     case 'uploadBuktiOrek': return actionUploadBuktiOrek_(data); // kunci dipegang sebentar di dalam (hanya saat menulis baris)
     case 'getBuktiOrek': return actionGetBuktiOrek_(data);
     case 'setTokenKelas': return withLock_(lock, function () { return actionSetTokenKelas_(data); });
+    case 'setAntiCurangUjian': return withLock_(lock, function () { return actionSetAntiCurangUjian_(data); });
     case 'setTampilTokenUjian': return withLock_(lock, function () { return actionSetTampilTokenUjian_(data); });
     case 'getPaketSurvei': return actionGetPaketSurvei_(data);
     case 'simpanPaketSurvei': return withLock_(lock, function () { return actionSimpanPaketSurvei_(data); });
@@ -2414,6 +2415,20 @@ function actionSimpanPengaturanTokenSiswa_(data) {
   CacheService.getScriptCache().remove('tampil_token_siswa_c');
   return jsonOut_({ ok: true, aktif: aktif });
 }
+// Anti-curang (layar penuh, alarm, deteksi pindah tab/screenshot, watermark identitas, hitungan pelanggaran & blokir) -- PER UJIAN.
+// Kolom Ujian.anti_curang: '' atau '1'/'true' = AKTIF (bawaan, perilaku lama); '0'/'false' = NONAKTIF.
+function antiCurangUjian_(u) {
+  var v = (u && u.anti_curang) == null ? '' : String(u.anti_curang).trim().toLowerCase();
+  return !(v === '0' || v === 'false');
+}
+function actionSetAntiCurangUjian_(data) {
+  var idx = findRowIndexById_(SHEET.UJIAN, data.ujianId);
+  if (idx < 1) return jsonOut_({ ok: false, error: 'Ujian tidak ditemukan.' });
+  var aktif = data.aktif === true || String(data.aktif).toLowerCase() === 'true' || String(data.aktif) === '1';
+  updateRowByFields_(SHEET.UJIAN, headersOf_(SHEET.UJIAN), idx, { anti_curang: aktif ? '1' : '0' });
+  return jsonOut_({ ok: true, aktif: aktif });
+}
+
 // Tampil/sembunyikan token di layar peserta -- PER UJIAN (kolom Ujian.tampil_token).
 // '' (belum pernah diatur) = ikut pengaturan lama (tampil_token_siswa, default Tampil);
 // '1'/'true' = token tampil; '0'/'false' = token disembunyikan (hanya diberikan guru/pengawas).
@@ -2914,7 +2929,7 @@ function actionMulaiUjian_(data) {
     var perluBukti = modeBuktiUjian_(ujian) === 'wajib' && daftarBuktiSesi_(sesiId).length === 0;
     var perluSurvei = !!jenisSurveiUjian_(ujian) && !suratSurveiAda_(sesiId);
     if (perluBukti || perluSurvei) {
-      return jsonOut_({ ok: true, perluBukti: perluBukti, perluSurvei: perluSurvei, sesiId: sesiId, nilai: existing.nilai, lulus: existing.lulus, buktiOrek: perluBukti ? 'wajib' : '', judul: ujian.judul });
+      return jsonOut_({ ok: true, antiCurang: antiCurangUjian_(ujian), perluBukti: perluBukti, perluSurvei: perluSurvei, sesiId: sesiId, nilai: existing.nilai, lulus: existing.lulus, buktiOrek: perluBukti ? 'wajib' : '', judul: ujian.judul });
     }
     return jsonOut_({ ok: false, error: 'Anda sudah menyelesaikan ujian ini.' });
   }
@@ -3002,6 +3017,7 @@ function actionMulaiUjian_(data) {
     raguTersimpan: ragu,
     sisaDetik: Math.max(Math.floor(sisaMs / 1000), 0),
     maxPelanggaran: Number(ujian.max_pelanggaran) || 999,
+    antiCurang: antiCurangUjian_(ujian),
     pelanggaranSaatIni: existing ? Number(existing.pelanggaran) || 0 : 0
   });
 }
@@ -3042,6 +3058,9 @@ function actionLapor_(data) {
   var state = ambilSesiState_(data.sesiId);
   if (!state) return jsonOut_({ ok: false, error: 'Sesi tidak ditemukan.' });
   if (state.status !== 'berlangsung') return jsonOut_({ ok: true, blokir: false });
+  // Anti-curang dinonaktifkan guru untuk ujian ini: laporan diabaikan (tidak dihitung, tidak dicatat, tidak memblokir).
+  var ujianCek = readAllCached_(SHEET.UJIAN).filter(function (u) { return u.id === state.ujian_id; })[0];
+  if (ujianCek && !antiCurangUjian_(ujianCek)) return jsonOut_({ ok: true, blokir: false, pelanggaran: Number(state.pelanggaran) || 0, antiCurang: false });
 
   var pelanggaranBaru = (Number(state.pelanggaran) || 0) + 1;
   state = simpanSesiState_(data.sesiId, { pelanggaran: pelanggaranBaru });

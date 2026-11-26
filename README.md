@@ -1,3 +1,15 @@
+# v43z29 — Aktifkan / Nonaktifkan Fitur Anti Curang **per ujian**
+
+- **Tombol baru di setiap baris Kelola Ujian:** **🛡 Nonaktifkan Anti Curang** / **🛡 Aktifkan Anti Curang** (ada konfirmasi saat menonaktifkan). Kolom *Maks. Pelanggaran* juga menampilkan status (*🛡 Anti curang aktif* / *⚠ Anti curang nonaktif*). Pilihan yang sama ada di form Buat/Ubah Ujian.
+- **Saat NONAKTIF untuk sebuah ujian:** tidak wajib layar penuh, tidak ada alarm/getar, pindah tab/aplikasi/screenshot tidak dihitung pelanggaran, watermark identitas tidak muncul, tombol terlarang tidak diblokir, dan siswa tidak diblokir otomatis. Survei setelah ujian itu juga tanpa anti-curang. Layar HP tetap menyala (itu bukan anti-curang).
+- **Ditegakkan di server juga:** laporan pelanggaran untuk ujian yang anti-curangnya nonaktif diabaikan (tidak dihitung/dicatat/memblokir), jadi aman walau HP siswa masih memuat versi lama.
+- **Bawaan = AKTIF** (ujian lama tidak berubah). Data: kolom baru **`anti_curang`** di sheet **Ujian** (dibuat otomatis). `''`/`1` = aktif, `0` = nonaktif. Aksi server baru: `setAntiCurangUjian`.
+- Pengaturan `config.js` (mis. `CBT_WATERMARK_IDENTITAS`, `CBT_ANTICHEAT_SURVEI`) tetap berlaku sebagai pengaturan umum; saklar per ujian ini menimpanya untuk ujian yang dinonaktifkan.
+- **Pasang:** ganti file (jangan timpa `config.js`). **Mode Server:** tempel ulang `Code.gs` lalu *Deploy > Manage deployments > New version*.
+- File berubah: `Code.gs`, `app.js`, `kunci-ujian.js`, `survei.js`, `index.html`, `sw.js`, `README.md`.
+
+---
+
 # v43z28 — Header tabel survei berwarna & tombol "Kembali ke Hasil" lebih menonjol
 
 - **Header tabel pernyataan Survei** (Pernyataan / Sangat tidak setuju / Tidak setuju / Setuju / Sangat setuju) kini berwarna, tidak putih lagi: *Pernyataan* biru tua, kolom skala bergradasi merah > jingga > hijau > hijau tua, teks putih, garis pemisah halus. Berlaku di HP maupun laptop dan untuk semua set skala survei.

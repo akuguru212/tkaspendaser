@@ -197,6 +197,11 @@ function kelasAktifUjian_(u) {
   try { const arr = JSON.parse(raw); if (Array.isArray(arr)) return arr.map(normKelas_); } catch (e) { }
   return null;
 }
+// Anti-curang per ujian. '' / '1' / true = AKTIF (bawaan); '0' / 'false' = nonaktif.
+function antiCurangUjian_(u) {
+  const v = String((u && u.anti_curang) == null ? '' : u.anti_curang).trim().toLowerCase();
+  return !(v === '0' || v === 'false');
+}
 // Tampil/sembunyikan token di layar peserta -- per ujian. '' = belum diatur: ikut pengaturan lama (default tampil).
 function tokenTampilUjian_(u, bawaan) {
   const v = String((u && u.tampil_token) == null ? '' : u.tampil_token).trim().toLowerCase();
@@ -1722,6 +1727,7 @@ const state = {
   idxSoal: 0,
   sisaDetik: 0,
   maxPelanggaran: 999,
+  antiCurang: true, // dari pengaturan per ujian (Kelola Ujian); false = tanpa layar penuh/alarm/hitungan pelanggaran
   pelanggaran: 0,
   timerHandle: null,
   autosaveHandle: null,
@@ -2924,6 +2930,13 @@ const LocalBackend = (function () {
         }).filter(u => !data.siswaId || izinKelasLokal_(u, data.siswaId).ok).map(u => { const t = tokenTampilUjian_(u, bawaan); return { judul: u.judul, token: t ? u.token : '', tampil: t }; });
         return { ok: true, tampil: list.length ? list[0].tampil : bawaan, ujian: list };
       }
+      case 'setAntiCurangUjian': {
+        const ix = cariIdx(D.ujian, data.ujianId);
+        if (ix < 0) return { ok: false, error: 'Ujian tidak ditemukan.' };
+        const aktif = data.aktif === true || String(data.aktif).toLowerCase() === 'true' || String(data.aktif) === '1';
+        D.ujian[ix].anti_curang = aktif ? '1' : '0'; simpan();
+        return { ok: true, aktif };
+      }
       case 'setTampilTokenUjian': {
         const ix = cariIdx(D.ujian, data.ujianId);
         if (ix < 0) return { ok: false, error: 'Ujian tidak ditemukan.' };
@@ -3531,6 +3544,7 @@ const LocalBackend = (function () {
           ok: true, sesiId: sesiObj.id, soal: soalUntukSiswa, jawabanTersimpan: jawaban, raguTersimpan: ragu,
           sisaDetik: Math.max(Math.floor(sisaMs / 1000), 0),
           maxPelanggaran: Number(ujian.max_pelanggaran) || 999,
+          antiCurang: antiCurangUjian_(ujian),
           pelanggaranSaatIni: existing ? Number(existing.pelanggaran) || 0 : 0
         };
       }
@@ -3546,6 +3560,7 @@ const LocalBackend = (function () {
         const sesi = D.sesi.find(s => s.id === data.sesiId);
         if (!sesi) return { ok: false, error: 'Sesi tidak ditemukan.' };
         if (sesi.status !== 'berlangsung') return { ok: true, blokir: false };
+        { const ujCek = D.ujian.find(u => u.id === sesi.ujian_id); if (ujCek && !antiCurangUjian_(ujCek)) return { ok: true, blokir: false, pelanggaran: Number(sesi.pelanggaran) || 0, antiCurang: false }; } // anti-curang nonaktif: abaikan
         sesi.pelanggaran = (Number(sesi.pelanggaran) || 0) + 1;
         D.log.push({ id: genId('LOG'), sesi_id: data.sesiId, siswa_id: sesi.siswa_id, ujian_id: sesi.ujian_id, waktu: new Date().toISOString(), jenis: data.jenis || 'tidak diketahui', detail: String(data.detail || '').slice(0, 120) });
         const ujian = D.ujian.find(u => u.id === sesi.ujian_id);
@@ -4374,6 +4389,7 @@ const UI = {
     document.getElementById('ujian-bukti-orek').value = ujian && ujian.bukti_orek ? ujian.bukti_orek : '';
     document.getElementById('ujian-survei').value = ujian ? (ujian.survei || '') : 'auto'; // ujian baru: otomatis (Numerasi -> Survei Karakter, Literasi -> Sulingjar)
     document.getElementById('ujian-survei-tampil').checked = ujian ? (String(ujian.survei_tampil) === 'true') : true; // ujian baru: nilai survei tampil ke siswa (latihan)
+    { const ac = document.getElementById('ujian-anti-curang'); if (ac) ac.value = (ujian ? antiCurangUjian_(ujian) : true) ? '1' : '0'; }
     { const tt = document.getElementById('ujian-tampil-token'); if (tt) tt.value = (ujian ? tokenTampilUjian_(ujian) : true) ? '1' : '0'; }
     { const fa = document.getElementById('field-token-awal'); if (fa) fa.style.display = ujian ? 'none' : ''; const ta = document.getElementById('ujian-token-awal'); if (ta) ta.value = ''; }
     Survei.setDraft(ujian ? (ujian.survei_butir || '') : '');
@@ -5642,19 +5658,37 @@ const Guru = {
           <td id="tk-ringkas-${u.id}" style="font-size:.8rem;max-width:170px">${ringkasTokenKelas_(u)}</td>
           <td>${u.durasi_menit} menit</td>
           <td style="font-size:.8rem">${formatTanggal(u.mulai)}<br>s/d ${formatTanggal(u.selesai)}</td>
-          <td>${u.max_pelanggaran}</td>
+          <td>${antiCurangUjian_(u) ? u.max_pelanggaran : '<span style="color:var(--c-muted)">—</span>'}<br><span class="token-siswa-status ${antiCurangUjian_(u) ? 'sembunyi' : 'tampil'}" title="${antiCurangUjian_(u) ? 'Fitur anti curang AKTIF untuk ujian ini' : 'Fitur anti curang NONAKTIF untuk ujian ini'}">${antiCurangUjian_(u) ? '🛡 Anti curang aktif' : '⚠ Anti curang nonaktif'}</span></td>
           <td><span class="badge ${kls}">${lbl}</span></td>
           <td>
             ${mati
               ? `<button class="accent small" onclick="Guru.ubahStatusUjian('${u.id}', true)" title="Aktifkan kembali: token bisa dipakai siswa lagi">▶ Aktifkan</button>`
               : `<button class="secondary small" onclick="Guru.ubahStatusUjian('${u.id}', false)" title="Nonaktifkan: token tidak bisa dipakai & tidak tampil di layar peserta">⏸ Nonaktifkan</button>`}
             <button class="accent small" onclick="Guru.bukaTokenKelas('${u.id}')" title="Aktifkan / nonaktifkan token per kelas">🔑 Token Kelas</button>
+            <button class="${antiCurangUjian_(u) ? 'secondary' : 'accent'} small" onclick="Guru.ubahAntiCurang('${u.id}', ${!antiCurangUjian_(u)})" title="${antiCurangUjian_(u) ? 'Nonaktifkan anti curang (layar penuh, alarm, hitungan pelanggaran) untuk ujian ini' : 'Aktifkan anti curang untuk ujian ini'}">${antiCurangUjian_(u) ? '🛡 Nonaktifkan Anti Curang' : '🛡 Aktifkan Anti Curang'}</button>
             <button class="${tokenTampilUjian_(u) ? 'secondary' : 'accent'} small" onclick="Guru.ubahTampilToken('${u.id}', ${!tokenTampilUjian_(u)})" title="${tokenTampilUjian_(u) ? 'Sembunyikan token ujian ini dari layar siswa (hanya diberikan guru/pengawas)' : 'Tampilkan token ujian ini di layar siswa'}">${tokenTampilUjian_(u) ? '🔒 Sembunyikan Token' : '👁 Tampilkan Token'}</button>
             <button class="secondary small" onclick='Guru.bukaEditUjian("${u.id}")'>Ubah</button>
             <button class="danger small" onclick="Guru.hapusUjian('${u.id}')">Hapus</button>
           </td>
         </tr>`;
       }).join('') + `</tbody></table>`;
+  },
+
+  // Aktifkan / nonaktifkan fitur anti curang untuk SATU ujian (tidak mempengaruhi ujian lain).
+  async ubahAntiCurang(id, aktif) {
+    const u = (state.guru.ujianList || []).find(x => x.id === id); if (!u) return;
+    if (!aktif) {
+      const ya = await Dialog.konfirmasi({
+        judul: 'Nonaktifkan Anti Curang?', tipe: 'warning', ikon: 'fa-shield-halved',
+        pesan: `Untuk ujian **${u.judul}**, siswa tidak lagi diwajibkan layar penuh, tidak ada alarm, pindah tab/aplikasi atau screenshot tidak dihitung pelanggaran, watermark identitas hilang, dan siswa tidak akan diblokir otomatis.\n\nBerlaku untuk siswa yang mulai atau melanjutkan ujian setelah ini. Ujian lain tidak terpengaruh. Anda bisa mengaktifkannya lagi kapan saja.`,
+        teksYa: 'Ya, Nonaktifkan'
+      });
+      if (!ya) return;
+    }
+    const res = await api('setAntiCurangUjian', { ujianId: id, aktif });
+    if (!res || !res.ok) { toast('Gagal menyimpan pengaturan anti curang: ' + ((res && res.error) || 'tidak ada respons'), 'error'); return; }
+    await Guru.muatDaftarUjian();
+    toast(aktif ? `Anti curang ujian "${u.judul}" diaktifkan.` : `Anti curang ujian "${u.judul}" dinonaktifkan.`, 'success');
   },
 
   // Tampilkan / sembunyikan token di layar siswa untuk SATU ujian (tidak mempengaruhi ujian lain).
@@ -5802,6 +5836,7 @@ const Guru = {
       ujian.tampil_detail = document.getElementById('ujian-tampil-detail').checked;
       ujian.tampil_pembahasan = document.getElementById('ujian-tampil-pembahasan').checked;
       if (!ujian.id) ujian.token_kelas = (document.getElementById('ujian-token-awal') || {}).value === 'kunci' ? '[]' : ''; // ujian baru: semua kelas, atau dikunci dulu
+      { const ac = document.getElementById('ujian-anti-curang'); if (ac) ujian.anti_curang = ac.value === '0' ? '0' : '1'; } // anti curang aktif/nonaktif: per ujian
       { const tt = document.getElementById('ujian-tampil-token'); if (tt) ujian.tampil_token = tt.value === '0' ? '0' : '1'; } // tampil/sembunyikan token di layar siswa: per ujian
       ujian.bukti_orek = document.getElementById('ujian-bukti-orek').value; // '' | 'wajib' | 'opsional'
       ujian.survei = document.getElementById('ujian-survei').value; // '' | 'auto' | 'karakter' | 'sulingjar'
@@ -7913,6 +7948,7 @@ const Siswa = {
   async mulaiUjian() {
     const res = await api('mulaiUjian', { ujianId: state.ujian.id, siswaId: state.user.id, deviceId: state.deviceId });
     if (!res.ok) { toast(res.error, 'error'); return; }
+    state.antiCurang = res.antiCurang !== false; // pengaturan anti-curang ujian ini (server); bawaan aktif
 
     // Pemulihan: siswa sudah selesai tapi bukti orak-orik WAJIB belum terunggah (halaman sempat tertutup).
     if (res.perluBukti || res.perluSurvei) {
@@ -9493,7 +9529,15 @@ const AntiCheat = {
   aktif: false,
   modeSurvei: false, // true selama siswa mengisi Survei Karakter / Sulingjar (setelah ujian terkirim)
 
+  // true bila guru menonaktifkan anti-curang untuk ujian yang sedang dikerjakan (Kelola Ujian > tombol Anti Curang).
+  dimatikan() { return typeof state !== 'undefined' && state.antiCurang === false; },
+
   aktifkan() {
+    if (AntiCheat.dimatikan()) { // tanpa layar penuh, alarm, deteksi pindah tab, watermark, & hitungan pelanggaran
+      AntiCheat.aktif = false; AntiCheat._insiden = false;
+      const w = document.getElementById('anticheat-warning'); if (w) w.classList.add('hidden');
+      return;
+    }
     AntiCheat.aktif = true;
     AntiCheat._insiden = false;
     AntiCheat.mintaFullscreen();
@@ -9610,6 +9654,7 @@ const AntiCheat = {
   // selesai saat siswa menekan tombol "Kembali ke Ujian" (Siswa.kembaliKeUjian).
   _insiden: false,
   async laporPelanggaran(jenis, pesan) {
+    if (AntiCheat.dimatikan()) return;
     const srv = !!AntiCheat.modeSurvei;
     if (!state.sesiId || (state.submitting && !srv) || AntiCheat._insiden) return;
     AntiCheat._insiden = true;

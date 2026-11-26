@@ -1303,6 +1303,14 @@
       <label><input type="checkbox" id="ujian-tampil-pembahasan" checked style="width:auto"> Tampilkan pembahasan soal pada detail jawaban <span class="subtitle" style="display:inline">— cocok untuk latihan; matikan untuk ulangan. Hanya berlaku bila detail jawaban diaktifkan.</span></label>
     </div>
     <div class="field">
+      <label for="ujian-anti-curang">Fitur anti curang</label>
+      <select id="ujian-anti-curang">
+        <option value="1">Aktif — layar penuh, alarm, deteksi pindah tab/screenshot, watermark, hitungan pelanggaran &amp; blokir</option>
+        <option value="0">Nonaktif — siswa bebas (cocok untuk latihan/simulasi); pelanggaran tidak dihitung</option>
+      </select>
+      <p style="font-size:.8rem;color:var(--c-muted);margin:.35rem 0 0">Berlaku hanya untuk ujian ini. Bisa diubah cepat dari tombol <strong>🛡 Anti Curang</strong> di daftar ujian.</p>
+    </div>
+    <div class="field">
       <label for="ujian-tampil-token">Token di layar siswa</label>
       <select id="ujian-tampil-token">
         <option value="1">Tampilkan — token ujian ini terlihat di layar peserta (cocok untuk latihan/simulasi)</option>
