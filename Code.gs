@@ -701,7 +701,13 @@ function actionPing_(data) {
     // langsung ikut berubah begitu guru memblokir / membuka blokir, tanpa login ulang.
     blokirPing = statusBlokirSiswa_(data.siswaId);
   }
-  return jsonOut_({ ok: true, blokir: blokirPing });
+  // Ujian yang sedang dikerjakan: kirim balik pengaturan anti-curang terbaru supaya perubahan guru langsung berlaku
+  // tanpa menunggu siswa memuat ulang halaman.
+  var antiCurangPing = null;
+  if (data.ujianId) {
+    try { var ujPing = readAllCached_(SHEET.UJIAN).filter(function (u) { return u.id === data.ujianId; })[0]; if (ujPing) antiCurangPing = antiCurangUjian_(ujPing); } catch (e) { antiCurangPing = null; }
+  }
+  return jsonOut_({ ok: true, blokir: blokirPing, antiCurang: antiCurangPing });
 }
 
 // ----------------------------------------------------------------------------

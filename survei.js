@@ -637,13 +637,13 @@ const Survei = (function () {
       const h = hitung(S.jenis, S.jawaban, S.set); const J = S.set;
       let indeks = '';
       if (S.tampilHasil) {
-        const baris = J.dim.map(d => { const x = h.dim[d[0]]; const k = kategoriIndeks(x.indeks); return `<div class="sv-bar"><div class="sv-bar-t"><span>${esc(d[1])}</span><b style="color:${k.warna}">${x.indeks === null ? '-' : String(x.indeks).replace('.', ',')}</b></div><div class="sv-bar-b"><i style="width:${x.indeks || 0}%;background:${k.warna}"></i></div><small style="color:${k.warna}">${k.label}</small></div>`; }).join('');
-        const total = S.jenis === 'karakter' ? `<div class="sv-total">Nilai Survei Karakter: <b>${String(h.total).replace('.', ',')}</b></div>` : '';
-        indeks = `<p class="sv-ket">Nilai survei (0–100) ini untuk latihan agar siswa menjawab jujur dan teliti. Pada ANBK/TKA sesungguhnya, siswa tidak melihat hasil survei.</p>${total}<div class="sv-bars">${baris}</div>`;
+        const baris = J.dim.map(d => { const x = h.dim[d[0]]; const k = kategoriIndeks(x.indeks); return `<div class="sv-bar"><div class="sv-bar-t"><span>${esc(d[1])}</span><b style="color:${k.warna}">${x.indeks === null ? '-' : String(x.indeks).replace('.', ',')}</b></div><div class="sv-bar-b"><i style="width:${x.indeks || 0}%;background:${k.warna}"></i></div><small class="sv-bar-s" style="color:${k.warna};background:${k.latar}">${k.label}</small></div>`; }).join('');
+        const total = S.jenis === 'karakter' ? `<div class="sv-total"><span>Nilai Survei Karakter</span><b>${String(h.total).replace('.', ',')}</b></div>` : '';
+        indeks = `<p class="sv-ket sv-ket-note"><i class="fa-solid fa-circle-info" aria-hidden="true"></i><span>Nilai survei (0–100) ini untuk latihan agar siswa menjawab jujur dan teliti. Pada ANBK/TKA sesungguhnya, siswa tidak melihat hasil survei.</span></p>${total}<div class="sv-bars">${baris}</div>`;
       }
       $('sv-nomor').textContent = 'Survei Terkirim';
       $('sv-progres').textContent = 'Selesai';
-      $('sv-body').innerHTML = `<div class="sv-pad"><p class="sv-p"><i class="fa-solid fa-circle-check" style="color:#1b7f4b"></i> Survei Anda sudah terkirim. Terima kasih.</p>${htmlKesungguhan(S.kualitasAkhir, false)}${indeks}</div>`;
+      $('sv-body').innerHTML = `<div class="sv-pad sv-hasil"><p class="sv-p sv-sukses"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Survei Anda sudah terkirim. Terima kasih.</p>${htmlKesungguhan(S.kualitasAkhir, false)}${indeks}</div>`;
       $('sv-nav').innerHTML = `<span></span><button type="button" class="anbk-btn anbk-btn-primary" id="sv-btn-lanjut"><span>LIHAT HASIL TES</span> <i class="fa-solid fa-circle-chevron-right"></i></button><span></span>`;
       $('sv-btn-lanjut').onclick = () => resolve();
       window.scrollTo(0, 0);

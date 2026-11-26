@@ -357,3 +357,57 @@ body.kunci-aktif #ujian-screen img, body.kunci-aktif #survei-screen img { -webki
 
   #ujian-screen #btn-soal-next, #survei-screen #sv-btn-next { background: #0d6efd !important; color: #fff !important; }
 }
+
+/* ============================================================================
+   Survei — halaman hasil siswa: SEMUA ukuran ikut skala font "A A A"
+   (--sv-skala), jadi hierarkinya tetap rapi di ukuran kecil, sedang, maupun besar.
+   ============================================================================ */
+#survei-screen #sv-body .sv-hasil { --h-ink: #1f2933; --h-mute: #5b6673; --h-line: #dde3ea; max-width: 1040px; margin: 0 auto; padding-top: 22px; padding-bottom: 28px; }
+#survei-screen #sv-body .sv-hasil > * + * { margin-top: calc(16px * var(--sv-skala)); }
+#survei-screen #sv-body .sv-hasil .sv-sukses { display: flex; align-items: center; gap: .6em; margin-bottom: 0; font: 600 calc(19px * var(--sv-skala))/1.35 'Poppins', sans-serif; color: var(--h-ink); }
+#survei-screen #sv-body .sv-hasil .sv-sukses i { color: #1b7f4b; font-size: 1.15em; }
+
+/* Kartu Nilai Kesungguhan */
+#survei-screen #sv-body .sv-hasil .sv-kes { max-width: none; margin-bottom: 0; gap: calc(20px * var(--sv-skala)); align-items: center; padding: calc(16px * var(--sv-skala)) calc(22px * var(--sv-skala)); border: 1px solid var(--h-line); border-left: 6px solid; border-radius: 14px; box-shadow: 0 1px 3px rgba(16,24,40,.06); background: #fff; }
+#survei-screen #sv-body .sv-hasil .sv-kes-n { font-size: calc(52px * var(--sv-skala)); min-width: calc(84px * var(--sv-skala)); letter-spacing: -1px; }
+#survei-screen #sv-body .sv-hasil .sv-kes-i { flex: 1 1 auto; min-width: 0; }
+#survei-screen #sv-body .sv-hasil .sv-kes-t { font-size: calc(17px * var(--sv-skala)); color: var(--h-ink); gap: 6px 12px; }
+#survei-screen #sv-body .sv-hasil .sv-lencana { font-size: calc(13px * var(--sv-skala)); padding: 3px 12px; }
+#survei-screen #sv-body .sv-hasil .sv-kes-k { gap: 8px; margin: calc(10px * var(--sv-skala)) 0 calc(8px * var(--sv-skala)); font-size: calc(14px * var(--sv-skala)); }
+#survei-screen #sv-body .sv-hasil .sv-kes-k > span { background: #f3f6f9; border: 1px solid var(--h-line); border-radius: 8px; padding: 4px 12px; color: var(--h-ink); white-space: nowrap; }
+#survei-screen #sv-body .sv-hasil .sv-kes-p { font-size: calc(14px * var(--sv-skala)); line-height: 1.55; color: var(--h-mute); }
+#survei-screen #sv-body .sv-hasil .sv-kes-a { display: inline-flex; gap: .5em; align-items: center; margin-top: calc(8px * var(--sv-skala)); padding: 4px 12px; border-radius: 8px; background: #fff4de; color: #8a5300; font-size: calc(13.5px * var(--sv-skala)); }
+#survei-screen #sv-body .sv-hasil .sv-kes-a::before { content: "\f071"; font-family: "Font Awesome 6 Free", "Font Awesome 5 Free"; font-weight: 900; font-size: .9em; }
+
+/* Catatan informasi */
+#survei-screen #sv-body .sv-hasil .sv-ket-note { display: flex; gap: .7em; align-items: flex-start; margin-bottom: 0; padding: calc(12px * var(--sv-skala)) calc(16px * var(--sv-skala)); background: #eef5ff; border: 1px solid #cfe0fb; border-left: 4px solid #0d6efd; border-radius: 10px; color: #33465c; font-size: calc(14px * var(--sv-skala)); line-height: 1.6; }
+#survei-screen #sv-body .sv-hasil .sv-ket-note i { color: #0d6efd; margin-top: .2em; }
+
+/* Nilai total */
+#survei-screen #sv-body .sv-hasil .sv-total { display: flex; align-items: baseline; flex-wrap: wrap; gap: .5em 1em; margin: calc(24px * var(--sv-skala)) 0 0; padding-bottom: calc(10px * var(--sv-skala)); border-bottom: 1px solid var(--h-line); font-size: calc(18px * var(--sv-skala)); font-weight: 600; color: var(--h-ink); }
+#survei-screen #sv-body .sv-hasil .sv-total b { font-size: calc(32px * var(--sv-skala)); line-height: 1; color: #0d6efd; font-weight: 700; }
+
+/* Kartu per dimensi: 2 kolom di layar lebar */
+#survei-screen #sv-body .sv-hasil .sv-bars { max-width: none; margin-top: calc(14px * var(--sv-skala)); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(14px * var(--sv-skala)); }
+#survei-screen #sv-body .sv-hasil .sv-bar { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: calc(8px * var(--sv-skala)) 12px; padding: calc(14px * var(--sv-skala)) calc(18px * var(--sv-skala)); background: #fff; border: 1px solid var(--h-line); border-radius: 12px; }
+#survei-screen #sv-body .sv-hasil .sv-bar-t { grid-column: 1 / -1; align-items: baseline; font-size: calc(15.5px * var(--sv-skala)); line-height: 1.4; color: var(--h-ink); }
+#survei-screen #sv-body .sv-hasil .sv-bar-t b { font-size: calc(20px * var(--sv-skala)); font-weight: 700; flex: 0 0 auto; }
+#survei-screen #sv-body .sv-hasil .sv-bar-b { grid-column: 1 / -1; height: calc(10px * var(--sv-skala)); margin: 0; border-radius: 999px; background: #e6ebf1; }
+#survei-screen #sv-body .sv-hasil .sv-bar-b i { border-radius: 999px; }
+#survei-screen #sv-body .sv-hasil .sv-bar-s { justify-self: start; grid-column: 1 / -1; font-size: calc(12.5px * var(--sv-skala)); font-weight: 600; padding: 2px 10px; border-radius: 999px; }
+
+@media (max-width: 860px) {
+  #survei-screen #sv-body .sv-hasil .sv-bars { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  #survei-screen #sv-body .sv-hasil { padding-top: 12px; }
+  #survei-screen #sv-body .sv-hasil .sv-kes { flex-direction: column; align-items: flex-start; gap: 8px; }
+  #survei-screen #sv-body .sv-hasil .sv-kes-n { text-align: left; min-width: 0; font-size: calc(44px * var(--sv-skala)); }
+  #survei-screen #sv-body .sv-hasil .sv-kes-k > span { white-space: normal; }
+}
+
+/* Tombol "LIHAT HASIL TES": cukup besar & jelas (desktop; di HP aturan 50px yang ada tetap berlaku) */
+@media (min-width: 641px) {
+  #survei-screen .anbk-nav #sv-btn-lanjut { width: auto; min-width: 240px; height: 46px; padding: 0 34px; font-size: 15.5px; font-weight: 600; letter-spacing: .02em; gap: 10px; box-shadow: 0 4px 12px rgba(13,110,253,.28); }
+  #survei-screen .anbk-nav #sv-btn-lanjut i { font-size: 1.1em; }
+}

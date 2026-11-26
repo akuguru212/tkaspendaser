@@ -5,6 +5,8 @@
 - **Ditegakkan di server juga:** laporan pelanggaran untuk ujian yang anti-curangnya nonaktif diabaikan (tidak dihitung/dicatat/memblokir), jadi aman walau HP siswa masih memuat versi lama.
 - **Bawaan = AKTIF** (ujian lama tidak berubah). Data: kolom baru **`anti_curang`** di sheet **Ujian** (dibuat otomatis). `''`/`1` = aktif, `0` = nonaktif. Aksi server baru: `setAntiCurangUjian`.
 - Pengaturan `config.js` (mis. `CBT_WATERMARK_IDENTITAS`, `CBT_ANTICHEAT_SURVEI`) tetap berlaku sebagai pengaturan umum; saklar per ujian ini menimpanya untuk ujian yang dinonaktifkan.
+- **Berlaku langsung saat ujian berjalan:** perubahan saklar dikirim lewat ping tiap ±1 menit, jadi siswa yang sedang mengerjakan ikut berubah tanpa memuat ulang (alarm/penutup layar hilang, atau anti-curang menyala lagi).
+- **Penting:** nomor versi file JS di `index.html` dinaikkan (`app.js?v=79`, `anbk.js?v=67`, `survei.js?v=17`, `kunci-ujian.js?v=7`) supaya browser tidak memakai file lama dari cache. Pakai `index.html` dari paket ini.
 - **Pasang:** ganti file (jangan timpa `config.js`). **Mode Server:** tempel ulang `Code.gs` lalu *Deploy > Manage deployments > New version*.
 - File berubah: `Code.gs`, `app.js`, `kunci-ujian.js`, `survei.js`, `index.html`, `sw.js`, `README.md`.
 

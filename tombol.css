@@ -1,0 +1,137 @@
+/* ============================================================================
+   SISTEM TOMBOL — rapi & konsisten di seluruh portal guru, modal, dan detail.
+   Dimuat PALING AKHIR (setelah style.css, anbk.css, mobile.css) supaya
+   menang atas gaya lama tanpa perlu !important.
+
+   Peran warna (bukan sekadar hiasan):
+     biru   (.info / .accent.small) = aksi biasa      hijau  (.ok)   = aktifkan / pulihkan
+     amber  (.warn)                 = perlu perhatian merah  (.danger) = hapus / tidak bisa dibatalkan
+     putih  (.secondary)            = aksi netral (Ubah, Pratinjau, Segarkan)
+     kuning (.accent, ukuran normal)= satu tombol utama per halaman (mis. + Buat Ujian)
+   ============================================================================ */
+
+/* Pembungkus selektor: spesifisitas ditinggikan (:not(#_)) agar menang atas skin ANBK. */
+:is(#guru-portal, #detail-screen, .modal) {
+  --bt-h: 40px;        /* tinggi tombol normal */
+  --bt-h-sm: 34px;     /* tinggi tombol kecil (di tabel / kartu) */
+  --bt-r: 10px;
+  --bt-blue: var(--a-blue, var(--c-primary));
+  --bt-green: var(--a-green, #198754);
+  --bt-amber: #c98200;
+  --bt-red: var(--a-red, var(--c-danger, #dc3545));
+}
+
+/* ---------- dasar: semua tombol bervarian ---------- */
+:is(#guru-portal, #detail-screen, .modal) :is(button.secondary, button.accent, button.danger, button.violet, button.ok, button.warn, button.info, button.small):not(.btn-salin-token):not(.rt-btn):not(.soal-grid *):not(#_) {
+  display: inline-flex; align-items: center; justify-content: center; gap: .45rem;
+  min-height: var(--bt-h); padding: 0 1.1rem;
+  border-radius: var(--bt-r); border: 1px solid transparent;
+  font-size: .86rem; font-weight: 600; line-height: 1.2; letter-spacing: 0;
+  white-space: nowrap; text-decoration: none; box-shadow: none; filter: none; transform: none;
+  transition: background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
+}
+:is(#guru-portal, #detail-screen, .modal) :is(button.secondary, button.accent, button.danger, button.violet, button.ok, button.warn, button.info).small:not(.btn-salin-token):not(#_),
+:is(#guru-portal, #detail-screen, .modal) button.small:not(.btn-salin-token):not(.rt-btn):not(.soal-grid *):not(#_) {
+  min-height: var(--bt-h-sm); padding: 0 .8rem; font-size: .8rem; border-radius: 8px; gap: .4rem;
+}
+:is(#guru-portal, #detail-screen, .modal) button.small.icon:not(#_) { padding: 0; width: var(--bt-h-sm); min-width: var(--bt-h-sm); }
+:is(#guru-portal, #detail-screen, .modal) button i:not(#_) { font-size: .92em; line-height: 1; flex: 0 0 auto; width: 1.1em; text-align: center; }
+:is(#guru-portal, #detail-screen, .modal) button:is(.secondary, .accent, .danger, .violet, .ok, .warn, .info):active:not(:disabled):not(#_) { transform: translateY(1px); box-shadow: none; }
+:is(#guru-portal, #detail-screen, .modal) button:is(.secondary, .accent, .danger, .violet, .ok, .warn, .info, .small):focus-visible:not(#_) {
+  outline: 3px solid color-mix(in srgb, var(--bt-blue) 35%, transparent); outline-offset: 2px;
+}
+:is(#guru-portal, #detail-screen, .modal) button:is(.secondary, .accent, .danger, .violet, .ok, .warn, .info, .small):disabled:not(#_) { opacity: .5; cursor: not-allowed; }
+
+/* ---------- netral (putih) ---------- */
+:is(#guru-portal, #detail-screen, .modal) button.secondary:not(#_) {
+  background: var(--c-surface, #fff); color: var(--c-text, #212529); border-color: color-mix(in srgb, var(--c-text, #212529) 20%, var(--c-surface, #fff));
+}
+:is(#guru-portal, #detail-screen, .modal) button.secondary:hover:not(:disabled):not(#_) {
+  background: color-mix(in srgb, var(--bt-blue) 8%, var(--c-surface, #fff)); border-color: var(--bt-blue); color: var(--bt-blue); transform: none;
+}
+
+/* ---------- tombol utama (kuning) — ukuran normal ---------- */
+:is(#guru-portal, #detail-screen, .modal) button.accent:not(.small):not(#_) {
+  background: var(--a-yellow, var(--c-accent)); border-color: var(--a-yellow, var(--c-accent)); color: #2b2100;
+  box-shadow: 0 1px 2px rgba(0,0,0,.12);
+}
+:is(#guru-portal, #detail-screen, .modal) button.accent:not(.small):hover:not(:disabled):not(#_) {
+  background: color-mix(in srgb, var(--a-yellow, var(--c-accent)) 88%, #000); border-color: color-mix(in srgb, var(--a-yellow, var(--c-accent)) 88%, #000); filter: none; transform: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,.16);
+}
+
+/* ---------- varian lembut (tinta + border tipis; solid saat di-hover) ---------- */
+:is(#guru-portal, #detail-screen, .modal) :is(button.accent.small, button.info, button.ok, button.warn, button.danger.small, button.violet.small):not(#_) {
+  --bx: var(--bt-blue);
+  background: color-mix(in srgb, var(--bx) 11%, var(--c-surface, #fff));
+  color: color-mix(in srgb, var(--bx) 80%, var(--c-text, #212529));
+  border-color: color-mix(in srgb, var(--bx) 38%, var(--c-surface, #fff));
+}
+:is(#guru-portal, #detail-screen, .modal) button.ok:not(#_)          { --bx: var(--bt-green); }
+:is(#guru-portal, #detail-screen, .modal) button.warn:not(#_)        { --bx: var(--bt-amber); color: color-mix(in srgb, var(--bt-amber) 62%, var(--c-text, #212529)); }
+:is(#guru-portal, #detail-screen, .modal) button.danger.small:not(#_){ --bx: var(--bt-red); }
+:is(#guru-portal, #detail-screen, .modal) :is(button.accent.small, button.info, button.ok, button.danger.small, button.violet.small):hover:not(:disabled):not(#_) {
+  background: var(--bx); border-color: var(--bx); color: #fff; filter: none; transform: none;
+}
+:is(#guru-portal, #detail-screen, .modal) button.warn:hover:not(:disabled):not(#_) {
+  background: color-mix(in srgb, var(--bt-amber) 22%, var(--c-surface, #fff)); border-color: var(--bt-amber); filter: none; transform: none;
+}
+
+/* ---------- tombol hijau solid (aksi utama sebuah baris, mis. Aktifkan) ---------- */
+:is(#guru-portal, #detail-screen, .modal) button.ok.solid:not(#_) { background: var(--bt-green); border-color: var(--bt-green); color: #fff; }
+:is(#guru-portal, #detail-screen, .modal) button.ok.solid:hover:not(:disabled):not(#_) { background: color-mix(in srgb, var(--bt-green) 86%, #000); border-color: color-mix(in srgb, var(--bt-green) 86%, #000); }
+
+/* ---------- danger ukuran normal tetap solid ---------- */
+:is(#guru-portal, #detail-screen, .modal) button.danger:not(.small):not(#_) { background: var(--bt-red); border-color: var(--bt-red); color: #fff; }
+:is(#guru-portal, #detail-screen, .modal) button.danger:not(.small):hover:not(:disabled):not(#_) { background: color-mix(in srgb, var(--bt-red) 85%, #000); border-color: color-mix(in srgb, var(--bt-red) 85%, #000); filter: none; transform: none; }
+
+/* ---------- sakelar mini di dalam tombol (Anti Curang, Tampilkan Token) ---------- */
+:is(#guru-portal, .modal) button.tgl:not(#_) { justify-content: flex-start; }
+:is(#guru-portal, .modal) button.tgl .tgl-label:not(#_) { flex: 1 1 auto; text-align: left; overflow: hidden; text-overflow: ellipsis; }
+:is(#guru-portal, .modal) button.tgl .sw:not(#_) {
+  flex: 0 0 auto; position: relative; width: 28px; height: 16px; border-radius: 999px;
+  background: color-mix(in srgb, var(--c-text, #212529) 24%, var(--c-surface, #fff)); transition: background .15s ease;
+}
+:is(#guru-portal, .modal) button.tgl .sw::before {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s ease;
+}
+:is(#guru-portal, .modal) button.tgl[aria-pressed="true"] .sw { background: var(--bt-green); }
+:is(#guru-portal, .modal) button.tgl[aria-pressed="true"] .sw::before { transform: translateX(12px); }
+
+/* ---------- kelompok aksi di tabel ---------- */
+/* Kelola Ujian: kisi 2 kolom, tiap tombol sama lebar & sama tinggi. */
+.aksi-ujian { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; width: 100%; min-width: 316px; max-width: 350px; }
+.aksi-ujian > .span2 { grid-column: 1 / -1; }
+.aksi-ujian > button, .aksi-ujian > .span2 { width: 100%; }
+.aksi-ujian .aksi-pisah { grid-column: 1 / -1; height: 1px; background: var(--c-line, #e5e7eb); margin: .1rem 0; }
+
+/* Aksi lain (Pemantauan, Siswa, Soal): tombol berjajar rapi & turun baris dengan jarak seragam. */
+@media (min-width: 641px) {
+  table.ledger td.aksi:not(#_) { display: table-cell; vertical-align: middle; white-space: normal; }
+  table.ledger td.aksi > button:not(#_) { margin: .15rem .35rem .15rem 0; vertical-align: middle; }
+  table.ledger td.aksi > button:last-child:not(#_) { margin-right: 0; }
+}
+:is(#guru-portal, .modal) .aksi:not(td) { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+:is(#guru-portal, .modal) .mapel-card-aksi { display: flex; gap: .4rem; align-items: center; }
+:is(#guru-portal, .modal) .mapel-card-aksi > button:not(.icon) { flex: 1 1 auto; }
+
+/* Toolbar halaman (Segarkan / Buat ...): sejajar, tinggi sama. */
+:is(#guru-portal, #detail-screen) .toolbar:not(#_) { align-items: center; }
+:is(#guru-portal, #detail-screen) .toolbar-actions:not(#_) { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+
+/* Baris tombol di modal: rata kanan, jarak seragam. */
+.modal-close-row, .modal .modal-aksi { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+
+/* Lencana status: satu baris, tidak patah di tengah. */
+.token-siswa-status:not(#_) { display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap; margin-top: .3rem; font-size: .76rem; }
+
+/* ---------- layar kecil: tombol tabel tetap nyaman disentuh ---------- */
+@media (max-width: 640px) {
+  .aksi-ujian { max-width: none; min-width: 0; }
+  :is(#guru-portal, #detail-screen, .modal) :is(button.secondary, button.accent, button.danger, button.ok, button.warn, button.info).small:not(.icon):not(#_) { min-height: 40px; }
+  table.ledger.ledger-kartu td.aksi:not(#_) { gap: .4rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(#guru-portal, #detail-screen, .modal) button, .aksi-ujian button .sw::before { transition: none; }
+}

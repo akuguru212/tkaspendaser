@@ -2911,7 +2911,8 @@ const LocalBackend = (function () {
             blokirPing = infoBlokirLokal(s);
           }
         }
-        return { ok: true, blokir: blokirPing };
+        const ujPing = data.ujianId ? D.ujian.find(u => u.id === data.ujianId) : null;
+        return { ok: true, blokir: blokirPing, antiCurang: ujPing ? antiCurangUjian_(ujPing) : null };
       }
       case 'getPengaturanTokenSiswa': return { ok: true, aktif: D.config.tampilTokenSiswa !== false };
       case 'simpanPengaturanTokenSiswa': {
@@ -5661,14 +5662,16 @@ const Guru = {
           <td>${antiCurangUjian_(u) ? u.max_pelanggaran : '<span style="color:var(--c-muted)">—</span>'}<br><span class="token-siswa-status ${antiCurangUjian_(u) ? 'sembunyi' : 'tampil'}" title="${antiCurangUjian_(u) ? 'Fitur anti curang AKTIF untuk ujian ini' : 'Fitur anti curang NONAKTIF untuk ujian ini'}">${antiCurangUjian_(u) ? '🛡 Anti curang aktif' : '⚠ Anti curang nonaktif'}</span></td>
           <td><span class="badge ${kls}">${lbl}</span></td>
           <td>
-            ${mati
-              ? `<button class="accent small" onclick="Guru.ubahStatusUjian('${u.id}', true)" title="Aktifkan kembali: token bisa dipakai siswa lagi">▶ Aktifkan</button>`
-              : `<button class="secondary small" onclick="Guru.ubahStatusUjian('${u.id}', false)" title="Nonaktifkan: token tidak bisa dipakai & tidak tampil di layar peserta">⏸ Nonaktifkan</button>`}
-            <button class="accent small" onclick="Guru.bukaTokenKelas('${u.id}')" title="Aktifkan / nonaktifkan token per kelas">🔑 Token Kelas</button>
-            <button class="${antiCurangUjian_(u) ? 'secondary' : 'accent'} small" onclick="Guru.ubahAntiCurang('${u.id}', ${!antiCurangUjian_(u)})" title="${antiCurangUjian_(u) ? 'Nonaktifkan anti curang (layar penuh, alarm, hitungan pelanggaran) untuk ujian ini' : 'Aktifkan anti curang untuk ujian ini'}">${antiCurangUjian_(u) ? '🛡 Nonaktifkan Anti Curang' : '🛡 Aktifkan Anti Curang'}</button>
-            <button class="${tokenTampilUjian_(u) ? 'secondary' : 'accent'} small" onclick="Guru.ubahTampilToken('${u.id}', ${!tokenTampilUjian_(u)})" title="${tokenTampilUjian_(u) ? 'Sembunyikan token ujian ini dari layar siswa (hanya diberikan guru/pengawas)' : 'Tampilkan token ujian ini di layar siswa'}">${tokenTampilUjian_(u) ? '🔒 Sembunyikan Token' : '👁 Tampilkan Token'}</button>
-            <button class="secondary small" onclick='Guru.bukaEditUjian("${u.id}")'>Ubah</button>
-            <button class="danger small" onclick="Guru.hapusUjian('${u.id}')">Hapus</button>
+            <div class="aksi-ujian">
+              ${mati
+                ? `<button type="button" class="ok solid small span2" onclick="Guru.ubahStatusUjian('${u.id}', true)" title="Aktifkan kembali: token bisa dipakai siswa lagi"><i class="fa-solid fa-play"></i> Aktifkan Ujian</button>`
+                : `<button type="button" class="secondary small span2" onclick="Guru.ubahStatusUjian('${u.id}', false)" title="Nonaktifkan: token tidak bisa dipakai & tidak tampil di layar peserta"><i class="fa-solid fa-pause"></i> Nonaktifkan Ujian</button>`}
+              <button type="button" class="secondary small tgl" aria-pressed="${antiCurangUjian_(u) ? 'true' : 'false'}" onclick="Guru.ubahAntiCurang('${u.id}', ${!antiCurangUjian_(u)})" title="${antiCurangUjian_(u) ? 'Anti curang AKTIF (layar penuh, alarm, hitungan pelanggaran). Klik untuk menonaktifkan.' : 'Anti curang NONAKTIF. Klik untuk mengaktifkan.'}"><i class="fa-solid fa-shield-halved"></i><span class="tgl-label">Anti Curang</span><span class="sw" aria-hidden="true"></span></button>
+              <button type="button" class="secondary small tgl" aria-pressed="${tokenTampilUjian_(u) ? 'true' : 'false'}" onclick="Guru.ubahTampilToken('${u.id}', ${!tokenTampilUjian_(u)})" title="${tokenTampilUjian_(u) ? 'Token TAMPIL di layar siswa. Klik untuk menyembunyikan (hanya guru/pengawas yang memberi tahu).' : 'Token DISEMBUNYIKAN dari layar siswa. Klik untuk menampilkan.'}"><i class="fa-solid fa-eye"></i><span class="tgl-label">Token Tampil</span><span class="sw" aria-hidden="true"></span></button>
+              <button type="button" class="info small span2" onclick="Guru.bukaTokenKelas('${u.id}')" title="Aktifkan / nonaktifkan token per kelas"><i class="fa-solid fa-key"></i> Token Kelas</button>
+              <button type="button" class="secondary small" onclick='Guru.bukaEditUjian("${u.id}")'><i class="fa-solid fa-pen"></i> Ubah</button>
+              <button type="button" class="danger small" onclick="Guru.hapusUjian('${u.id}')"><i class="fa-solid fa-trash-can"></i> Hapus</button>
+            </div>
           </td>
         </tr>`;
       }).join('') + `</tbody></table>`;
@@ -6900,7 +6903,7 @@ const Guru = {
           ${s.blokir ? `<br><span class="badge no" title="${escapeHtml_(s.blokirAlasan || 'Tanpa alasan')}">🚫 Diblokir</span>${s.blokirAlasan ? `<div style="font-size:.78rem;color:var(--c-muted);margin-top:.2rem">${escapeHtml_(s.blokirAlasan)}</div>` : ''}` : ''}</td>
         <td class="aksi">
           ${s.blokir
-            ? `<button class="accent small" onclick="Guru.bukaBlokirSiswa('${s.id}')">✅ Buka Blokir</button>`
+            ? `<button class="ok small" onclick="Guru.bukaBlokirSiswa('${s.id}')">✅ Buka Blokir</button>`
             : `<button class="secondary small" onclick="Guru.blokirSiswa('${s.id}')">🚫 Blokir</button>`}
           ${s.online ? `<button class="secondary small" onclick="Guru.resetDevice('${s.id}')">Lepas Kunci</button>` : ''}
           <button class="secondary small" onclick="Guru.bukaEditSiswa('${s.id}')">Ubah</button>
@@ -7903,7 +7906,16 @@ const Siswa = {
     clearInterval(state.pingHandle);
     const kirimPing = async () => {
       if (!state.user) return;
-      const res = await api('ping', { role: 'siswa', siswaId: state.user.id, deviceId: state.deviceId });
+      const dalamUjian = !!(state.sesiId && state.ujian && state.ujian.id && !state.submitting && !AntiCheat.modeSurvei);
+      const res = await api('ping', { role: 'siswa', siswaId: state.user.id, deviceId: state.deviceId, ujianId: dalamUjian ? state.ujian.id : '' });
+      // Guru mengubah saklar Anti Curang saat siswa sudah mengerjakan: langsung berlaku (tanpa reload).
+      if (dalamUjian && res && res.ok && typeof res.antiCurang === 'boolean' && res.antiCurang !== (state.antiCurang !== false)) {
+        state.antiCurang = res.antiCurang;
+        try {
+          if (!res.antiCurang) { AntiCheat.nonaktifkan(); AntiCheat._insiden = false; const w = document.getElementById('anticheat-warning'); if (w) w.classList.add('hidden'); }
+          else AntiCheat.aktifkan();
+        } catch (e) { /* abaikan */ }
+      }
       // Status Blokir Akun ikut dibawa tiap ping, jadi portal berubah otomatis saat guru memblokir/membuka blokir.
       if (res && res.ok && res.blokir) Siswa.terapkanStatusBlokir(res.blokir);
     };
