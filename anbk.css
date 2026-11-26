@@ -475,3 +475,42 @@ html[data-skin="anbk"] #guru-portal .dash-hero, html[data-skin="anbk"] #guru-por
 .token-siswa-status { font-size: .8rem; font-weight: 700; padding: .15rem .6rem; border-radius: 999px; }
 .token-siswa-status.tampil { background: #fff3d6; color: #a76705; }
 .token-siswa-status.sembunyi { background: #dff5e9; color: #1b7f53; }
+
+/* ============================================================================
+   Header tabel pernyataan survei: berwarna (tidak putih) agar tegas & profesional.
+   Kolom "Pernyataan" = biru tua; kolom skala = gradasi merah -> jingga -> hijau
+   (urutan kolom = skor 1..n, jadi cocok untuk semua set skala survei).
+   ============================================================================ */
+#survei-screen .sv-mx-wrap { border-color: #c9d3e0; border-radius: 12px; overflow-x: auto; box-shadow: 0 6px 18px -10px rgba(30,55,90,.35); }
+#survei-screen .sv-mx-wrap .sv-mx thead { background: transparent; }
+#survei-screen .sv-mx-wrap .sv-mx thead th { color: #fff; border-bottom: 0; border-left: 1px solid rgba(255,255,255,.28); letter-spacing: .1px; text-shadow: 0 1px 1px rgba(0,0,0,.18); vertical-align: middle; }
+#survei-screen .sv-mx-wrap .sv-mx thead th:first-child { border-left: 0; }
+#survei-screen .sv-mx-wrap .sv-mx thead th.sv-mx-t { background: linear-gradient(180deg, #2c5ca8, #1f4580); }
+#survei-screen .sv-mx-wrap .sv-mx thead th:nth-child(2) { background: linear-gradient(180deg, #e0525d, #c23a46); }
+#survei-screen .sv-mx-wrap .sv-mx thead th:nth-child(3) { background: linear-gradient(180deg, #f39a3d, #e07f1b); }
+#survei-screen .sv-mx-wrap .sv-mx thead th:nth-child(4) { background: linear-gradient(180deg, #46b479, #2f9a60); }
+#survei-screen .sv-mx-wrap .sv-mx thead th:nth-child(5) { background: linear-gradient(180deg, #2a9a6a, #1b7a4f); }
+#survei-screen .sv-mx-wrap .sv-mx thead th:nth-child(6) { background: linear-gradient(180deg, #1f8f8a, #146f6b); }
+#survei-screen .sv-mx-wrap .sv-mx thead th:nth-child(7) { background: linear-gradient(180deg, #2c6fb7, #1f5694); }
+/* skala 2 kolom / 3 kolom tetap enak: kolom terakhir selalu hijau tua */
+#survei-screen .sv-mx-wrap .sv-mx thead th:nth-child(2):nth-last-child(1), #survei-screen .sv-mx-wrap .sv-mx thead th:nth-child(3):nth-last-child(1) { background: linear-gradient(180deg, #2a9a6a, #1b7a4f); }
+
+/* Tombol "Kembali ke Hasil" (Detail Jawaban siswa): mencolok & profesional */
+#detail-screen .detail-top { margin-bottom: 1.1rem; }
+#detail-screen .detail-top > button {
+  display: inline-flex; align-items: center; gap: .6rem; cursor: pointer;
+  padding: .75rem 1.5rem .75rem 1.1rem; border: 0; border-radius: 999px;
+  background: linear-gradient(135deg, #1f6feb 0%, #0d4fc4 100%); color: #fff;
+  font: 700 .98rem/1 'Poppins', 'Inter', sans-serif; letter-spacing: .2px;
+  box-shadow: 0 10px 22px -8px rgba(13,79,196,.7), inset 0 1px 0 rgba(255,255,255,.25);
+  transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+}
+#detail-screen .detail-top > button i {
+  display: inline-grid; place-items: center; width: 1.7rem; height: 1.7rem; border-radius: 50%;
+  background: rgba(255,255,255,.22); font-size: .85rem; transition: transform .15s ease;
+}
+#detail-screen .detail-top > button:hover { transform: translateY(-1px); filter: brightness(1.07); box-shadow: 0 14px 26px -8px rgba(13,79,196,.75), inset 0 1px 0 rgba(255,255,255,.3); }
+#detail-screen .detail-top > button:hover i { transform: translateX(-3px); }
+#detail-screen .detail-top > button:active { transform: translateY(0); box-shadow: 0 6px 14px -6px rgba(13,79,196,.7); }
+#detail-screen .detail-top > button:focus-visible { outline: 3px solid rgba(13,110,253,.4); outline-offset: 3px; }
+@media (max-width: 640px) { #detail-screen .detail-top > button { width: 100%; justify-content: center; padding: .85rem 1rem; font-size: 1rem; } }

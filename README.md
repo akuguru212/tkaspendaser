@@ -1,3 +1,11 @@
+# v43z28 — Header tabel survei berwarna & tombol "Kembali ke Hasil" lebih menonjol
+
+- **Header tabel pernyataan Survei** (Pernyataan / Sangat tidak setuju / Tidak setuju / Setuju / Sangat setuju) kini berwarna, tidak putih lagi: *Pernyataan* biru tua, kolom skala bergradasi merah > jingga > hijau > hijau tua, teks putih, garis pemisah halus. Berlaku di HP maupun laptop dan untuk semua set skala survei.
+- **Tombol "Kembali ke Hasil"** di Detail Jawaban siswa: tombol biru bulat dengan ikon panah, bayangan, dan efek hover/tekan; di HP selebar layar.
+- File berubah: `anbk.css`, `sw.js`, `README.md`. Tidak perlu mengubah `Code.gs` / `config.js`.
+
+---
+
 # v43z27 — Sembunyikan / Tampilkan Token **per ujian** (bukan global)
 
 - **Pengaturan token kini milik tiap ujian.** Setiap baris di **Kelola Ujian** punya tombol sendiri: **🔒 Sembunyikan Token** / **👁 Tampilkan Token**, plus label status di bawah token (*👁 Tampil di layar siswa* / *🔒 Disembunyikan*). Mengubah satu ujian tidak mempengaruhi ujian lain.
