@@ -1,3 +1,16 @@
+# v43z44 — Layar penuh dipulihkan setelah "Kembali" (screenshot), tidak lagi harus mengetuk soal
+
+- **Masalah:** setelah PrtSc lalu menekan *Kembali ke Ujian* di halaman soal, soal tampil tetapi tidak dalam layar penuh; siswa harus mengetuk soal dulu. Di halaman survei terasa mulus.
+- **Penyebab:** sisa alat tangkap layar Windows kadang melepas layar penuh **sesudah** tombol Kembali ditekan. Jeda anti-pelanggaran v43z43 (benar) membungkam peringatan & hitungan untuk kejadian itu, tetapi ikut membungkam pemulihan layar penuh, sehingga tidak ada tampilan apa pun dan tidak ada percobaan masuk layar penuh lagi.
+- **Perbaikan (`kunci-ujian.js`):**
+  1. Setelah *Kembali*, aplikasi mencoba masuk layar penuh lagi tiap 0,5 detik selama ~5 detik. Bila berhasil, layar penuh pulih otomatis tanpa ketukan tambahan.
+  2. Bila layar penuh terlepas selama jeda screenshot, tampil kartu biasa "Layar penuh terlepas setelah tangkap layar" dengan satu tombol, **tanpa alarm dan tanpa hitungan pelanggaran**, sambil terus mencoba pulih.
+  3. Hitungan pelanggaran tidak berubah (satu PrtSc = satu pelanggaran).
+- **Batas teknis:** browser hanya mengizinkan masuk layar penuh bila ada ketukan siswa yang masih "berlaku" (sekitar 5 detik). Bila sisa alat tangkap layar melepasnya setelah itu, satu ketukan di kartu diperlukan. Browser juga tidak bisa mencegah screenshot: di Windows halaman hanya menerima PrtSc *setelah* gambar diambil, jadi pencegahnya adalah watermark nama.
+- File berubah: `kunci-ujian.js` (v11), `index.html`, `sw.js` (cache `hp36`), `README.md`.
+
+---
+
 # v43z43 — Sekali tekan PrtSc = SATU pelanggaran (tidak lagi beruntun sampai terblokir)
 
 - **Masalah:** menekan PrtSc sekali menimbulkan peringatan & alarm berulang, lalu 3 pelanggaran dan siswa terblokir.

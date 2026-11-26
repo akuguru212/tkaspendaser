@@ -26,7 +26,7 @@
 
   const K = {
     aktif: false, wake: null, alarmEl: null, alarmOn: false, pernahFs: false, getarTimer: null,
-    blurTimer: null, audioSiap: false, url: null, missFokus: 0, pernahFokus: false, fokusTimer: null, visTimer: null, hiddenT0: 0, blurT0: 0,
+    blurTimer: null, fsRetry: null, audioSiap: false, url: null, missFokus: 0, pernahFokus: false, fokusTimer: null, visTimer: null, hiddenT0: 0, blurT0: 0,
 
     // ---------- util ----------
     fsDidukung() { const e = document.documentElement; return !!(e.requestFullscreen || e.webkitRequestFullscreen); },
@@ -135,14 +135,31 @@
       K.alarmMati();
       if (!document.hidden) K.sembunyiIsi(false);   // isi soal dibuka lagi setelah siswa menekan Kembali
       if (!K.fsDidukung() || K.adaFs()) K.sembunyiPenutup();
-      K.minta();
+      K.minta(); K.pulihFsBerkala();
       const w = document.getElementById('anticheat-warning');
       if (w && !w.classList.contains('hidden') && typeof Siswa !== 'undefined' && Siswa.kembaliKeUjian) Siswa.kembaliKeUjian();
+    },
+    // Setelah "Kembali": coba masuk layar penuh lagi beberapa kali (~5 dtk). Alat tangkap layar Windows kadang melepas layar penuh
+    // SESUDAH tombol ditekan; selama izin klik masih berlaku, percobaan ulang ini memulihkannya tanpa siswa harus mengetuk soal lagi.
+    pulihFsBerkala() {
+      if (!K.fsDidukung()) return;
+      clearInterval(K.fsRetry); let n = 0;
+      K.fsRetry = setInterval(() => {
+        if (!K.aktif || K.alarmOn || ++n > 10) { clearInterval(K.fsRetry); return; }
+        if (K.adaFs()) return;
+        K.masukFs().then(ok => { if (ok) K.periksaFs(); });
+      }, 500);
     },
     periksaFs() {
       if (!K.aktif || !K.pesanAktif() || !K.fsDidukung()) return;
       if (K.adaFs()) { K.pernahFs = true; if (!K.alarmOn) K.sembunyiPenutup(); return; }
-      if (K.pernahFs) K.alarmNyala('Anda keluar dari layar penuh. Tekan tombol di bawah untuk kembali ke ' + K.kata() + '.');
+      if (K.pernahFs) {
+        if (K.dalamJeda() && !K.alarmOn) { // layar penuh terlepas oleh sisa alat tangkap layar: TANPA alarm & hitungan, tetapi dipulihkan (bukan dibiarkan diam)
+          K.tampilPenutup('Layar penuh terlepas setelah tangkap layar. Ketuk tombol di bawah untuk melanjutkan ' + K.kata() + '.', false);
+          K.pulihFsBerkala(); return;
+        }
+        K.alarmNyala('Anda keluar dari layar penuh. Tekan tombol di bawah untuk kembali ke ' + K.kata() + '.');
+      }
       else K.tampilPenutup('Ketuk tombol di bawah untuk memulai ' + K.kata() + ' dalam layar penuh. Layar diberi watermark nama Anda, dan screenshot dicatat sebagai pelanggaran.', false);
     },
 
@@ -359,7 +376,7 @@
     },
     off() {
       if (!K.aktif) return;
-      K.aktif = false; clearTimeout(K.tampilPenutupAwal); clearTimeout(K.blurTimer); clearTimeout(K.visTimer); clearInterval(K.fokusTimer); K.WM.henti();
+      K.aktif = false; clearTimeout(K.tampilPenutupAwal); clearTimeout(K.blurTimer); clearTimeout(K.visTimer); clearInterval(K.fokusTimer); clearInterval(K.fsRetry); K.WM.henti();
       K.alarmMati(); K.sembunyiPenutup(); K.sembunyiIsi(false); K.lepasWake();
       document.body.classList.remove('kunci-aktif');
       document.removeEventListener('visibilitychange', K.onVis);
