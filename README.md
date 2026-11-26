@@ -1,3 +1,12 @@
+# v43z42 — Pop up peringatan merah & tegas, tombol tidak lagi "hilang"
+
+- **Perbaikan tombol:** tombol di pop up (LANJUTKAN MENGERJAKAN, PERIKSA KEMBALI, TETAP KIRIM) tidak terlihat sebelum disorot kursor karena warnanya memakai variabel CSS `--a-*` yang hanya terbaca di dalam `.anbk-page`, sedangkan pop up dipasang di luar itu. Sekarang warna tombol ditulis langsung, dan variabel `--a-*` juga didefinisikan global di `:root` sebagai pengaman. Tombol lain (login, Submit, Mulai, Soal sebelumnya/berikutnya, Selesai Tes, Kembali ke Ujian, dll.) sudah diperiksa: semuanya berada di dalam `.anbk-page` atau berwarna sendiri, jadi aman.
+- **Tampilan baru (ujian & survei):** kotak berbingkai merah, header merah tua dengan ikon segitiga peringatan putih yang berdenyut, label "PERINGATAN!", judul tebal (bold 800), kalimat inti merah tebal ("Anda terdeteksi menjawab/mengisi asal-asalan"). Tombol besar, huruf kapital tebal: LANJUTKAN MENGERJAKAN (merah), PERIKSA KEMBALI (hijau), TETAP KIRIM (merah).
+- Teks pesan tidak berubah dari versi sebelumnya (hanya ditambah kalimat inti di atas).
+- File berubah: `anbk.css` (v71), `peringatan-cepat.js` (v4), `survei.js` (v23), `index.html`, `sw.js` (cache `hp34`), `README.md`.
+
+---
+
 # v43z41 — Deteksi tombol screenshot (PrtSc) diperkuat, berlaku di ujian & survei
 
 - **Masalah:** di Windows, tombol PrintScreen / Win+Shift+S membuka alat tangkap layar yang "menelan" tombolnya, sehingga halaman soal kadang tidak menerima kejadian tombol sama sekali dan alarm tidak berbunyi.

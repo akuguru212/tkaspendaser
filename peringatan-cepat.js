@@ -74,15 +74,14 @@
   // Pengingat saat mengerjakan: popup di tengah layar dengan tombol LANJUTKAN MENGERJAKAN.
   // Waktu selama popup terbuka tidak dihitung sebagai waktu membaca soal.
   function tampilPengingat() {
-    if (document.querySelector('.cj-bg')) return;
-    pasangCss();
+    if (document.querySelector('.wr-bg')) return;
     tutupSoal(); simpan();
     const el = document.createElement('div');
-    el.className = 'cj-bg';
-    el.innerHTML = `<div class="cj-box" role="alertdialog" aria-modal="true"><div class="cj-ico"><i class="fa-solid fa-triangle-exclamation"></i></div>
-      <h3>Anda menjawab terlalu cepat</h3>
-      <p>Pelan-pelan saja. Bacalah soal dengan teliti sebelum memilih jawaban.</p>
-      <div class="cj-aksi"><button type="button" class="anbk-btn anbk-btn-primary" data-a="lanjut">LANJUTKAN MENGERJAKAN</button></div></div>`;
+    el.className = 'wr-bg';
+    el.innerHTML = `<div class="wr-box" role="alertdialog" aria-modal="true"><div class="wr-head"><div class="wr-ico"><i class="fa-solid fa-triangle-exclamation"></i></div>
+      <div><div class="wr-lbl">Peringatan!</div><h3 class="wr-title">Anda menjawab terlalu cepat</h3></div></div>
+      <div class="wr-body"><p class="wr-tegas">Anda terdeteksi menjawab asal-asalan.</p><p>Pelan-pelan saja. Bacalah soal dengan teliti sebelum memilih jawaban.</p></div>
+      <div class="wr-aksi"><button type="button" class="wr-btn wr-btn-merah" data-a="lanjut">Lanjutkan Mengerjakan</button></div></div>`;
     el.addEventListener('click', (ev) => {
       if (!ev.target.closest('[data-a]')) return;
       el.remove();
@@ -154,37 +153,22 @@
   }
 
   // ---------------- tampilan peringatan ----------------
-  function pasangCss() {
-    if ($('cj-css')) return;
-    const st = document.createElement('style'); st.id = 'cj-css';
-    st.textContent = `
-.cj-bg{position:fixed;inset:0;z-index:99990;background:rgba(15,30,55,.55);display:grid;place-items:center;padding:16px}
-.cj-box{background:#fff;border-radius:12px;max-width:480px;width:100%;max-height:92vh;overflow:auto;padding:22px 22px 18px;font-family:'Poppins',sans-serif;box-shadow:0 18px 50px rgba(0,0,0,.3)}
-.cj-ico{width:44px;height:44px;border-radius:50%;background:#fff3cd;color:#b26a00;display:grid;place-items:center;font-size:20px}
-.cj-box h3{margin:6px 0 8px;font-size:18px;color:#212529}
-.cj-box p,.cj-box li{font-size:13.5px;line-height:1.55;color:#343a40}
-.cj-box ul{margin:0 0 10px;padding-left:20px}
-.cj-chips{display:flex;flex-wrap:wrap;gap:5px;margin:2px 0 10px}
-.cj-chips button{all:unset;box-sizing:border-box;cursor:pointer;min-width:28px;height:26px;padding:0 6px;display:inline-grid;place-items:center;border:1px solid #d39e00;border-radius:3px;background:#ffc107;font:500 12px 'Poppins',sans-serif;color:#212529}
-.cj-aksi{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
-.cj-aksi .anbk-btn{height:34px;padding:0 16px;font-size:12.5px;flex:1 1 140px}`;
-    document.head.appendChild(st);
-  }
+  function pasangCss() { /* gaya pop up ada di anbk.css (.wr-*) */ }
   const esc = (s) => String(s).replace(/[&<>"]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
 
   function tampilPeringatan(h) {
-    pasangCss();
     return new Promise((res) => {
       const el = document.createElement('div');
-      el.className = 'cj-bg';
+      el.className = 'wr-bg';
       const chips = h.kilat.slice(0, 60).map((i) => `<button type="button" data-no="${i}">${i + 1}</button>`).join('');
-      el.innerHTML = `<div class="cj-box" role="alertdialog" aria-modal="true"><div class="cj-ico"><i class="fa-solid fa-triangle-exclamation"></i></div>
-        <h3>Anda terdeteksi mengerjakan terlalu cepat</h3>
-        <p>Anda terdeteksi mengerjakan terlalu cepat, asal-asalan, atau asal klik, sehingga jawaban bisa kurang teliti.</p>
+      el.innerHTML = `<div class="wr-box" role="alertdialog" aria-modal="true"><div class="wr-head"><div class="wr-ico"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <div><div class="wr-lbl">Peringatan! Terdeteksi asal-asalan</div><h3 class="wr-title">Anda terdeteksi mengerjakan terlalu cepat</h3></div></div>
+        <div class="wr-body">
+        <p class="wr-tegas">Anda terdeteksi mengerjakan terlalu cepat, asal-asalan, atau asal klik, sehingga jawaban bisa kurang teliti.</p>
         <ul>${h.alasan.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>
-        ${chips ? `<p>Soal yang dijawab sangat cepat (ketuk nomor untuk memeriksa kembali):</p><div class="cj-chips">${chips}</div>` : ''}
-        <p>Soal literasi dan numerasi perlu dibaca dengan saksama. Mengerjakan asal klik tidak mencerminkan kemampuan Anda sebenarnya. Silakan <b>periksa kembali</b> selagi waktu masih ada, atau pilih <b>tetap kirim</b> bila Anda yakin dengan jawaban Anda.</p>
-        <div class="cj-aksi"><button type="button" class="anbk-btn anbk-btn-green" data-a="ulang">PERIKSA KEMBALI</button><button type="button" class="anbk-btn anbk-btn-red" data-a="kirim">TETAP KIRIM</button></div></div>`;
+        ${chips ? `<p>Soal yang dijawab sangat cepat (ketuk nomor untuk memeriksa kembali):</p><div class="wr-chips">${chips}</div>` : ''}
+        <p>Soal literasi dan numerasi perlu dibaca dengan saksama. Mengerjakan asal klik tidak mencerminkan kemampuan Anda sebenarnya. Silakan <b>periksa kembali</b> selagi waktu masih ada, atau pilih <b>tetap kirim</b> bila Anda yakin dengan jawaban Anda.</p></div>
+        <div class="wr-aksi"><button type="button" class="wr-btn wr-btn-hijau" data-a="ulang">Periksa Kembali</button><button type="button" class="wr-btn wr-btn-merah" data-a="kirim">Tetap Kirim</button></div></div>`;
       el.addEventListener('click', (ev) => {
         const no = ev.target.closest('[data-no]');
         if (no) { el.remove(); res({ a: 'ulang', no: Number(no.dataset.no) }); return; }

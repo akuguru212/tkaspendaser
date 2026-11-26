@@ -555,14 +555,14 @@ const Survei = (function () {
 
   // Pop up pengingat saat mengisi. Waktu selama pop up terbuka tidak dihitung sebagai waktu membaca.
   function tampilPengingat() {
-    if (S.tahap !== 'butir' || document.querySelector('.sv-modal-bg')) return;
+    if (S.tahap !== 'butir' || document.querySelector('.wr-bg')) return;
     catatWaktuButir();
     const el = document.createElement('div');
-    el.className = 'sv-modal-bg';
-    el.innerHTML = `<div class="sv-modal" role="alertdialog" aria-modal="true"><div class="sv-modal-ico"><i class="fa-solid fa-triangle-exclamation"></i></div>
-      <h3>Anda mengisi terlalu cepat</h3>
-      <p>Pelan-pelan saja. Bacalah setiap pernyataan dengan teliti dan jawablah dengan baik.</p>
-      <div class="sv-modal-aksi"><button type="button" class="anbk-btn anbk-btn-primary" data-a="lanjut">LANJUTKAN MENGERJAKAN</button></div></div>`;
+    el.className = 'wr-bg';
+    el.innerHTML = `<div class="wr-box" role="alertdialog" aria-modal="true"><div class="wr-head"><div class="wr-ico"><i class="fa-solid fa-triangle-exclamation"></i></div>
+      <div><div class="wr-lbl">Peringatan!</div><h3 class="wr-title">Anda mengisi terlalu cepat</h3></div></div>
+      <div class="wr-body"><p class="wr-tegas">Anda terdeteksi mengisi asal-asalan.</p><p>Pelan-pelan saja. Bacalah setiap pernyataan dengan teliti dan jawablah dengan baik.</p></div>
+      <div class="wr-aksi"><button type="button" class="wr-btn wr-btn-merah" data-a="lanjut">Lanjutkan Mengerjakan</button></div></div>`;
     el.addEventListener('click', ev => { if (!ev.target.closest('[data-a]')) return; el.remove(); if (S.tahap === 'butir') S.tMasuk = Date.now(); });
     document.body.appendChild(el);
   }
@@ -584,12 +584,15 @@ const Survei = (function () {
   function tampilPeringatan(q) {
     return new Promise(res => {
       const el = document.createElement('div');
-      el.className = 'sv-modal-bg';
-      el.innerHTML = `<div class="sv-modal" role="alertdialog" aria-modal="true"><div class="sv-modal-ico"><i class="fa-solid fa-triangle-exclamation"></i></div>
-        <h3>${q.terlaluCepat || q.seragam ? 'Anda terdeteksi mengisi terlalu cepat' : 'Periksa kembali jawaban Anda'}</h3>
-        <p>${q.terlaluCepat || q.seragam ? 'Anda terdeteksi mengisi terlalu cepat, asal-asalan, atau asal klik.' : 'Jawaban Anda terlihat kurang teliti.'} Perkiraan <b>Nilai Kesungguhan</b> Anda saat ini: <b style="color:${kategoriKesungguhan(q.nilai).warna}">${q.nilai}</b> (${kategoriKesungguhan(q.nilai).label}).</p><ul>${q.alasan.map(a => `<li>${esc(a)}</li>`).join('')}</ul>
-        <p>Ingat: <b>jawaban jujur Anda sangat berarti bagi sekolah</b> dalam meningkatkan layanan dan lingkungan belajar. Bacalah tiap pernyataan, lalu pilih yang paling menggambarkan keadaan Anda sebenarnya.</p>
-        <div class="sv-modal-aksi"><button type="button" class="anbk-btn anbk-btn-green" data-a="ulang">PERIKSA KEMBALI</button><button type="button" class="anbk-btn anbk-btn-red" data-a="kirim">TETAP KIRIM</button></div></div>`;
+      el.className = 'wr-bg';
+      const cepat = q.terlaluCepat || q.seragam;
+      el.innerHTML = `<div class="wr-box" role="alertdialog" aria-modal="true"><div class="wr-head"><div class="wr-ico"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <div><div class="wr-lbl">Peringatan! ${cepat ? 'Terdeteksi asal-asalan' : 'Pengisian kurang teliti'}</div><h3 class="wr-title">${cepat ? 'Anda terdeteksi mengisi terlalu cepat' : 'Periksa kembali jawaban Anda'}</h3></div></div>
+        <div class="wr-body">
+        <p class="wr-tegas">${cepat ? 'Anda terdeteksi mengisi terlalu cepat, asal-asalan, atau asal klik.' : 'Jawaban Anda terlihat kurang teliti.'}</p>
+        <p>Perkiraan <b>Nilai Kesungguhan</b> Anda saat ini: <b style="color:${kategoriKesungguhan(q.nilai).warna}">${q.nilai}</b> (${kategoriKesungguhan(q.nilai).label}).</p><ul>${q.alasan.map(a => `<li>${esc(a)}</li>`).join('')}</ul>
+        <p>Ingat: <b>jawaban jujur Anda sangat berarti bagi sekolah</b> dalam meningkatkan layanan dan lingkungan belajar. Bacalah tiap pernyataan, lalu pilih yang paling menggambarkan keadaan Anda sebenarnya.</p></div>
+        <div class="wr-aksi"><button type="button" class="wr-btn wr-btn-hijau" data-a="ulang">Periksa Kembali</button><button type="button" class="wr-btn wr-btn-merah" data-a="kirim">Tetap Kirim</button></div></div>`;
       el.addEventListener('click', ev => { const a = ev.target.closest('[data-a]'); if (!a) return; el.remove(); res(a.dataset.a); });
       document.body.appendChild(el);
     });
