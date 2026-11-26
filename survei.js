@@ -429,7 +429,7 @@ const Survei = (function () {
     const k = kategoriKesungguhan(q.nilai); const c = q.komponen || {};
     const baris = [['Waktu membaca', c.waktu], ['Variasi jawaban', c.variasi], ['Konsistensi jawaban', c.konsistensi]].filter(x => x[1]).map(x => `<span>${x[0]}: <b>${x[1][0]}</b>/${x[1][1]}</span>`).join('');
     return `<div class="sv-kes" style="border-color:${k.warna}"><div class="sv-kes-n" style="color:${k.warna}">${q.nilai}</div><div class="sv-kes-i"><div class="sv-kes-t">Nilai Kesungguhan Mengisi Survei <span class="sv-lencana" style="background:${k.latar};color:${k.warna}">${k.label}</span></div><div class="sv-kes-k">${baris}</div>
-      <div class="sv-kes-p">${guru ? 'Mengukur ketelitian mengisi (waktu baca, variasi, konsistensi), bukan benar/salah. Nilai rendah berarti nilai survei siswa ini kurang dapat dipercaya.' : 'Nilai ini mengukur ketelitian Anda mengisi, bukan benar/salah. Jawab jujur dan teliti agar hasil survei sekolah mencerminkan keadaan sebenarnya.'}</div>${q.alasan && q.alasan.length ? `<div class="sv-kes-a">${esc(q.alasan.join('; '))}</div>` : ''}</div></div>`;
+      <div class="sv-kes-p">${guru ? 'Mengukur ketelitian mengisi (waktu baca, variasi, konsistensi), bukan benar/salah. Nilai rendah berarti nilai survei siswa ini kurang dapat dipercaya.' : 'Nilai ini mengukur ketelitian dan kesungguhan Anda dalam mengisi. Jawab jujur dan teliti agar hasil survei sekolah mencerminkan keadaan sebenarnya.'}</div>${q.alasan && q.alasan.length ? `<div class="sv-kes-a">${esc(q.alasan.join('; '))}</div>` : ''}</div></div>`;
   }
 
   // =====================================================================================
@@ -478,7 +478,7 @@ const Survei = (function () {
       $('sv-nomor').textContent = 'Petunjuk Pengerjaan';
       box.innerHTML = `<div class="sv-pad"><div class="sv-intro"><i class="fa-solid ${J.ikon}"></i><h3>${esc(J.nama)}</h3></div>
         <p class="sv-p">Terima kasih telah menyelesaikan tes. Selanjutnya Anda diminta mengisi <b>${esc(J.nama)}</b> sebanyak <b>${total} butir</b>${adaMatriks() ? ' dalam <b>' + hl.length + ' halaman</b>' : ''}.</p>
-        <ul class="sv-ul"><li><b>Tidak ada jawaban yang benar atau salah.</b> Pilihlah jawaban yang paling menggambarkan keadaan Anda yang sebenarnya, bukan jawaban yang menurut Anda &quot;paling baik&quot;.</li>
+        <ul class="sv-ul"><li><b>Jawaban jujur Anda sangat berarti bagi sekolah.</b> Pilihlah jawaban yang paling menggambarkan keadaan Anda yang sebenarnya, bukan jawaban yang menurut Anda &quot;paling baik&quot;.</li>
         <li>Semua butir <b>wajib dijawab</b>. Bacalah setiap pernyataan dengan teliti.</li>
         <li>Anda akan mendapat <b>Nilai Kesungguhan</b> (0–100). Mengisi terlalu cepat, memilih pola jawaban yang sama terus-menerus, atau menjawab pernyataan yang berlawanan secara bertentangan <b>menurunkan nilai</b> dan membuat hasil survei Anda tidak dapat dipercaya.</li>
         <li>Anda dapat kembali ke ${adaMatriks() ? 'halaman' : 'butir'} sebelumnya untuk mengubah jawaban sebelum menekan <b>Selesai</b>.</li>
@@ -541,8 +541,30 @@ const Survei = (function () {
     const hl = hlm(); const to = S.idx + arah;
     if (arah > 0 && !halLengkap(hl[S.idx])) return;
     if (to < 0) return;
+    // pengingat saat mengisi: halaman ini ditinggalkan < 3 detik per butir, tiga kali berturut-turut -> pop up (maks. 2 kali)
+    let ingatkan = false;
+    if (arah > 0 && S.tahap === 'butir' && S.tMasuk) {
+      const n = hl[S.idx].idx.length; const dt = (Date.now() - S.tMasuk) / 1000 / n;
+      S.cepatBeruntun = dt < 3 ? (S.cepatBeruntun || 0) + 1 : 0;
+      if (S.cepatBeruntun >= 3 && (S.pengingat || 0) < 2) { S.pengingat = (S.pengingat || 0) + 1; S.cepatBeruntun = 0; ingatkan = true; }
+    }
     if (to >= hl.length) { catatWaktuButir(); S.tahap = 'konfirmasi'; S.tMasuk = 0; render(); return; }
     masukHalaman(to);
+    if (ingatkan) setTimeout(tampilPengingat, 0);
+  }
+
+  // Pop up pengingat saat mengisi. Waktu selama pop up terbuka tidak dihitung sebagai waktu membaca.
+  function tampilPengingat() {
+    if (S.tahap !== 'butir' || document.querySelector('.sv-modal-bg')) return;
+    catatWaktuButir();
+    const el = document.createElement('div');
+    el.className = 'sv-modal-bg';
+    el.innerHTML = `<div class="sv-modal" role="alertdialog" aria-modal="true"><div class="sv-modal-ico"><i class="fa-solid fa-triangle-exclamation"></i></div>
+      <h3>Anda mengisi terlalu cepat</h3>
+      <p>Pelan-pelan saja. Bacalah setiap pernyataan dengan teliti dan jawablah dengan baik.</p>
+      <div class="sv-modal-aksi"><button type="button" class="anbk-btn anbk-btn-primary" data-a="lanjut">LANJUTKAN MENGERJAKAN</button></div></div>`;
+    el.addEventListener('click', ev => { if (!ev.target.closest('[data-a]')) return; el.remove(); if (S.tahap === 'butir') S.tMasuk = Date.now(); });
+    document.body.appendChild(el);
   }
   function toggleRagu() {
     const el = $('sv-chk-ragu'); if (!el || S.tahap !== 'butir') return;
@@ -564,9 +586,9 @@ const Survei = (function () {
       const el = document.createElement('div');
       el.className = 'sv-modal-bg';
       el.innerHTML = `<div class="sv-modal" role="alertdialog" aria-modal="true"><div class="sv-modal-ico"><i class="fa-solid fa-triangle-exclamation"></i></div>
-        <h3>Periksa kembali jawaban Anda</h3>
-        <p>Jawaban Anda terlihat kurang teliti. Perkiraan <b>Nilai Kesungguhan</b> Anda saat ini: <b style="color:${kategoriKesungguhan(q.nilai).warna}">${q.nilai}</b> (${kategoriKesungguhan(q.nilai).label}).</p><ul>${q.alasan.map(a => `<li>${esc(a)}</li>`).join('')}</ul>
-        <p>Ingat: <b>tidak ada jawaban benar atau salah</b>. Bacalah tiap pernyataan, lalu pilih yang paling menggambarkan keadaan Anda sebenarnya.</p>
+        <h3>${q.terlaluCepat || q.seragam ? 'Anda terdeteksi mengisi terlalu cepat' : 'Periksa kembali jawaban Anda'}</h3>
+        <p>${q.terlaluCepat || q.seragam ? 'Anda terdeteksi mengisi terlalu cepat, asal-asalan, atau asal klik.' : 'Jawaban Anda terlihat kurang teliti.'} Perkiraan <b>Nilai Kesungguhan</b> Anda saat ini: <b style="color:${kategoriKesungguhan(q.nilai).warna}">${q.nilai}</b> (${kategoriKesungguhan(q.nilai).label}).</p><ul>${q.alasan.map(a => `<li>${esc(a)}</li>`).join('')}</ul>
+        <p>Ingat: <b>jawaban jujur Anda sangat berarti bagi sekolah</b> dalam meningkatkan layanan dan lingkungan belajar. Bacalah tiap pernyataan, lalu pilih yang paling menggambarkan keadaan Anda sebenarnya.</p>
         <div class="sv-modal-aksi"><button type="button" class="anbk-btn anbk-btn-green" data-a="ulang">PERIKSA KEMBALI</button><button type="button" class="anbk-btn anbk-btn-red" data-a="kirim">TETAP KIRIM</button></div></div>`;
       el.addEventListener('click', ev => { const a = ev.target.closest('[data-a]'); if (!a) return; el.remove(); res(a.dataset.a); });
       document.body.appendChild(el);
@@ -605,7 +627,7 @@ const Survei = (function () {
     try { info = await api('getSurveiSesi', { sesiId: state.sesiId, siswaId: state.user.id }); } catch (e) { info = null; }
     if (!info || !info.ok || !info.jenis || info.sudah || !JENIS[info.jenis]) return;
     let simpan = null; try { simpan = JSON.parse(sessionStorage.getItem('cbt_survei_' + state.sesiId) || 'null'); } catch (e) { }
-    Object.assign(S, { jenis: info.jenis, set: bangunSet(info.jenis, info.set), sesiId: state.sesiId, jawaban: (simpan && simpan.j) || {}, detik: (simpan && simpan.d) || {}, idx: 0, tahap: 'intro', mulai: Date.now(), tMasuk: 0, diingatkan: false, kirimBusy: false, dikunjungi: {}, ragu: (simpan && simpan.r) || {}, tampilHasil: !!info.tampilHasil });
+    Object.assign(S, { jenis: info.jenis, set: bangunSet(info.jenis, info.set), sesiId: state.sesiId, jawaban: (simpan && simpan.j) || {}, detik: (simpan && simpan.d) || {}, idx: 0, tahap: 'intro', mulai: Date.now(), tMasuk: 0, diingatkan: false, cepatBeruntun: 0, pengingat: 0, kirimBusy: false, dikunjungi: {}, ragu: (simpan && simpan.r) || {}, tampilHasil: !!info.tampilHasil });
     const sc = $('survei-screen'); if (!sc) return;
     try { KumpulUI.sembunyikanSemua(); } catch (e) { }
     UI.tampilkan('survei-screen');

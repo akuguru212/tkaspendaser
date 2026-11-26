@@ -1,3 +1,48 @@
+# v43z41 — Deteksi tombol screenshot (PrtSc) diperkuat, berlaku di ujian & survei
+
+- **Masalah:** di Windows, tombol PrintScreen / Win+Shift+S membuka alat tangkap layar yang "menelan" tombolnya, sehingga halaman soal kadang tidak menerima kejadian tombol sama sekali dan alarm tidak berbunyi.
+- **Perbaikan:**
+  1. Deteksi PrintScreen juga lewat kode tombol 44 (`keyCode`), bukan hanya nama tombol.
+  2. **Deteksi lewat keyboard:** di komputer/laptop, bila jendela kehilangan fokus tanpa ada gerakan mouse/sentuh sesaat sebelumnya, dianggap dipicu keyboard (tangkap layar / Alt+Tab / tombol Windows) → dicatat sebagai pelanggaran *screenshot* + alarm.
+  3. Clipboard ditimpa **5 kali** (0–2,5 detik) setelah PrtSc, karena Windows menaruh gambar tangkapan ke clipboard sedikit terlambat.
+- Mesin yang sama dipakai di halaman soal (literasi, numerasi, dll.) **dan** halaman survei. Di survei kejadian tetap dicatat untuk guru, tidak menambah hitungan pelanggaran ujian.
+- **Batas teknis:** browser tidak bisa memblokir tombol PrtSc atau mendeteksi screenshot lewat tombol fisik HP (Power+Volume). Penangkalnya: watermark nama siswa + isi soal disembunyikan saat fokus hilang.
+- File berubah: `kunci-ujian.js` (v9), `index.html`, `sw.js` (cache `hp33`), `README.md`.
+
+---
+
+# v43z40 — Teks pop up "Anda mengisi terlalu cepat" (survei) disingkat
+
+- Pesan pop up saat mengisi survei: *"Pelan-pelan saja. Bacalah setiap pernyataan dengan teliti dan jawablah dengan baik."*
+- File berubah: `survei.js` (v22), `index.html`, `sw.js` (cache `hp32`), `README.md`.
+
+---
+
+# v43z39 — Kalimat "tidak ada jawaban benar atau salah" diganti (tampilan siswa)
+
+- Kalimat itu dihapus dari semua tampilan siswa (pop up mengisi terlalu cepat, pop up akhir, halaman pengantar survei, keterangan nilai kesungguhan) dan diganti kalimat yang menekankan manfaat survei: *"Jawaban jujur Anda sangat berarti bagi sekolah dalam meningkatkan layanan dan lingkungan belajar."*
+- Tampilan guru tidak diubah.
+- File berubah: `survei.js` (v21), `index.html`, `sw.js` (cache `hp31`), `README.md`.
+
+---
+
+# v43z38 — Pop up "mengisi terlalu cepat" juga saat mengisi survei
+
+- Di survei (Karakter & Sulingjar), bila siswa meninggalkan **3 halaman berturut-turut** dengan waktu < 3 detik per pernyataan, muncul pop up **"Anda mengisi terlalu cepat"** dengan tombol **LANJUTKAN MENGERJAKAN** (maks. 2 kali per sesi). Waktu saat pop up terbuka tidak dihitung.
+- Pop up di akhir (PERIKSA KEMBALI / TETAP KIRIM) tidak berubah.
+- File berubah: `survei.js` (v20), `index.html`, `sw.js` (cache `hp30`), `README.md`.
+
+---
+
+# v43z37 — Peringatan "menjawab terlalu cepat" jadi pop up
+
+- **Saat mengerjakan:** peringatan di pojok kanan atas (toast) diganti **pop up di tengah layar** berisi *"Anda menjawab terlalu cepat. Pelan-pelan saja, bacalah soal dengan teliti"* dengan tombol **LANJUTKAN MENGERJAKAN**. Waktu saat pop up terbuka tidak dihitung sebagai waktu membaca soal.
+- **Di akhir (SELESAI TES):** pop up *"Anda terdeteksi mengerjakan terlalu cepat, asal-asalan, atau asal klik"* dengan tombol **PERIKSA KEMBALI** dan **TETAP KIRIM** (tetap muncul satu kali saja).
+- Survei: judul pop up akhir menyesuaikan bila terdeteksi terlalu cepat/seragam.
+- File berubah: `peringatan-cepat.js` (v3), `survei.js` (v19), `index.html`, `sw.js` (cache `hp29`), `README.md`.
+
+---
+
 # v43z36 — Garis pembatas antar kolom tabel survei
 
 - Tabel pernyataan survei (Karakter & Sulingjar) kini punya **garis pembatas vertikal tipis** antara kolom *Pernyataan*, *Tidak pernah*, *Kadang-kadang*, *Sering*, *Selalu* (warna abu-biru muda, tidak mencolok). Batas kolom jelas tanpa mengganggu fokus siswa.

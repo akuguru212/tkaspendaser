@@ -35,11 +35,11 @@
   const KUNCI = (sid) => 'cbt_waktu_' + sid;
 
   // ---------------- pencatatan waktu per soal ----------------
-  const T = { sesiId: '', detik: {}, cur: null, t0: 0, beruntun: 0, pengingat: 0, diingatkan: false };
+  const T = { sesiId: '', detik: {}, cur: null, t0: 0, beruntun: 0, pengingat: 0, diingatkan: false, popupTunda: false };
 
   function muat(sesiId) {
     if (T.sesiId === sesiId) return;
-    T.sesiId = sesiId; T.detik = {}; T.cur = null; T.t0 = 0; T.beruntun = 0; T.pengingat = 0; T.diingatkan = false;
+    T.sesiId = sesiId; T.detik = {}; T.cur = null; T.t0 = 0; T.beruntun = 0; T.pengingat = 0; T.diingatkan = false; T.popupTunda = false;
     try {
       const v = JSON.parse(localStorage.getItem(KUNCI(sesiId)) || '{}');
       if (v && v.d) { T.detik = v.d; T.diingatkan = !!v.w; }
@@ -67,8 +67,28 @@
     T.beruntun = cepat ? T.beruntun + 1 : 0;
     if (T.beruntun >= 4 && T.pengingat < 2) {
       T.pengingat++; T.beruntun = 0;
-      if (typeof toast === 'function') toast('Anda menjawab sangat cepat. Pelan-pelan, bacalah soal dengan teliti sebelum memilih jawaban.', 'error');
+      T.popupTunda = true; // popup ditampilkan setelah soal berikutnya selesai dirender (lihat ExamEngine.renderSoal)
     }
+  }
+
+  // Pengingat saat mengerjakan: popup di tengah layar dengan tombol LANJUTKAN MENGERJAKAN.
+  // Waktu selama popup terbuka tidak dihitung sebagai waktu membaca soal.
+  function tampilPengingat() {
+    if (document.querySelector('.cj-bg')) return;
+    pasangCss();
+    tutupSoal(); simpan();
+    const el = document.createElement('div');
+    el.className = 'cj-bg';
+    el.innerHTML = `<div class="cj-box" role="alertdialog" aria-modal="true"><div class="cj-ico"><i class="fa-solid fa-triangle-exclamation"></i></div>
+      <h3>Anda menjawab terlalu cepat</h3>
+      <p>Pelan-pelan saja. Bacalah soal dengan teliti sebelum memilih jawaban.</p>
+      <div class="cj-aksi"><button type="button" class="anbk-btn anbk-btn-primary" data-a="lanjut">LANJUTKAN MENGERJAKAN</button></div></div>`;
+    el.addEventListener('click', (ev) => {
+      if (!ev.target.closest('[data-a]')) return;
+      el.remove();
+      if (T.cur && !document.hidden && !state.submitting) T.t0 = Date.now();
+    });
+    document.body.appendChild(el);
   }
 
   function aktifUntukUjian() {
@@ -93,7 +113,9 @@
       T.cur = s ? s.id : null;
       T.t0 = (T.cur && !document.hidden) ? Date.now() : 0;
     }
-    return _render.apply(this, arguments);
+    const hasilRender = _render.apply(this, arguments);
+    if (T.popupTunda) { T.popupTunda = false; setTimeout(tampilPengingat, 0); }
+    return hasilRender;
   };
 
   // jangan hitung waktu saat tab/aplikasi tidak terlihat
@@ -157,11 +179,11 @@
       el.className = 'cj-bg';
       const chips = h.kilat.slice(0, 60).map((i) => `<button type="button" data-no="${i}">${i + 1}</button>`).join('');
       el.innerHTML = `<div class="cj-box" role="alertdialog" aria-modal="true"><div class="cj-ico"><i class="fa-solid fa-triangle-exclamation"></i></div>
-        <h3>Anda terdeteksi menjawab terlalu cepat</h3>
-        <p>Waktu Anda mengerjakan soal terlihat sangat singkat, sehingga jawaban bisa kurang teliti.</p>
+        <h3>Anda terdeteksi mengerjakan terlalu cepat</h3>
+        <p>Anda terdeteksi mengerjakan terlalu cepat, asal-asalan, atau asal klik, sehingga jawaban bisa kurang teliti.</p>
         <ul>${h.alasan.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>
         ${chips ? `<p>Soal yang dijawab sangat cepat (ketuk nomor untuk memeriksa kembali):</p><div class="cj-chips">${chips}</div>` : ''}
-        <p>Soal literasi dan numerasi perlu dibaca dengan saksama. Mengerjakan asal-asalan tidak mencerminkan kemampuan Anda sebenarnya. Silakan periksa kembali selagi waktu masih ada.</p>
+        <p>Soal literasi dan numerasi perlu dibaca dengan saksama. Mengerjakan asal klik tidak mencerminkan kemampuan Anda sebenarnya. Silakan <b>periksa kembali</b> selagi waktu masih ada, atau pilih <b>tetap kirim</b> bila Anda yakin dengan jawaban Anda.</p>
         <div class="cj-aksi"><button type="button" class="anbk-btn anbk-btn-green" data-a="ulang">PERIKSA KEMBALI</button><button type="button" class="anbk-btn anbk-btn-red" data-a="kirim">TETAP KIRIM</button></div></div>`;
       el.addEventListener('click', (ev) => {
         const no = ev.target.closest('[data-no]');

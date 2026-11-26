@@ -160,9 +160,23 @@
         K.lepasWake(); K.minta(); K.periksaFs();
       }
     },
-    onBlur() {
+    // Komputer/laptop (bukan HP/tablet): dipakai untuk deteksi fokus hilang karena keyboard.
+    desktop() {
+      try { return !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') && !!(window.matchMedia && window.matchMedia('(hover: hover)').matches); } catch (e) { return false; }
+    },
+    onPtr() { K.ptrT = Date.now(); },
+    // Windows 10/11: tombol PrintScreen / Win+Shift+S membuka alat tangkap layar yang MENELAN tombolnya, sehingga halaman tidak
+    // menerima keydown/keyup sama sekali -- yang terlihat hanya jendela kehilangan fokus. Di komputer, fokus hilang tanpa ada
+    // gerakan mouse/sentuh sesaat sebelumnya = dipicu keyboard (tangkap layar / Alt+Tab / tombol Windows) -> dihitung & alarm.
+    curigaiSSDariKeyboard() {
+      if (!K.aktif || !K.pesanAktif() || document.hidden || !K.desktop()) return;
+      if (Date.now() - (K.ptrT || 0) < 1200) return; // ada gerakan mouse sesaat sebelumnya: bukan karena keyboard
+      K.laporSS('Fokus jendela hilang lewat keyboard (kemungkinan tombol Print Screen / Win+Shift+S)');
+    },
+    onBlur(e) {
       if (!K.aktif) return;
       K.curigaiSSDariBlur();
+      if (e && e.type === 'blur') K.curigaiSSDariKeyboard();
       K.sembunyiIsi(true);
       clearTimeout(K.blurTimer); K.blurT0 = Date.now();
       K.blurTimer = setTimeout(() => {
@@ -203,11 +217,11 @@
     //  b) Win/Cmd+Shift ditekan lalu jendela langsung kehilangan fokus <= 2,5 dtk (alat tangkap layar bawaan OS sering
     //     "menelan" huruf S/angkanya sehingga halaman hanya melihat Win/Cmd+Shift lalu blur).
     // Screenshot lewat tombol fisik HP (Power+Volume / usap tiga jari) TIDAK dapat dideteksi oleh halaman web.
-    ssT: 0, metaShiftT: 0,
+    ssT: 0, metaShiftT: 0, ptrT: 0,
     tombolSS(e) {
       const k = String(e.key || '').toLowerCase(), c = String(e.code || '');
       const meta = !!(e.metaKey || (e.getModifierState && e.getModifierState('OS')));
-      if (k === 'printscreen' || k === 'snapshot' || c === 'PrintScreen') return true;
+      if (k === 'printscreen' || k === 'snapshot' || c === 'PrintScreen' || e.keyCode === 44 || e.which === 44) return true;
       if (meta && e.shiftKey && (c === 'KeyS' || k === 's' || /^Digit[3-6]$/.test(c) || ['3', '4', '5', '6', '#', '$', '%', '^'].indexOf(k) >= 0)) return true;
       if (e.ctrlKey && e.shiftKey && (c === 'KeyS' || k === 's')) return true;
       if (e.ctrlKey && e.shiftKey && (c === 'F5' || k === 'f5')) return true;
@@ -216,7 +230,9 @@
     laporSS(tombol) {
       const t = Date.now(); if (t - K.ssT < 1500) return; K.ssT = t; // keydown + keyup + blur dari satu screenshot = satu kejadian
       K.sembunyiIsi(true);
-      try { navigator.clipboard && navigator.clipboard.writeText(' '); } catch (x) { /* abaikan */ }
+      // Timpa clipboard berulang kali: Windows menaruh gambar tangkapan ke clipboard sedikit TERLAMBAT setelah tombol ditekan,
+      // jadi satu kali timpa saja sering kalah. Gagal diam-diam bila halaman sedang tidak berfokus.
+      [0, 150, 500, 1200, 2500].forEach(ms => setTimeout(() => { try { navigator.clipboard && navigator.clipboard.writeText(' ').catch(() => {}); } catch (x) { /* abaikan */ } }, ms));
       setTimeout(() => { if (!document.hidden && document.hasFocus() && !K.alarmOn) K.sembunyiIsi(false); }, 1500);
       K.laporHitung('screenshot', 'Screenshot terdeteksi (' + tombol + '). Ini dihitung sebagai pelanggaran.');
       K.alarmNyala('Screenshot dilarang selama ' + K.kata() + '. Percobaan ini dicatat sebagai pelanggaran.');
@@ -309,6 +325,7 @@
       document.addEventListener('fullscreenchange', K.onFsChange); document.addEventListener('webkitfullscreenchange', K.onFsChange);
       document.addEventListener('pointerdown', K.onTap, true); document.addEventListener('touchstart', K.onTap, true);
       document.addEventListener('keydown', K.onKey, true); document.addEventListener('keyup', K.onKeyUp, true);
+      K.ptrT = Date.now(); ['pointermove', 'pointerdown', 'mousemove', 'mousedown', 'wheel', 'touchstart'].forEach(t => document.addEventListener(t, K.onPtr, { capture: true, passive: true }));
       ['dragstart', 'selectstart', 'copy', 'cut', 'contextmenu'].forEach(t => document.addEventListener(t, K.blokir, true));
       try { history.pushState({ kunci: 1 }, '', location.href); } catch (e) { /* abaikan */ }
       window.addEventListener('popstate', K.onPop);
@@ -324,6 +341,7 @@
       document.removeEventListener('fullscreenchange', K.onFsChange); document.removeEventListener('webkitfullscreenchange', K.onFsChange);
       document.removeEventListener('pointerdown', K.onTap, true); document.removeEventListener('touchstart', K.onTap, true);
       document.removeEventListener('keydown', K.onKey, true); document.removeEventListener('keyup', K.onKeyUp, true);
+      ['pointermove', 'pointerdown', 'mousemove', 'mousedown', 'wheel', 'touchstart'].forEach(t => document.removeEventListener(t, K.onPtr, { capture: true }));
       ['dragstart', 'selectstart', 'copy', 'cut', 'contextmenu'].forEach(t => document.removeEventListener(t, K.blokir, true));
       window.removeEventListener('popstate', K.onPop);
       K.pernahFs = false;
