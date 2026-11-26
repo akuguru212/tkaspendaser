@@ -1,3 +1,10 @@
+# v43z36 — Garis pembatas antar kolom tabel survei
+
+- Tabel pernyataan survei (Karakter & Sulingjar) kini punya **garis pembatas vertikal tipis** antara kolom *Pernyataan*, *Tidak pernah*, *Kadang-kadang*, *Sering*, *Selalu* (warna abu-biru muda, tidak mencolok). Batas kolom jelas tanpa mengganggu fokus siswa.
+- File berubah: `anbk.css` (aturan di bagian paling bawah), `index.html` (`anbk.css?v=70`), `sw.js` (versi cache `hp28`), `README.md`.
+
+---
+
 # v43z29 — Aktifkan / Nonaktifkan Fitur Anti Curang **per ujian**
 
 - **Tombol baru di setiap baris Kelola Ujian:** **🛡 Nonaktifkan Anti Curang** / **🛡 Aktifkan Anti Curang** (ada konfirmasi saat menonaktifkan). Kolom *Maks. Pelanggaran* juga menampilkan status (*🛡 Anti curang aktif* / *⚠ Anti curang nonaktif*). Pilihan yang sama ada di form Buat/Ubah Ujian.

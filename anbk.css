@@ -509,3 +509,14 @@ html[data-skin="anbk"] #guru-portal .dash-hero, html[data-skin="anbk"] #guru-por
 #detail-screen .detail-top > button:active { transform: translateY(0); box-shadow: 0 6px 14px -6px rgba(13,79,196,.7); }
 #detail-screen .detail-top > button:focus-visible { outline: 3px solid rgba(13,110,253,.4); outline-offset: 3px; }
 @media (max-width: 640px) { #detail-screen .detail-top > button { width: 100%; justify-content: center; padding: .85rem 1rem; font-size: 1rem; } }
+
+/* ============================================================================
+   Garis pembatas vertikal tabel survei (Pernyataan | Tidak pernah | Kadang-kadang | Sering | Selalu).
+   Tipis & berwarna abu-biru muda: batas kolom jelas, tetapi tidak mengganggu fokus siswa.
+   Berlaku untuk semua skala survei (Karakter & Sulingjar), laptop maupun HP.
+   ============================================================================ */
+#survei-screen .sv-mx { border-collapse: collapse; }
+#survei-screen .sv-mx tbody td { border-left: 1px solid #dde4ee; }
+#survei-screen .sv-mx tbody td:first-child { border-left: 0; }
+#survei-screen .sv-mx tbody td.sv-mx-t { border-right: 1px solid #cfd8e5; }
+#survei-screen .sv-mx tbody tr:last-child td { border-bottom: 0; }
