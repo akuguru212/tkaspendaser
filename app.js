@@ -5645,14 +5645,14 @@ const Guru = {
         <div style="margin:.2rem 0 .55rem">Siswa bisa melihat dan salah memasukkan token ujian lain. Nonaktifkan salah satu, atau batasi kelasnya lewat <strong>🔑 Token Kelas</strong>.</div>
         <div style="display:flex;gap:.45rem;flex-wrap:wrap">${bentrok.map(u => `<button type="button" class="secondary small" onclick="Guru.ubahStatusUjian('${u.id}', false)">⏸ Nonaktifkan ${escapeHtml_(u.judul)} (${escapeHtml_(u.token)})</button>`).join('')}</div>
       </div>` : '';
-    cont.innerHTML = banner + `<table class="ledger"><thead><tr>
+    cont.innerHTML = banner + `<table class="ledger tabel-ujian"><thead><tr>
         <th>Judul</th><th>Token</th><th>Token Aktif untuk</th><th>Durasi</th><th>Jadwal</th><th>Maks. Pelanggaran</th><th>Status</th><th></th>
 
-      </tr></thead><tbody>` + res.data.map(u => {
+      </tr></thead><tbody>` + res.data.map((u, idx) => {
         const st = statusUjian_(u), mati = st === 'nonaktif';
         const [kls, lbl] = labelStatus[st];
         return `
-        <tr${mati ? ' style="opacity:.6"' : ''}>
+        <tr class="ujian-baris ujian-w${idx % 6}${mati ? ' ujian-mati' : ''}">
           <td><strong>${escapeHtml_(u.judul)}</strong><br><span style="color:var(--c-muted);font-size:.78rem">${labelKategori(u.kategori)}${u.subkategori ? ' • ' + escapeHtml_(u.subkategori) : ''}</span></td>
           <td style="white-space:nowrap"><code style="font-size:1rem;font-weight:700${mati ? ';text-decoration:line-through' : ''}">${u.token}</code> <button type="button" class="btn-salin-token" title="Salin token" aria-label="Salin token ${u.token}" onclick="event.stopPropagation();salinToken('${u.token}', this)">📋</button>
             <br><span class="token-siswa-status ${tokenTampilUjian_(u) ? 'tampil' : 'sembunyi'}" title="${tokenTampilUjian_(u) ? 'Token tampil di layar siswa untuk ujian ini' : 'Token disembunyikan dari layar siswa untuk ujian ini'}">${tokenTampilUjian_(u) ? '👁 Tampil di layar siswa' : '🔒 Disembunyikan'}</span></td>
@@ -5666,8 +5666,8 @@ const Guru = {
               ${mati
                 ? `<button type="button" class="ok solid small span2" onclick="Guru.ubahStatusUjian('${u.id}', true)" title="Aktifkan kembali: token bisa dipakai siswa lagi"><i class="fa-solid fa-play"></i> Aktifkan Ujian</button>`
                 : `<button type="button" class="secondary small span2" onclick="Guru.ubahStatusUjian('${u.id}', false)" title="Nonaktifkan: token tidak bisa dipakai & tidak tampil di layar peserta"><i class="fa-solid fa-pause"></i> Nonaktifkan Ujian</button>`}
-              <button type="button" class="secondary small tgl" aria-pressed="${antiCurangUjian_(u) ? 'true' : 'false'}" onclick="Guru.ubahAntiCurang('${u.id}', ${!antiCurangUjian_(u)})" title="${antiCurangUjian_(u) ? 'Anti curang AKTIF (layar penuh, alarm, hitungan pelanggaran). Klik untuk menonaktifkan.' : 'Anti curang NONAKTIF. Klik untuk mengaktifkan.'}"><i class="fa-solid fa-shield-halved"></i><span class="tgl-label">Anti Curang</span><span class="sw" aria-hidden="true"></span></button>
-              <button type="button" class="secondary small tgl" aria-pressed="${tokenTampilUjian_(u) ? 'true' : 'false'}" onclick="Guru.ubahTampilToken('${u.id}', ${!tokenTampilUjian_(u)})" title="${tokenTampilUjian_(u) ? 'Token TAMPIL di layar siswa. Klik untuk menyembunyikan (hanya guru/pengawas yang memberi tahu).' : 'Token DISEMBUNYIKAN dari layar siswa. Klik untuk menampilkan.'}"><i class="fa-solid fa-eye"></i><span class="tgl-label">Token Tampil</span><span class="sw" aria-hidden="true"></span></button>
+              <button type="button" class="secondary small tgl" aria-pressed="${antiCurangUjian_(u) ? 'true' : 'false'}" onclick="Guru.ubahAntiCurang('${u.id}', ${!antiCurangUjian_(u)})" title="${antiCurangUjian_(u) ? 'Anti curang AKTIF (layar penuh, alarm, hitungan pelanggaran). Klik untuk menonaktifkan.' : 'Anti curang NONAKTIF. Klik untuk mengaktifkan.'}"><i class="fa-solid fa-shield-halved"></i><span class="tgl-label">Anti Curang</span><i class="${antiCurangUjian_(u) ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle'} tgl-st" aria-hidden="true"></i></button>
+              <button type="button" class="secondary small tgl" aria-pressed="${tokenTampilUjian_(u) ? 'true' : 'false'}" onclick="Guru.ubahTampilToken('${u.id}', ${!tokenTampilUjian_(u)})" title="${tokenTampilUjian_(u) ? 'Token TAMPIL di layar siswa. Klik untuk menyembunyikan (hanya guru/pengawas yang memberi tahu).' : 'Token DISEMBUNYIKAN dari layar siswa. Klik untuk menampilkan.'}"><i class="fa-solid fa-eye"></i><span class="tgl-label">Token Tampil</span><i class="${tokenTampilUjian_(u) ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle'} tgl-st" aria-hidden="true"></i></button>
               <button type="button" class="info small span2" onclick="Guru.bukaTokenKelas('${u.id}')" title="Aktifkan / nonaktifkan token per kelas"><i class="fa-solid fa-key"></i> Token Kelas</button>
               <button type="button" class="secondary small" onclick='Guru.bukaEditUjian("${u.id}")'><i class="fa-solid fa-pen"></i> Ubah</button>
               <button type="button" class="danger small" onclick="Guru.hapusUjian('${u.id}')"><i class="fa-solid fa-trash-can"></i> Hapus</button>

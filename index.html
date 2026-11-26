@@ -35,7 +35,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
 <link rel="stylesheet" href="anbk.css?v=69">
 <link rel="stylesheet" href="mobile.css?v=8">
-<link rel="stylesheet" href="tombol.css?v=1">
+<link rel="stylesheet" href="tombol.css?v=3">
 <!-- Font Awesome: ikon sidebar & tombol (gaya dashboard modern) -->
 <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
 <!-- KaTeX: render persamaan matematika (LaTeX) di dalam soal -->
@@ -388,7 +388,7 @@
     <!-- ---------- TAB: KELOLA UJIAN ---------- -->
     <section id="tab-ujian" class="hidden">
       <h2>Kelola Ujian</h2>
-      <p class="subtitle">Atur durasi, jadwal token, toleransi keterlambatan, dan batas pelanggaran anti-cheat. Tombol <strong>Sembunyikan Token</strong> di setiap baris ujian membuat token <em>ujian itu saja</em> tidak tampil di layar siswa, sehingga hanya guru yang bisa memberikannya. Pengaturannya terpisah untuk tiap ujian.</p>
+      <p class="subtitle">Atur durasi, jadwal token, toleransi keterlambatan, dan batas pelanggaran anti-cheat. Tombol <strong>Token Tampil</strong> di setiap baris ujian membuat token <em>ujian itu saja</em> tidak tampil di layar siswa, sehingga hanya guru yang bisa memberikannya. Pengaturannya terpisah untuk tiap ujian.</p>
       <div class="panel">
         <div class="toolbar">
           <button type="button" class="secondary btn-segarkan" title="Ambil data terbaru tanpa mengubah pilihan ujian &amp; kelas" onclick="Guru.segarkan('tab-ujian', this)"><i class="fa-solid fa-rotate"></i> Segarkan</button><span class="segar-info" id="segar-info-tab-ujian" aria-live="polite"></span>
@@ -1666,7 +1666,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=80"></script>
+<script src="app.js?v=82"></script>
 <script src="anbk.js?v=67"></script>
 <script src="survei.js?v=18"></script>
 <script src="kunci-ujian.js?v=7"></script>

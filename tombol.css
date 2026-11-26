@@ -35,7 +35,7 @@
   min-height: var(--bt-h-sm); padding: 0 .8rem; font-size: .8rem; border-radius: 8px; gap: .4rem;
 }
 :is(#guru-portal, #detail-screen, .modal) button.small.icon:not(#_) { padding: 0; width: var(--bt-h-sm); min-width: var(--bt-h-sm); }
-:is(#guru-portal, #detail-screen, .modal) button i:not(#_) { font-size: .92em; line-height: 1; flex: 0 0 auto; width: 1.1em; text-align: center; }
+:is(#guru-portal, #detail-screen, .modal) :is(button.secondary, button.accent, button.danger, button.violet, button.ok, button.warn, button.info, button.small):not(.nav-tab) > i:not(#_) { font-size: .92em; line-height: 1; flex: 0 0 auto; width: 1.1em; text-align: center; }
 :is(#guru-portal, #detail-screen, .modal) button:is(.secondary, .accent, .danger, .violet, .ok, .warn, .info):active:not(:disabled):not(#_) { transform: translateY(1px); box-shadow: none; }
 :is(#guru-portal, #detail-screen, .modal) button:is(.secondary, .accent, .danger, .violet, .ok, .warn, .info, .small):focus-visible:not(#_) {
   outline: 3px solid color-mix(in srgb, var(--bt-blue) 35%, transparent); outline-offset: 2px;
@@ -85,19 +85,35 @@
 :is(#guru-portal, #detail-screen, .modal) button.danger:not(.small):not(#_) { background: var(--bt-red); border-color: var(--bt-red); color: #fff; }
 :is(#guru-portal, #detail-screen, .modal) button.danger:not(.small):hover:not(:disabled):not(#_) { background: color-mix(in srgb, var(--bt-red) 85%, #000); border-color: color-mix(in srgb, var(--bt-red) 85%, #000); filter: none; transform: none; }
 
-/* ---------- sakelar mini di dalam tombol (Anti Curang, Tampilkan Token) ---------- */
-:is(#guru-portal, .modal) button.tgl:not(#_) { justify-content: flex-start; }
-:is(#guru-portal, .modal) button.tgl .tgl-label:not(#_) { flex: 1 1 auto; text-align: left; overflow: hidden; text-overflow: ellipsis; }
-:is(#guru-portal, .modal) button.tgl .sw:not(#_) {
-  flex: 0 0 auto; position: relative; width: 28px; height: 16px; border-radius: 999px;
-  background: color-mix(in srgb, var(--c-text, #212529) 24%, var(--c-surface, #fff)); transition: background .15s ease;
+/* ---------- tombol toggle (Anti Curang, Token Tampil): AKTIF = hijau terang, NONAKTIF = abu-abu redup ---------- */
+:is(#guru-portal, .modal) button.tgl:not(#_) { justify-content: flex-start; gap: .4rem; padding: 0 .65rem; }
+:is(#guru-portal, .modal) button.tgl .tgl-label:not(#_) { flex: 1 1 auto; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; }
+:is(#guru-portal, .modal) button.tgl .tgl-st:not(#_) { flex: 0 0 auto; margin-left: auto; font-size: 1rem; width: auto; }
+
+/* NONAKTIF */
+:is(#guru-portal, .modal) button.tgl[aria-pressed="false"]:not(#_) {
+  background: color-mix(in srgb, var(--c-text, #212529) 5%, var(--c-surface, #fff));
+  border-color: color-mix(in srgb, var(--c-text, #212529) 14%, var(--c-surface, #fff));
+  color: color-mix(in srgb, var(--c-text, #212529) 52%, var(--c-surface, #fff));
 }
-:is(#guru-portal, .modal) button.tgl .sw::before {
-  content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%;
-  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s ease;
+:is(#guru-portal, .modal) button.tgl[aria-pressed="false"] .tgl-st:not(#_) { color: color-mix(in srgb, var(--c-text, #212529) 32%, var(--c-surface, #fff)); }
+:is(#guru-portal, .modal) button.tgl[aria-pressed="false"]:hover:not(:disabled):not(#_) {
+  background: color-mix(in srgb, var(--bt-green) 8%, var(--c-surface, #fff)); border-color: color-mix(in srgb, var(--bt-green) 55%, var(--c-surface, #fff)); color: color-mix(in srgb, var(--bt-green) 80%, var(--c-text, #212529));
 }
-:is(#guru-portal, .modal) button.tgl[aria-pressed="true"] .sw { background: var(--bt-green); }
-:is(#guru-portal, .modal) button.tgl[aria-pressed="true"] .sw::before { transform: translateX(12px); }
+/* AKTIF */
+:is(#guru-portal, .modal) button.tgl[aria-pressed="true"]:not(#_) {
+  background: color-mix(in srgb, var(--bt-green) 17%, var(--c-surface, #fff));
+  border-color: color-mix(in srgb, var(--bt-green) 62%, var(--c-surface, #fff));
+  color: color-mix(in srgb, var(--bt-green) 88%, var(--c-text, #212529));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bt-green) 18%, transparent);
+}
+:is(#guru-portal, .modal) button.tgl[aria-pressed="true"] .tgl-st:not(#_) { color: var(--bt-green); }
+:is(#guru-portal, .modal) button.tgl[aria-pressed="true"]:hover:not(:disabled):not(#_) {
+  background: color-mix(in srgb, var(--bt-green) 26%, var(--c-surface, #fff)); border-color: var(--bt-green); color: color-mix(in srgb, var(--bt-green) 92%, var(--c-text, #212529));
+}
+
+/* Baris ujian nonaktif: hanya kolom data yang diredupkan, tombol aksi tetap jelas */
+table.ledger tr.ujian-mati > td:not(:last-child) { opacity: .55; }
 
 /* ---------- kelompok aksi di tabel ---------- */
 /* Kelola Ujian: kisi 2 kolom, tiap tombol sama lebar & sama tinggi. */
@@ -133,5 +149,32 @@
   table.ledger.ledger-kartu td.aksi:not(#_) { gap: .4rem; }
 }
 @media (prefers-reduced-motion: reduce) {
-  :is(#guru-portal, #detail-screen, .modal) button, .aksi-ujian button .sw::before { transition: none; }
+  :is(#guru-portal, #detail-screen, .modal) button, .aksi-ujian button { transition: none; }
+}
+
+/* ---------- Daftar ujian: tiap ujian satu "blok" dengan warna lembut berbeda ---------- */
+.ujian-w0 { --rc: #4a8fe0; } .ujian-w1 { --rc: #34a870; } .ujian-w2 { --rc: #e0a21c; }
+.ujian-w3 { --rc: #8a63d2; } .ujian-w4 { --rc: #25a2a8; } .ujian-w5 { --rc: #e0607a; }
+
+@media (min-width: 641px) {
+  #guru-portal table.ledger.tabel-ujian:not(#_) { border-collapse: separate; border-spacing: 0 10px; }
+  #guru-portal table.ledger.tabel-ujian thead th:not(#_) { border-radius: 0; }
+  #guru-portal table.ledger.tabel-ujian tr.ujian-baris > td:not(#_) {
+    background: color-mix(in srgb, var(--rc) 11%, var(--c-surface, #fff));
+    border: 0; border-top: 1px solid color-mix(in srgb, var(--rc) 22%, var(--c-surface, #fff)); border-bottom: 1px solid color-mix(in srgb, var(--rc) 22%, var(--c-surface, #fff));
+    padding-top: .85rem; padding-bottom: .85rem;
+  }
+  #guru-portal table.ledger.tabel-ujian tr.ujian-baris > td:first-child:not(#_) {
+    border-left: 6px solid var(--rc); border-radius: 12px 0 0 12px;
+  }
+  #guru-portal table.ledger.tabel-ujian tr.ujian-baris > td:last-child:not(#_) {
+    border-right: 1px solid color-mix(in srgb, var(--rc) 22%, var(--c-surface, #fff)); border-radius: 0 12px 12px 0;
+  }
+  #guru-portal table.ledger.tabel-ujian tr.ujian-baris:hover > td:not(#_) { background: color-mix(in srgb, var(--rc) 17%, var(--c-surface, #fff)); }
+}
+@media (max-width: 640px) {
+  table.ledger.tabel-ujian tr.ujian-baris:not(#_) {
+    background: color-mix(in srgb, var(--rc) 11%, var(--c-surface, #fff));
+    border: 1px solid color-mix(in srgb, var(--rc) 25%, var(--c-surface, #fff)); border-left: 6px solid var(--rc);
+  }
 }
