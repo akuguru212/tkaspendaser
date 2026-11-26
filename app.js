@@ -3650,7 +3650,7 @@ const LocalBackend = (function () {
         const rsG = Survei.setUntukUjian(ujS, D.paketSurvei); const jenisG = rsG.jenis;
         const rowSv = (D.survei || []).filter(x => x.sesi_id === sesi.id)[0];
         const tampilG = !!ujS && String(ujS.survei_tampil) === 'true';
-        const out = { ok: true, jenis: jenisG, set: rsG.set, sudah: !!rowSv, tampilHasil: tampilG };
+        const out = { ok: true, jenis: jenisG, set: rsG.set, sudah: !!rowSv, tampilHasil: tampilG, durasiMenit: Math.max(0, Math.floor(Number(ujS && ujS.survei_durasi_menit)) || 0) };
         if (rowSv && tampilG) { try { out.jawaban = JSON.parse(rowSv.jawaban_json || '{}'); out.kualitas = JSON.parse(rowSv.kualitas_json || '{}'); } catch (e) { } }
         return out;
       }
@@ -4391,6 +4391,7 @@ const UI = {
     document.getElementById('ujian-bukti-orek').value = ujian && ujian.bukti_orek ? ujian.bukti_orek : '';
     document.getElementById('ujian-survei').value = ujian ? (ujian.survei || '') : 'auto'; // ujian baru: otomatis (Numerasi -> Survei Karakter, Literasi -> Sulingjar)
     document.getElementById('ujian-survei-tampil').checked = ujian ? (String(ujian.survei_tampil) === 'true') : true; // ujian baru: nilai survei tampil ke siswa (latihan)
+    { const sd = document.getElementById('ujian-survei-durasi'); if (sd) sd.value = ujian && Number(ujian.survei_durasi_menit) > 0 ? Math.floor(Number(ujian.survei_durasi_menit)) : 0; } // 0 = tanpa batas waktu
     { const ac = document.getElementById('ujian-anti-curang'); if (ac) ac.value = (ujian ? antiCurangUjian_(ujian) : true) ? '1' : '0'; }
     { const tt = document.getElementById('ujian-tampil-token'); if (tt) tt.value = (ujian ? tokenTampilUjian_(ujian) : true) ? '1' : '0'; }
     { const fa = document.getElementById('field-token-awal'); if (fa) fa.style.display = ujian ? 'none' : ''; const ta = document.getElementById('ujian-token-awal'); if (ta) ta.value = ''; }
@@ -5845,6 +5846,7 @@ const Guru = {
       ujian.bukti_orek = document.getElementById('ujian-bukti-orek').value; // '' | 'wajib' | 'opsional'
       ujian.survei = document.getElementById('ujian-survei').value; // '' | 'auto' | 'karakter' | 'sulingjar'
       ujian.survei_tampil = document.getElementById('ujian-survei-tampil').checked;
+      { const sd = document.getElementById('ujian-survei-durasi'); const n = sd ? Math.floor(Number(sd.value)) : 0; ujian.survei_durasi_menit = (n > 0 ? Math.min(n, 240) : 0); } // menit; 0 = tanpa batas waktu
       ujian.survei_butir = Survei.draftJson(); // '' = pakai butir bawaan; selain itu JSON butir khusus hasil impor Word
       const hasilPesan = Guru.ambilPesanNilaiUntukSimpan();
       if (hasilPesan.error) { toast(hasilPesan.error, 'error'); return; }

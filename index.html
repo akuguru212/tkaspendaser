@@ -34,7 +34,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
 <link rel="stylesheet" href="anbk.css?v=71">
-<link rel="stylesheet" href="mobile.css?v=8">
+<link rel="stylesheet" href="mobile.css?v=10">
 <link rel="stylesheet" href="tombol.css?v=3">
 <!-- Font Awesome: ikon sidebar & tombol (gaya dashboard modern) -->
 <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
@@ -1345,6 +1345,11 @@
         <option value="sulingjar">Survei Lingkungan Belajar / Sulingjar (setelah Literasi)</option>
       </select>
       <label style="margin-top:.5rem"><input type="checkbox" id="ujian-survei-tampil" style="width:auto"> Tampilkan nilai survei (per dimensi) ke siswa setelah mengisi <span class="subtitle" style="display:inline">— hanya untuk latihan; ANBK/TKA asli tidak menampilkannya.</span></label>
+      <div id="ujian-survei-waktu-box" style="margin-top:.6rem">
+        <label for="ujian-survei-durasi" style="margin-bottom:.25rem">Waktu pengerjaan survei (menit)</label>
+        <input type="number" id="ujian-survei-durasi" min="0" max="240" step="1" value="0" placeholder="0" style="max-width:180px">
+        <p style="font-size:.8rem;color:var(--c-muted);margin:.35rem 0 0">Isi <strong>0</strong> bila survei tanpa batas waktu. Bila diisi, siswa melihat lama waktu di halaman petunjuk dan hitung mundur <strong>Sisa Waktu</strong> saat mengisi (mulai dihitung setelah menekan <strong>Mulai Survei</strong>). Saat waktu habis, jawaban yang sudah diisi terkirim otomatis dan ditandai <em>Perlu dicek</em> di Hasil Survei.</p>
+      </div>
       <div style="margin-top:.6rem;padding:.6rem .7rem;border:1px dashed rgba(128,128,128,.4);border-radius:10px">
         <div style="font-size:.84rem;font-weight:600">Butir survei untuk latihan ini</div>
         <div id="ujian-survei-status" style="font-size:.8rem;color:var(--c-muted);margin:.2rem 0 .5rem"></div>
@@ -1557,7 +1562,7 @@
     <section class="anbk-card anbk-card-ujian">
       <div class="anbk-u-top">
         <h2 class="anbk-u-no" id="sv-nomor">Petunjuk Pengerjaan</h2>
-        <div class="anbk-u-tools"><span class="anbk-pill anbk-pill-timer" id="sv-progres">0 / 0 terjawab</span></div>
+        <div class="anbk-u-tools"><span class="anbk-pill anbk-pill-timer hidden" id="sv-timer" title="Waktu pengerjaan survei"></span><span class="anbk-pill anbk-pill-timer" id="sv-progres">0 / 0 terjawab</span></div>
       </div>
       <div class="anbk-u-sub">
         <div class="anbk-font" role="group" aria-label="Ukuran font survei"><span>Ukuran font survei:</span>
@@ -1666,10 +1671,10 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=83"></script>
+<script src="app.js?v=84"></script>
 <script src="anbk.js?v=67"></script>
 <script src="peringatan-cepat.js?v=4"></script>
-<script src="survei.js?v=23"></script>
+<script src="survei.js?v=24"></script>
 <script src="kunci-ujian.js?v=11"></script>
 <script src="leaderboard.js?v=1"></script>
 <script src="leaderboard-survei.js?v=1"></script>

@@ -121,7 +121,7 @@ var SCHEMA = {
   // soal, mis. untuk soal listening/video) ditambahkan lewat mekanisme skema otomatis
   // yang sama -- lihat README bag. "Menambah kolom baru" & tampilan "Kelola Soal".
   BankSoal: ['id', 'guru_id', 'kategori', 'subkategori', 'tipe', 'topik', 'pertanyaan', 'gambar', 'audio', 'video', 'opsi_json', 'kunci_json', 'bobot', 'tingkat_kesulitan', 'pembahasan', 'status', 'dibuat'],
-  Ujian: ['id', 'guru_id', 'judul', 'kategori', 'subkategori', 'soal_ids', 'durasi_menit', 'token', 'mulai', 'selesai', 'toleransi_menit', 'max_pelanggaran', 'acak_soal', 'acak_opsi', 'nilai_lulus', 'status', 'instruksi_remedial', 'pesan_nilai', 'tampil_detail', 'tampil_pembahasan', 'bukti_orek', 'survei', 'survei_tampil', 'survei_butir', 'token_kelas', 'tampil_token', 'anti_curang'],
+  Ujian: ['id', 'guru_id', 'judul', 'kategori', 'subkategori', 'soal_ids', 'durasi_menit', 'token', 'mulai', 'selesai', 'toleransi_menit', 'max_pelanggaran', 'acak_soal', 'acak_opsi', 'nilai_lulus', 'status', 'instruksi_remedial', 'pesan_nilai', 'tampil_detail', 'tampil_pembahasan', 'bukti_orek', 'survei', 'survei_tampil', 'survei_butir', 'token_kelas', 'tampil_token', 'anti_curang', 'survei_durasi_menit'],
   // 'tambahan_detik' dipakai fitur "Pemantauan Ujian" (tombol "Tambah Waktu") --
   // jumlah detik ekstra yang diberikan guru ke satu sesi siswa tertentu, di luar
   // durasi_menit standar ujian. Kosong/0 berarti tidak ada tambahan.
@@ -1772,7 +1772,7 @@ function actionGetSurveiSesi_(data) {
   var ujian = readAll_(SHEET.UJIAN).filter(function (u) { return u.id === sesi.ujian_id; })[0];
   var jenis = jenisSurveiUjian_(ujian);
   var tampil = !!ujian && String(ujian.survei_tampil).toLowerCase() === 'true';
-  var out = { ok: true, jenis: jenis, set: setSurveiUjian_(ujian, jenis), sudah: false, tampilHasil: tampil };
+  var out = { ok: true, jenis: jenis, set: setSurveiUjian_(ujian, jenis), sudah: false, tampilHasil: tampil, durasiMenit: Math.max(0, Math.floor(Number(ujian && ujian.survei_durasi_menit)) || 0) };
   if (jenis) {
     var baris = readAll_(SHEET.SURVEI).filter(function (r) { return String(r.sesi_id) === String(sesi.id); })[0];
     out.sudah = !!baris;

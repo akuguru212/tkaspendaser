@@ -1,3 +1,35 @@
+# v43z47 — Detail Jawaban (HP): tombol "Kembali ke Hasil" mencolok & timbul
+
+- **Masalah:** di HP tombol *Kembali ke Hasil* pada halaman Detail Jawaban tampak polos (putih).
+- **Penyebab:** gaya biru timbul di `anbk.css` tertimpa aturan tombol umum di `tombol.css` (dimuat paling akhir).
+- **Perbaikan (`mobile.css` v10, hanya layar ≤ 640px):** tombol selebar kartu, tinggi 54px, biru bergradasi dengan sisi bawah tebal dan bayangan (timbul), teks putih tebal, ikon panah dalam lingkaran putih. Saat ditekan tombol turun 2px. Diuji pada lebar 360 & 412 px.
+- **Tidak berubah:** fungsi tombol, tampilan laptop/tablet, dan isi halaman detail.
+- File berubah: `mobile.css` (v10), `index.html`, `sw.js` (cache `hp39`), `README.md`. Sudah termasuk v43z45 (waktu survei) dan v43z46 (header soal HP).
+
+---
+
+# v43z46 — Halaman soal HP: tombol kotak (Daftar Soal) sejajar dengan waktu, tombol dibuat timbul
+
+- **Masalah:** di HP, tombol kotak **Daftar Soal** turun sendirian ke baris kedua di bawah nomor soal sehingga header tidak rapi.
+- **Perbaikan (`mobile.css` v9, hanya layar ≤ 640px):** nomor soal, **waktu**, Informasi, Muat Ulang, dan **Daftar Soal** kini satu baris. Judul "Soal nomor N" yang mengalah (mengecil) bila layar sempit, tombol tidak lagi turun baris. Banner *Pelanggaran* tetap di baris sendiri di bawahnya. Diuji pada lebar 412, 360, dan 320 px.
+- **Tombol timbul:** tombol ikon & pill waktu memakai gradasi lembut, sisi bawah tebal, dan bayangan; saat ditekan tombol turun 2px (terasa seperti ditekan). Tombol bawah (Sebelumnya, Ragu-ragu, Berikutnya/Selesai) memakai gaya timbul yang sama dengan warna aslinya.
+- **Tidak berubah:** fungsi tombol, urutan, layar laptop/tablet, dan halaman survei.
+- File berubah: `mobile.css` (v9), `index.html`, `sw.js` (cache `hp38`), `README.md`. Sudah termasuk fitur waktu survei v43z45.
+
+---
+
+# v43z45 — Waktu pengerjaan Survei: diatur guru, terlihat di akun siswa
+
+- **Masalah:** Survei (Karakter & Sulingjar) tidak punya batas/pengaturan waktu pengerjaan.
+- **Portal guru (Kelola Ujian > Survei Setelah Ujian):** kolom baru **Waktu pengerjaan survei (menit)**. Isi **0** = tanpa batas waktu (perilaku lama, jadi ujian yang sudah ada tidak berubah). Maksimal 240 menit. Kolom hanya tampil bila survei aktif. Tersimpan per ujian di kolom baru `survei_durasi_menit`.
+- **Akun siswa:** di halaman petunjuk tertulis lama waktu dan pill **Waktu Pengerjaan : N menit**. Setelah siswa menekan **MULAI SURVEI**, pill berubah menjadi hitung mundur **Sisa Waktu : HH:MM:SS** (merah di 1 menit terakhir). Bila halaman dimuat ulang, hitung mundur melanjutkan (tidak mulai dari awal).
+- **Waktu habis:** jawaban yang sudah diisi terkirim otomatis tanpa peringatan tambahan, dan ditandai **Perlu dicek** di Hasil Survei dengan keterangan "Waktu pengerjaan survei habis (x dari y butir terjawab)". Bila pengiriman gagal (sinyal), siswa bisa menekan SELESAI SURVEI untuk mengirim ulang.
+- **Tidak berubah:** semua alur survei, anti-nyontek, Nilai Kesungguhan, hasil & leaderboard tetap seperti sebelumnya. Survei tanpa waktu (0) berjalan persis seperti dulu.
+- **Mode Server:** tempel `Code.gs` terbaru lalu deploy versi baru. Kolom `survei_durasi_menit` ditambahkan otomatis oleh mekanisme skema (lihat bagian "Menambah kolom baru"). Tanpa `Code.gs` baru, durasi tidak sampai ke siswa. Mode Lokal langsung berfungsi.
+- File berubah: `survei.js` (v24), `app.js` (v84), `index.html`, `Code.gs`, `sw.js` (cache `hp37`), `README.md`.
+
+---
+
 # v43z44 — Layar penuh dipulihkan setelah "Kembali" (screenshot), tidak lagi harus mengetuk soal
 
 - **Masalah:** setelah PrtSc lalu menekan *Kembali ke Ujian* di halaman soal, soal tampil tetapi tidak dalam layar penuh; siswa harus mengetuk soal dulu. Di halaman survei terasa mulus.

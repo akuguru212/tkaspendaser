@@ -479,6 +479,7 @@ const Survei = (function () {
       box.innerHTML = `<div class="sv-pad"><div class="sv-intro"><i class="fa-solid ${J.ikon}"></i><h3>${esc(J.nama)}</h3></div>
         <p class="sv-p">Terima kasih telah menyelesaikan tes. Selanjutnya Anda diminta mengisi <b>${esc(J.nama)}</b> sebanyak <b>${total} butir</b>${adaMatriks() ? ' dalam <b>' + hl.length + ' halaman</b>' : ''}.</p>
         <ul class="sv-ul"><li><b>Jawaban jujur Anda sangat berarti bagi sekolah.</b> Pilihlah jawaban yang paling menggambarkan keadaan Anda yang sebenarnya, bukan jawaban yang menurut Anda &quot;paling baik&quot;.</li>
+        ${S.durasiMenit > 0 ? `<li>Waktu pengerjaan survei: <b>${S.durasiMenit} menit</b>, dihitung sejak Anda menekan <b>MULAI SURVEI</b>. Bila waktu habis, jawaban yang sudah diisi terkirim otomatis.</li>` : ''}
         <li>Semua butir <b>wajib dijawab</b>. Bacalah setiap pernyataan dengan teliti.</li>
         <li>Anda akan mendapat <b>Nilai Kesungguhan</b> (0–100). Mengisi terlalu cepat, memilih pola jawaban yang sama terus-menerus, atau menjawab pernyataan yang berlawanan secara bertentangan <b>menurunkan nilai</b> dan membuat hasil survei Anda tidak dapat dipercaya.</li>
         <li>Anda dapat kembali ke ${adaMatriks() ? 'halaman' : 'butir'} sebelumnya untuk mengubah jawaban sebelum menekan <b>Selesai</b>.</li>
@@ -500,12 +501,12 @@ const Survei = (function () {
       $('sv-nomor').textContent = 'Konfirmasi Survei';
       const kosong = J.butir.map((r, i) => [r[0], i]).filter(x => !S.jawaban[x[0]]);
       const raguList = Object.keys(S.ragu).map(Number).filter(i => i < hl.length).sort((a, b) => a - b);
-      box.innerHTML = `<div class="sv-pad"><p class="sv-p">Terima kasih telah mengisi survei ini. Tekan tombol <mark class="anbk-mark anbk-mark-red">SELESAI SURVEI</mark> untuk mengirim jawaban, atau <mark class="anbk-mark anbk-mark-green">KEMBALI</mark> untuk memeriksa jawaban Anda.</p>
+      box.innerHTML = `<div class="sv-pad">${S.waktuHabis ? '<div class="anbk-peringatan"><p><b>Waktu pengerjaan survei habis.</b> Jawaban yang sudah diisi sedang dikirim. Bila gagal, tekan SELESAI SURVEI untuk mengirim ulang.</p></div>' : ''}<p class="sv-p">Terima kasih telah mengisi survei ini. Tekan tombol <mark class="anbk-mark anbk-mark-red">SELESAI SURVEI</mark> untuk mengirim jawaban, atau <mark class="anbk-mark anbk-mark-green">KEMBALI</mark> untuk memeriksa jawaban Anda.</p>
         <div class="anbk-ringkas"><span>Terjawab <b>${jml}</b></span><span>Belum dijawab <b>${kosong.length}</b></span><span>Ragu-ragu <b>${raguList.length}</b></span></div>
         ${raguList.length ? `<div class="anbk-peringatan"><p>${raguList.length} ${adaMatriks() ? 'halaman' : 'butir'} masih ditandai ragu-ragu. Anda boleh memeriksanya kembali sebelum mengirim.</p><div class="kumpul-chips">${raguList.map(i => `<button type="button" class="kumpul-chip" onclick="Survei.lompat(${i})">${i + 1}</button>`).join('')}</div></div>` : ''}
         ${kosong.length ? `<div class="anbk-peringatan"><p>Masih ada butir yang belum dijawab. Semua butir wajib dijawab.</p><div class="kumpul-chips">${kosong.map(x => `<button type="button" class="kumpul-chip" onclick="Survei.lompatButir(${x[1]})">${x[1] + 1}</button>`).join('')}</div></div>` : ''}</div>`;
       nav.innerHTML = `<button type="button" id="sv-btn-kembali" class="anbk-btn anbk-btn-green" onclick="Survei.lompat(${Math.min(S.idx, hl.length - 1)})">KEMBALI</button><span></span>
-        <button type="button" class="anbk-btn anbk-btn-red" ${kosong.length ? 'disabled' : ''} id="sv-btn-kirim" onclick="Survei.kirim()">SELESAI SURVEI</button>`;
+        <button type="button" class="anbk-btn anbk-btn-red" ${kosong.length && !S.waktuHabis ? 'disabled' : ''} id="sv-btn-kirim" onclick="Survei.kirim()">SELESAI SURVEI</button>`;
     }
     terapkanSkala();
     window.scrollTo(0, 0);
@@ -579,7 +580,49 @@ const Survei = (function () {
   }
   function lompat(i) { masukHalaman(i); }
   function lompatButir(bi) { masukHalaman(halamanDariButir(bi)); }
-  function mulai() { masukHalaman(0); }
+  function mulai() { mulaiWaktu(); masukHalaman(0); }
+
+  // ---- Waktu pengerjaan survei (diatur guru di Kelola Ujian; 0 = tanpa batas) ----
+  const KUNCI_WAKTU = () => 'cbt_survei_t_' + S.sesiId;
+  function formatSisa(ms) {
+    const t = Math.max(0, Math.ceil(ms / 1000)); const p = (n) => String(n).padStart(2, '0');
+    return p(Math.floor(t / 3600)) + ':' + p(Math.floor((t % 3600) / 60)) + ':' + p(t % 60);
+  }
+  function hentikanWaktu() {
+    if (S.timerId) { clearInterval(S.timerId); S.timerId = null; }
+    const el = $('sv-timer'); if (el) el.classList.add('hidden');
+  }
+  // Sebelum survei dimulai: tampilkan lama waktu. Sesudah dimulai: hitung mundur "Sisa Waktu".
+  function tampilWaktu() {
+    const el = $('sv-timer'); if (!el || !(S.durasiMenit > 0)) return;
+    el.classList.remove('hidden');
+    if (!S.batasWaktu) { el.innerHTML = 'Waktu Pengerjaan : <b>' + S.durasiMenit + ' menit</b>'; return; }
+    const sisa = S.batasWaktu - Date.now();
+    el.innerHTML = 'Sisa Waktu : <b>' + formatSisa(sisa) + '</b>';
+    const b = el.querySelector('b'); if (b) b.classList.toggle('low', sisa <= 60000);
+    if (sisa <= 0) waktuHabis();
+  }
+  function mulaiWaktu() {
+    if (!(S.durasiMenit > 0) || S.timerId) return;
+    if (!S.tMulaiWaktu) { S.tMulaiWaktu = Date.now(); try { sessionStorage.setItem(KUNCI_WAKTU(), String(S.tMulaiWaktu)); } catch (e) { /* abaikan */ } }
+    S.batasWaktu = S.tMulaiWaktu + S.durasiMenit * 60000;
+    tampilWaktu();
+    S.timerId = setInterval(tampilWaktu, 1000);
+  }
+  function waktuHabis() {
+    if (S.waktuHabis || !S.set) return;
+    S.waktuHabis = true;
+    if (S.timerId) { clearInterval(S.timerId); S.timerId = null; }
+    // Pop up pengingat ditutup; bila pop up peringatan sebelum kirim sedang terbuka, lanjutkan kirim lewat tombolnya.
+    const tk = document.querySelector('.wr-bg [data-a="kirim"]');
+    document.querySelectorAll('.wr-bg').forEach(e => { if (!e.contains(tk)) e.remove(); });
+    if (tk) { tk.click(); return; }
+    if (S.kirimBusy) return;
+    catatWaktuButir();
+    S.tahap = 'konfirmasi'; S.tMasuk = 0; S.diingatkan = true;
+    render();
+    kirim();
+  }
 
   function tampilPeringatan(q) {
     return new Promise(res => {
@@ -608,6 +651,10 @@ const Survei = (function () {
         const pilihan = await tampilPeringatan(kualitas);
         if (pilihan === 'ulang') { lompat(0); return; }
       }
+      if (S.waktuHabis) { // waktu habis: tidak ada peringatan tambahan; guru diberi tanda di Hasil Survei
+        kualitas.baik = false;
+        kualitas.alasan = (kualitas.alasan || []).concat(['Waktu pengerjaan survei habis (' + Object.keys(S.jawaban).length + ' dari ' + S.set.butir.length + ' butir terjawab).']);
+      }
       const durasi = Math.round((Date.now() - S.mulai) / 1000);
       const btn = $('sv-btn-kirim'); if (btn) { btn.disabled = true; btn.textContent = 'Mengirim...'; }
       let res = null;
@@ -617,7 +664,8 @@ const Survei = (function () {
         await new Promise(r => setTimeout(r, 900 * k));
       }
       if (!res || !res.ok) { toast((res && res.error) || 'Survei belum terkirim. Periksa koneksi lalu coba lagi.', 'error'); if (btn) { btn.disabled = false; btn.textContent = 'SELESAI SURVEI'; } return; }
-      try { sessionStorage.removeItem('cbt_survei_' + S.sesiId); } catch (e) { }
+      try { sessionStorage.removeItem('cbt_survei_' + S.sesiId); sessionStorage.removeItem(KUNCI_WAKTU()); } catch (e) { }
+      hentikanWaktu();
       S.kualitasAkhir = { baik: kualitas.baik, alasan: kualitas.alasan, rataDetik: kualitas.rataDetik, nilai: kualitas.nilai, komponen: kualitas.komponen };
       S.selesai && S.selesai(res);
     } finally { S.kirimBusy = false; }
@@ -630,12 +678,15 @@ const Survei = (function () {
     try { info = await api('getSurveiSesi', { sesiId: state.sesiId, siswaId: state.user.id }); } catch (e) { info = null; }
     if (!info || !info.ok || !info.jenis || info.sudah || !JENIS[info.jenis]) return;
     let simpan = null; try { simpan = JSON.parse(sessionStorage.getItem('cbt_survei_' + state.sesiId) || 'null'); } catch (e) { }
-    Object.assign(S, { jenis: info.jenis, set: bangunSet(info.jenis, info.set), sesiId: state.sesiId, jawaban: (simpan && simpan.j) || {}, detik: (simpan && simpan.d) || {}, idx: 0, tahap: 'intro', mulai: Date.now(), tMasuk: 0, diingatkan: false, cepatBeruntun: 0, pengingat: 0, kirimBusy: false, dikunjungi: {}, ragu: (simpan && simpan.r) || {}, tampilHasil: !!info.tampilHasil });
+    hentikanWaktu();
+    let tMulaiSimpan = 0; try { tMulaiSimpan = parseInt(sessionStorage.getItem('cbt_survei_t_' + state.sesiId), 10) || 0; } catch (e) { }
+    Object.assign(S, { durasiMenit: Math.max(0, Math.floor(Number(info.durasiMenit)) || 0), tMulaiWaktu: tMulaiSimpan, batasWaktu: 0, timerId: null, waktuHabis: false, jenis: info.jenis, set: bangunSet(info.jenis, info.set), sesiId: state.sesiId, jawaban: (simpan && simpan.j) || {}, detik: (simpan && simpan.d) || {}, idx: 0, tahap: 'intro', mulai: Date.now(), tMasuk: 0, diingatkan: false, cepatBeruntun: 0, pengingat: 0, kirimBusy: false, dikunjungi: {}, ragu: (simpan && simpan.r) || {}, tampilHasil: !!info.tampilHasil });
     const sc = $('survei-screen'); if (!sc) return;
     try { KumpulUI.sembunyikanSemua(); } catch (e) { }
     UI.tampilkan('survei-screen');
     const anticheat = $('anticheat-warning'); if (anticheat) anticheat.classList.add('hidden');
     render();
+    setTimeout(() => { if (S.durasiMenit > 0) { if (S.tMulaiWaktu) mulaiWaktu(); else tampilWaktu(); } }, 0); // tampilkan waktu; lanjutkan hitung mundur bila halaman dimuat ulang
     // Anti-nyontek yang sama dengan halaman soal (layar penuh, alarm, screenshot, watermark, blokir salin) aktif selama survei.
     // Kejadian dicatat ke log guru dengan awalan "[Survei]" dan TIDAK menambah hitungan pelanggaran ujian / tidak memblokir.
     // Matikan lewat config.js: window.CBT_ANTICHEAT_SURVEI = false;
@@ -1158,6 +1209,7 @@ const Survei = (function () {
   function statusForm() {
     const el = $('ujian-survei-status'); if (!el) return;
     const pilihan = ($('ujian-survei') || {}).value || '';
+    { const wb = $('ujian-survei-waktu-box'); if (wb) wb.style.display = pilihan ? '' : 'none'; } // waktu pengerjaan hanya relevan bila survei aktif
     const jenis = jenisFormSaatIni(); const kat = ($('ujian-kategori') || {}).value || '';
     let teks = '';
     if (!pilihan) teks = 'Survei nonaktif untuk ujian ini.';
