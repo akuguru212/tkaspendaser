@@ -1,3 +1,18 @@
+# v43z43 — Sekali tekan PrtSc = SATU pelanggaran (tidak lagi beruntun sampai terblokir)
+
+- **Masalah:** menekan PrtSc sekali menimbulkan peringatan & alarm berulang, lalu 3 pelanggaran dan siswa terblokir.
+- **Penyebab:** alat tangkap layar Windows (Snipping Tool) merebut fokus & mengeluarkan browser dari layar penuh. Pelanggaran pertama (PrtSc) memang benar, tetapi begitu siswa menekan "Kembali ke Ujian" penanda kejadian di-reset, sehingga **sisa kejadian yang sama** (jendela kehilangan fokus, pemeriksaan fokus berkala, keluar layar penuh, deteksi "fokus hilang lewat keyboard") dihitung lagi sebagai pelanggaran baru + alarm baru.
+- **Perbaikan (`kunci-ujian.js`):**
+  1. Satu kali screenshot = satu insiden. Selama insiden + **jeda 15 detik** (diperpanjang 8 detik setelah siswa menekan Kembali), semua pelanggaran susulan (`screenshot` lanjutan, `pindah_tab`, `keluar_aplikasi`, `keluar_fullscreen`) hanya dicatat sebagai percobaan, **tidak dihitung dan tidak membunyikan alarm lagi**.
+  2. Semua pewaktu fokus yang masih menunggu dibatalkan saat screenshot terdeteksi dan saat siswa menekan Kembali.
+  3. Berlaku untuk kedua tombol Kembali (penutup layar penuh dan kotak peringatan lama).
+  4. Isi soal otomatis dibuka lagi 1,5 detik setelah screenshot susulan (tidak tertinggal buram).
+  5. PrtSc yang benar-benar baru setelah jeda berakhir tetap dihitung. Atur lewat `config.js`: `window.CBT_SS_JEDA_DETIK = 15;` (0–120).
+- **Catatan:** pelanggaran yang sudah telanjur tercatat di sesi siswa yang terblokir tidak berubah otomatis; reset lewat menu guru (hapus pelanggaran / buka blokir).
+- File berubah: `kunci-ujian.js` (v10), `config.js`, `index.html`, `sw.js` (cache `hp35`), `README.md`.
+
+---
+
 # v43z42 — Pop up peringatan merah & tegas, tombol tidak lagi "hilang"
 
 - **Perbaikan tombol:** tombol di pop up (LANJUTKAN MENGERJAKAN, PERIKSA KEMBALI, TETAP KIRIM) tidak terlihat sebelum disorot kursor karena warnanya memakai variabel CSS `--a-*` yang hanya terbaca di dalam `.anbk-page`, sedangkan pop up dipasang di luar itu. Sekarang warna tombol ditulis langsung, dan variabel `--a-*` juga didefinisikan global di `:root` sebagai pengaman. Tombol lain (login, Submit, Mulai, Soal sebelumnya/berikutnya, Selesai Tes, Kembali ke Ujian, dll.) sudah diperiksa: semuanya berada di dalam `.anbk-page` atau berwarna sendiri, jadi aman.

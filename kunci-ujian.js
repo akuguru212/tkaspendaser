@@ -14,6 +14,8 @@
    6) WATERMARK IDENTITAS: nama + kelas + jam + kode sesi siswa diulang tipis di SELURUH layar ujian, sehingga setiap
       tangkapan layar / foto layar bisa dilacak ke pemiliknya (penangkal utama untuk screenshot yang tak terdeteksi).
       Matikan: CBT_WATERMARK_IDENTITAS = false; atur kepekatan: CBT_WM_OPACITY (0.03 - 0.4, bawaan 0.06).
+   JEDA SCREENSHOT (v43z43): satu kali PrtSc = satu pelanggaran. Fokus hilang / keluar layar penuh / blur akibat alat tangkap layar
+   Windows setelah itu tidak dihitung lagi (atur lewat config.js: CBT_SS_JEDA_DETIK, bawaan 15 detik).
    CATATAN JUJUR: browser/PWA TIDAK PUNYA event "screenshot", jadi screenshot lewat tombol fisik (Power+Volume) atau aplikasi
    melayang yang tidak mengambil fokus TIDAK bisa dideteksi/diblokir oleh halaman web. Itu hanya bisa dicegah lewat aplikasi
    Android native (FLAG_SECURE -> hasil screenshot hitam) atau Safe Exam Browser. Watermark di atas adalah penangkalnya.
@@ -39,6 +41,7 @@
     kata() { return AntiCheat.modeSurvei ? 'survei' : 'ujian'; },
     // Pelanggaran yang DIHITUNG (sama seperti keluar layar penuh). Satu kejadian = satu hitungan (dijaga AntiCheat._insiden).
     laporHitung(jenis, pesan) {
+      if (jenis !== 'screenshot' && K.dalamJeda()) { K.catat('tombol_terlarang', 'Sisa kejadian screenshot (' + jenis + ') tidak dihitung lagi.'); return false; }
       try {
         if (AntiCheat && typeof AntiCheat.laporPelanggaran === 'function' && !AntiCheat._insiden) { AntiCheat.laporPelanggaran(jenis, pesan); return true; }
       } catch (e) { /* abaikan */ }
@@ -87,8 +90,9 @@
       const a = K.alarmEl; a.muted = true;
       const p = a.play(); if (p && p.then) p.then(() => { a.pause(); a.currentTime = 0; a.muted = false; K.audioSiap = true; }).catch(() => { a.muted = false; });
     },
-    alarmNyala(alasan) {
+    alarmNyala(alasan, dariSS) {
       if (!K.aktif || !K.pesanAktif()) return;
+      if (!dariSS && K.dalamJeda()) return; // sisa kejadian screenshot yang sama: jangan bunyikan alarm lagi
       K.tampilPenutup(alasan, true);
       if (K.alarmOn) return;
       K.alarmOn = true;
@@ -125,6 +129,7 @@
     },
     sembunyiPenutup() { const ov = document.getElementById('kunci-overlay'); if (ov) ov.classList.add('hidden'); document.body.classList.remove('kunci-tutup'); },
     async kembali() {
+      K.akhiriInsidenSS();
       K.bukaKunciAudio();
       if (K.fsDidukung() && !K.adaFs()) { const ok = await K.masukFs(); if (!ok && K.fsDidukung()) { /* gagal: tetap tampilkan penutup */ } }
       K.alarmMati();
@@ -150,12 +155,12 @@
       if (document.hidden) {
         K.curigaiSSDariBlur();
         K.sembunyiIsi(true); K.hiddenT0 = Date.now(); clearTimeout(K.visTimer);
-        const nyala = () => { if (K.aktif && document.hidden) K.alarmNyala('Anda meninggalkan halaman ujian atau layar mati.'); };
+        const nyala = () => { if (K.aktif && document.hidden && !K.dalamJeda()) K.alarmNyala('Anda meninggalkan halaman ujian atau layar mati.'); };
         if (tol <= 0) nyala(); else K.visTimer = setTimeout(nyala, tol);
       } else {
         clearTimeout(K.visTimer);
         const ms = K.hiddenT0 ? Date.now() - K.hiddenT0 : 0; K.hiddenT0 = 0;
-        if (ms > tol && !K.alarmOn) K.alarmNyala('Anda meninggalkan halaman ujian atau layar mati.'); // pewaktu tertahan saat layar mati
+        if (ms > tol && !K.alarmOn && !K.dalamJeda()) K.alarmNyala('Anda meninggalkan halaman ujian atau layar mati.'); // pewaktu tertahan saat layar mati
         else K.sembunyiIsi(false);
         K.lepasWake(); K.minta(); K.periksaFs();
       }
@@ -180,7 +185,7 @@
       K.sembunyiIsi(true);
       clearTimeout(K.blurTimer); K.blurT0 = Date.now();
       K.blurTimer = setTimeout(() => {
-        if (!K.aktif || document.hasFocus()) return;
+        if (!K.aktif || document.hasFocus() || K.dalamJeda()) return;
         if (K.hitungFokus()) K.laporHitung('keluar_aplikasi', 'Fokus layar ujian hilang lebih dari ' + Math.round(K.tol() / 1000) + ' detik (aplikasi/jendela lain di atas ujian).');
         K.alarmNyala('Anda keluar dari aplikasi ujian.');
       }, Math.max(400, K.tol()));
@@ -197,6 +202,7 @@
       if (!K.aktif || !K.pesanAktif() || document.hidden) { K.missFokus = 0; return; }
       if (document.hasFocus()) { K.pernahFokus = true; if (K.missFokus >= 2 && !K.alarmOn) K.sembunyiIsi(false); K.missFokus = 0; return; }
       if (!K.pernahFokus) return;
+      if (K.dalamJeda()) { K.missFokus = 0; return; } // fokus hilang karena alat tangkap layar yang sama: bukan pelanggaran baru
       K.missFokus++;
       if (K.missFokus === 2) K.sembunyiIsi(true);
       if (K.missFokus >= Math.max(4, Math.ceil(K.tol() / 500) + 1) && !K.alarmOn) {
@@ -218,6 +224,18 @@
     //     "menelan" huruf S/angkanya sehingga halaman hanya melihat Win/Cmd+Shift lalu blur).
     // Screenshot lewat tombol fisik HP (Power+Volume / usap tiga jari) TIDAK dapat dideteksi oleh halaman web.
     ssT: 0, metaShiftT: 0, ptrT: 0,
+    // JEDA SETELAH SCREENSHOT (v43z43): satu kali tekan PrtSc = SATU insiden = SATU pelanggaran. Sisa kejadiannya (alat tangkap layar
+    // Windows merebut fokus, keluar layar penuh, jendela blur, pemeriksaan fokus berkala) TIDAK dihitung lagi, juga setelah siswa
+    // menekan "Kembali". Atur: window.CBT_SS_JEDA_DETIK (bawaan 15, 0 - 120).
+    ssAktif: false, jedaSampai: 0,
+    jedaMs() { const d = Number(window.CBT_SS_JEDA_DETIK); return (isNaN(d) ? 15 : Math.max(0, Math.min(120, d))) * 1000; },
+    dalamJeda() { return Date.now() < K.jedaSampai || (K.ssAktif && K.alarmOn); },
+    // Siswa menekan "Kembali" (tombol penutup ATAU tombol peringatan lama): insiden selesai, sisa kejadian diberi jeda 8 detik lagi.
+    akhiriInsidenSS() { if (K.ssAktif || K.dalamJeda()) { K.ssAktif = false; K.jedaSampai = Math.max(K.jedaSampai, Date.now() + 8000); K.bersihkanPewaktu(); } },
+    // Batalkan semua pewaktu fokus/layar yang masih menunggu agar tidak menembak setelah insiden screenshot.
+    bersihkanPewaktu() {
+      clearTimeout(K.blurTimer); clearTimeout(K.visTimer); K.missFokus = 0; K.blurT0 = 0; K.metaShiftT = 0;
+    },
     tombolSS(e) {
       const k = String(e.key || '').toLowerCase(), c = String(e.code || '');
       const meta = !!(e.metaKey || (e.getModifierState && e.getModifierState('OS')));
@@ -227,15 +245,23 @@
       if (e.ctrlKey && e.shiftKey && (c === 'F5' || k === 'f5')) return true;
       return false;
     },
+    // Buka lagi isi soal ~1,5 dtk setelah screenshot bila halaman berfokus & tidak ada alarm (tanpa ini isi soal bisa tetap buram).
+    pulihkanIsi() { setTimeout(() => { if (K.aktif && !document.hidden && document.hasFocus() && !K.alarmOn) K.sembunyiIsi(false); }, 1500); },
     laporSS(tombol) {
-      const t = Date.now(); if (t - K.ssT < 1500) return; K.ssT = t; // keydown + keyup + blur dari satu screenshot = satu kejadian
-      K.sembunyiIsi(true);
+      const t = Date.now();
+      if (K.dalamJeda()) { // masih insiden yang sama (atau sisa kejadiannya): catat saja, TIDAK dihitung & TIDAK berbunyi lagi
+        K.sembunyiIsi(true); K.pulihkanIsi();
+        if (t - K.ssT > 5000) { K.ssT = t; K.catat('tombol_terlarang', 'Screenshot lanjutan pada insiden yang sama (' + tombol + '), tidak dihitung lagi.'); }
+        return;
+      }
+      K.ssT = t; K.ssAktif = true; K.jedaSampai = t + K.jedaMs();
+      K.bersihkanPewaktu();
+      K.sembunyiIsi(true); K.pulihkanIsi();
       // Timpa clipboard berulang kali: Windows menaruh gambar tangkapan ke clipboard sedikit TERLAMBAT setelah tombol ditekan,
       // jadi satu kali timpa saja sering kalah. Gagal diam-diam bila halaman sedang tidak berfokus.
       [0, 150, 500, 1200, 2500].forEach(ms => setTimeout(() => { try { navigator.clipboard && navigator.clipboard.writeText(' ').catch(() => {}); } catch (x) { /* abaikan */ } }, ms));
-      setTimeout(() => { if (!document.hidden && document.hasFocus() && !K.alarmOn) K.sembunyiIsi(false); }, 1500);
       K.laporHitung('screenshot', 'Screenshot terdeteksi (' + tombol + '). Ini dihitung sebagai pelanggaran.');
-      K.alarmNyala('Screenshot dilarang selama ' + K.kata() + '. Percobaan ini dicatat sebagai pelanggaran.');
+      K.alarmNyala('Screenshot dilarang selama ' + K.kata() + '. Percobaan ini dicatat sebagai pelanggaran.', true);
     },
     // Jendela baru saja kehilangan fokus / disembunyikan: apakah segera setelah Win/Cmd+Shift? Bila ya = alat tangkap layar OS.
     curigaiSSDariBlur() {
@@ -344,7 +370,7 @@
       ['pointermove', 'pointerdown', 'mousemove', 'mousedown', 'wheel', 'touchstart'].forEach(t => document.removeEventListener(t, K.onPtr, { capture: true }));
       ['dragstart', 'selectstart', 'copy', 'cut', 'contextmenu'].forEach(t => document.removeEventListener(t, K.blokir, true));
       window.removeEventListener('popstate', K.onPop);
-      K.pernahFs = false;
+      K.pernahFs = false; K.ssAktif = false; K.jedaSampai = 0;
     }
   };
 
@@ -352,6 +378,19 @@
   const aktifAsli = AntiCheat.aktifkan, matiAsli = AntiCheat.nonaktifkan;
   AntiCheat.aktifkan = function () { const r = aktifAsli.apply(this, arguments); if (!AntiCheat.aktif) return r; /* anti-curang dinonaktifkan guru untuk ujian ini */ try { K.on(); } catch (e) { console.warn('KunciUjian', e); } return r; };
   AntiCheat.nonaktifkan = function () { try { K.off(); } catch (e) { /* abaikan */ } return matiAsli.apply(this, arguments); };
+  // Pintu tunggal: pelanggaran yang timbul dari sisa kejadian screenshot (pindah_tab / keluar_aplikasi / keluar_fullscreen)
+  // dari app.js juga diabaikan selama jeda, jadi satu PrtSc tidak pernah dihitung lebih dari satu kali.
+  const laporAsli = AntiCheat.laporPelanggaran;
+  AntiCheat.laporPelanggaran = function (jenis) {
+    if (K.aktif && jenis !== 'screenshot' && K.dalamJeda()) { K.catat('tombol_terlarang', 'Sisa kejadian screenshot (' + jenis + ') tidak dihitung lagi.'); return Promise.resolve(); }
+    return laporAsli.apply(this, arguments);
+  };
+  try { // tombol "Kembali ke Ujian" di kotak peringatan lama (app.js) juga mengakhiri insiden screenshot
+    if (typeof Siswa !== 'undefined' && Siswa.kembaliKeUjian && !Siswa._kjBungkus) {
+      const kuAsli = Siswa.kembaliKeUjian; Siswa._kjBungkus = true;
+      Siswa.kembaliKeUjian = function () { try { K.akhiriInsidenSS(); } catch (e) { /* abaikan */ } return kuAsli.apply(this, arguments); };
+    }
+  } catch (e) { /* abaikan */ }
   window.KunciUjian = K;
 })();
 
