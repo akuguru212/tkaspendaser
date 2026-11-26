@@ -33,7 +33,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
-<link rel="stylesheet" href="anbk.css?v=66">
+<link rel="stylesheet" href="anbk.css?v=67">
 <link rel="stylesheet" href="mobile.css?v=7">
 <!-- Font Awesome: ikon sidebar & tombol (gaya dashboard modern) -->
 <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
@@ -387,10 +387,9 @@
     <!-- ---------- TAB: KELOLA UJIAN ---------- -->
     <section id="tab-ujian" class="hidden">
       <h2>Kelola Ujian</h2>
-      <p class="subtitle">Atur durasi, jadwal token, toleransi keterlambatan, dan batas pelanggaran anti-cheat.</p>
+      <p class="subtitle">Atur durasi, jadwal token, toleransi keterlambatan, dan batas pelanggaran anti-cheat. Tombol <strong>Sembunyikan Token</strong> di setiap baris ujian membuat token <em>ujian itu saja</em> tidak tampil di layar siswa, sehingga hanya guru yang bisa memberikannya. Pengaturannya terpisah untuk tiap ujian.</p>
       <div class="panel">
         <div class="toolbar">
-          <div></div>
           <button type="button" class="secondary btn-segarkan" title="Ambil data terbaru tanpa mengubah pilihan ujian &amp; kelas" onclick="Guru.segarkan('tab-ujian', this)"><i class="fa-solid fa-rotate"></i> Segarkan</button><span class="segar-info" id="segar-info-tab-ujian" aria-live="polite"></span>
           <button class="accent" onclick="UI.bukaModalUjian()">+ Buat Ujian</button>
         </div>
@@ -761,7 +760,6 @@
               <select id="filter-kelas-siswa" onchange="Guru.renderTabelSiswa()" style="width:auto;flex:1"><option value="">Semua Kelas</option></select>
             </label>
             <button class="accent small" onclick="Anbk.bukaKartuLogin()" title="Cetak Kartu Login peserta (logo, QR, NISN, TTL, username, password) sesuai Filter Kelas">🪪 Cetak Kartu Login</button>
-            <label class="filter-cek" style="margin:0" title="Jika aktif, token ujian yang sedang dibuka tampil di layar peserta (seperti simulasi TKA). Matikan untuk ujian sungguhan."><input type="checkbox" id="opt-tampil-token" onchange="Anbk.simpanTampilToken(this.checked)"> Tampilkan token di layar peserta</label>
             <button class="secondary small" onclick="Guru.unduhAkunSiswa()" title="Unduh username & password siswa (.xlsx), satu sheet per kelas. Ikuti Filter Kelas: pilih satu kelas untuk mengunduh kelas itu saja.">⬇ Unduh Akun (.xlsx)</button>
             <button class="secondary small" onclick="Guru.resetDeviceKelas('filter-kelas-siswa')" title="Lepas kunci perangkat semua siswa di kelas yang sedang dipilih pada Filter Kelas">🔓 Lepas Semua Perangkat</button>
             <button class="danger small" onclick="Guru.hapusKelas()" title="Hapus semua siswa di kelas yang sedang dipilih pada Filter Kelas">🗑 Hapus Kelas Ini</button>
@@ -1304,6 +1302,14 @@
     <div class="field">
       <label><input type="checkbox" id="ujian-tampil-pembahasan" checked style="width:auto"> Tampilkan pembahasan soal pada detail jawaban <span class="subtitle" style="display:inline">— cocok untuk latihan; matikan untuk ulangan. Hanya berlaku bila detail jawaban diaktifkan.</span></label>
     </div>
+    <div class="field">
+      <label for="ujian-tampil-token">Token di layar siswa</label>
+      <select id="ujian-tampil-token">
+        <option value="1">Tampilkan — token ujian ini terlihat di layar peserta (cocok untuk latihan/simulasi)</option>
+        <option value="0">Sembunyikan — token hanya diberikan guru/pengawas (cocok untuk ujian sungguhan)</option>
+      </select>
+      <p style="font-size:.8rem;color:var(--c-muted);margin:.35rem 0 0">Berlaku hanya untuk ujian ini. Bisa diubah cepat dari tombol <strong>🔒 Sembunyikan Token</strong> di daftar ujian.</p>
+    </div>
     <div class="field" id="field-token-awal">
       <label for="ujian-token-awal">Token berlaku untuk (ujian baru)</label>
       <select id="ujian-token-awal">
@@ -1652,7 +1658,7 @@
 
 <script src="config.js"></script>
 <script src="app.js?v=78"></script>
-<script src="anbk.js?v=65"></script>
+<script src="anbk.js?v=66"></script>
 <script src="survei.js?v=16"></script>
 <script src="kunci-ujian.js?v=6"></script>
 <script src="leaderboard.js?v=1"></script>

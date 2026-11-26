@@ -87,6 +87,14 @@ const Anbk = (function () {
       const l = res && res.ok && res.ujian && res.ujian.length ? res.ujian[0] : null;
       $('kd-token-tampil').textContent = (l && l.token) ? l.token : '------';
       $('kd-mata').textContent = l ? l.judul : '-';
+      // Guru menyembunyikan token: tombol Salin disembunyikan dan siswa diberi petunjuk meminta token ke guru.
+      const sembunyi = !!(l && l.tampil === false); // per ujian: ujian ini token-nya disembunyikan guru
+      const salin = $('kd-salin'); if (salin) salin.style.display = sembunyi ? 'none' : '';
+      let h = $('kd-token-hint');
+      if (sembunyi) {
+        if (!h) { h = document.createElement('div'); h.id = 'kd-token-hint'; h.style.cssText = 'font-size:.82rem;color:#b45309;margin-top:.45rem;font-weight:600'; const row = document.querySelector('.anbk-token-row'); if (row) row.insertAdjacentElement('afterend', h); }
+        if (h) h.textContent = 'Token tidak ditampilkan. Mintalah token kepada guru/pengawas.';
+      } else if (h) h.remove();
     } catch (e) { /* abaikan */ }
     if (btn) btn.classList.remove('is-disabled');
   }
@@ -435,15 +443,6 @@ const Anbk = (function () {
     Guru._cetakArea_(html, 'Kartu Login' + (kelas ? ' ' + kelas : '')).then(() => {});
     const a = $('cetak-area'); if (a) a.classList.add('kl-area');
   }
-  async function simpanTampilToken(aktif) {
-    const res = await api('simpanPengaturanTokenSiswa', { aktif });
-    if (res && res.ok) toast(aktif ? 'Token tampil di layar peserta.' : 'Token disembunyikan dari layar peserta.', 'success');
-    else toast('Gagal menyimpan pengaturan.', 'error');
-  }
-  async function muatPengaturanToken() {
-    try { const r = await api('getPengaturanTokenSiswa', {}); const c = $('opt-tampil-token'); if (c && r && r.ok) c.checked = !!r.aktif; } catch (e) { /* abaikan */ }
-  }
-
   // ---------------- impor data siswa (sesuai Kartu Login) ----------------
   const norm = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]/g, '');
   const KOL = {
@@ -508,8 +507,6 @@ const Anbk = (function () {
     };
     reader.readAsBinaryString(file);
   };
-  const _muatSiswa = Guru.muatDaftarSiswa;
-  Guru.muatDaftarSiswa = async function () { const r = await _muatSiswa.apply(Guru, arguments); muatPengaturanToken(); return r; };
 
   // ---------------- awal: #guru dan #u=..&p=.. (hasil memindai QR kartu) ----------------
   window.addEventListener('DOMContentLoaded', () => {
@@ -524,6 +521,6 @@ const Anbk = (function () {
   });
 
   return { setUser, isoTgl, tglPanjang, tampilKonfirmasiData, segarkanToken, salinTokenAktif, tampilKonfirmasiTes, kembaliKeKonfirmasiData, menuUser, toggleSandi, pilihPortal,
-    bukaDaftar, bukaInfo, muatUlangSoal, tutupModal, renderSoal, qrMatrix, qrSvg, bukaKartuLogin, cetakKartuLogin, simpanTampilToken };
+    bukaDaftar, bukaInfo, muatUlangSoal, tutupModal, renderSoal, qrMatrix, qrSvg, bukaKartuLogin, cetakKartuLogin };
 })();
 window.Anbk = Anbk;

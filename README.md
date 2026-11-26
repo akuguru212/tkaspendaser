@@ -1,3 +1,24 @@
+# v43z27 — Sembunyikan / Tampilkan Token **per ujian** (bukan global)
+
+- **Pengaturan token kini milik tiap ujian.** Setiap baris di **Kelola Ujian** punya tombol sendiri: **🔒 Sembunyikan Token** / **👁 Tampilkan Token**, plus label status di bawah token (*👁 Tampil di layar siswa* / *🔒 Disembunyikan*). Mengubah satu ujian tidak mempengaruhi ujian lain.
+- **Juga ada di form Buat/Ubah Ujian:** pilihan *Token di layar siswa* (Tampilkan / Sembunyikan). Ujian baru default Tampilkan.
+- **Tombol global dihapus:** tombol "Sembunyikan Token dari Layar Siswa" di atas tabel Kelola Ujian dan kotak centang "Tampilkan token di layar peserta" di Data Siswa tidak ada lagi.
+- **Server tetap tidak mengirim token** bila disembunyikan (dicek per ujian di `getTokenAktif`), tombol Salin di layar siswa hilang dan muncul petunjuk "Mintalah token kepada guru/pengawas".
+- **Kompatibilitas data lama:** kolom baru **`tampil_token`** di sheet **Ujian** (dibuat otomatis oleh skema). Kosong = ujian lama yang belum diatur, mengikuti pengaturan global lama (default Tampil), jadi perilaku ujian lama tidak berubah sampai guru mengatur tombolnya. `1` = tampil, `0` = disembunyikan.
+- Aksi server baru: `setTampilTokenUjian`.
+- **Pasang:** ganti semua file. **Mode Server:** tempel ulang `Code.gs` lalu *Deploy > Manage deployments > New version*.
+- File berubah: `Code.gs`, `app.js`, `anbk.js`, `anbk.css`, `index.html`, `sw.js`, `README.md`.
+
+---
+
+# v43z26 — Tombol "Sembunyikan Token dari Layar Siswa" di Kelola Ujian
+
+- **Tombol baru** di Portal Guru > Kelola Ujian: **Sembunyikan Token dari Layar Siswa** / **Tampilkan Token di Layar Siswa**, dengan keterangan status (TAMPIL / DISEMBUNYIKAN).
+- Saat disembunyikan: token **tidak dikirim server** ke siswa (bukan hanya disamarkan), tombol Salin disembunyikan, dan layar siswa menampilkan petunjuk "Mintalah token kepada guru/pengawas". Token hanya bisa diberikan oleh guru.
+- Memakai pengaturan yang sama dengan kotak centang "Tampilkan token di layar peserta" di Data Siswa (keduanya selalu sinkron). Berlaku untuk semua ujian.
+- Bila gagal tersimpan (internet putus), tombol kembali ke status sebelumnya dan muncul pesan galat.
+- File berubah: `anbk.js`, `anbk.css`, `index.html`, `sw.js`, `README.md`. `Code.gs` tidak berubah (aksi server sudah ada).
+
 # v43z25 — Menu "Rekap Keikutsertaan" (siapa yang sudah / belum ikut simulasi) + unduh PDF
 
 - **Menu baru** di Portal Guru: **Rekap Keikutsertaan** (di bawah Rekap Nilai).

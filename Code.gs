@@ -121,7 +121,7 @@ var SCHEMA = {
   // soal, mis. untuk soal listening/video) ditambahkan lewat mekanisme skema otomatis
   // yang sama -- lihat README bag. "Menambah kolom baru" & tampilan "Kelola Soal".
   BankSoal: ['id', 'guru_id', 'kategori', 'subkategori', 'tipe', 'topik', 'pertanyaan', 'gambar', 'audio', 'video', 'opsi_json', 'kunci_json', 'bobot', 'tingkat_kesulitan', 'pembahasan', 'status', 'dibuat'],
-  Ujian: ['id', 'guru_id', 'judul', 'kategori', 'subkategori', 'soal_ids', 'durasi_menit', 'token', 'mulai', 'selesai', 'toleransi_menit', 'max_pelanggaran', 'acak_soal', 'acak_opsi', 'nilai_lulus', 'status', 'instruksi_remedial', 'pesan_nilai', 'tampil_detail', 'tampil_pembahasan', 'bukti_orek', 'survei', 'survei_tampil', 'survei_butir', 'token_kelas'],
+  Ujian: ['id', 'guru_id', 'judul', 'kategori', 'subkategori', 'soal_ids', 'durasi_menit', 'token', 'mulai', 'selesai', 'toleransi_menit', 'max_pelanggaran', 'acak_soal', 'acak_opsi', 'nilai_lulus', 'status', 'instruksi_remedial', 'pesan_nilai', 'tampil_detail', 'tampil_pembahasan', 'bukti_orek', 'survei', 'survei_tampil', 'survei_butir', 'token_kelas', 'tampil_token'],
   // 'tambahan_detik' dipakai fitur "Pemantauan Ujian" (tombol "Tambah Waktu") --
   // jumlah detik ekstra yang diberikan guru ke satu sesi siswa tertentu, di luar
   // durasi_menit standar ujian. Kosong/0 berarti tidak ada tambahan.
@@ -333,6 +333,7 @@ function route_(action, data) {
     case 'uploadBuktiOrek': return actionUploadBuktiOrek_(data); // kunci dipegang sebentar di dalam (hanya saat menulis baris)
     case 'getBuktiOrek': return actionGetBuktiOrek_(data);
     case 'setTokenKelas': return withLock_(lock, function () { return actionSetTokenKelas_(data); });
+    case 'setTampilTokenUjian': return withLock_(lock, function () { return actionSetTampilTokenUjian_(data); });
     case 'getPaketSurvei': return actionGetPaketSurvei_(data);
     case 'simpanPaketSurvei': return withLock_(lock, function () { return actionSimpanPaketSurvei_(data); });
     case 'hapusPaketSurvei': return withLock_(lock, function () { return actionHapusPaketSurvei_(data); });
@@ -2413,9 +2414,24 @@ function actionSimpanPengaturanTokenSiswa_(data) {
   CacheService.getScriptCache().remove('tampil_token_siswa_c');
   return jsonOut_({ ok: true, aktif: aktif });
 }
-// Daftar ujian yang sedang dibuka. Token HANYA disertakan bila guru mengaktifkan opsi di atas.
+// Tampil/sembunyikan token di layar peserta -- PER UJIAN (kolom Ujian.tampil_token).
+// '' (belum pernah diatur) = ikut pengaturan lama (tampil_token_siswa, default Tampil);
+// '1'/'true' = token tampil; '0'/'false' = token disembunyikan (hanya diberikan guru/pengawas).
+function tokenTampilUjian_(u) {
+  var v = (u && u.tampil_token) == null ? '' : String(u.tampil_token).trim().toLowerCase();
+  if (v === '') return tokenSiswaAktif_();
+  return !(v === '0' || v === 'false');
+}
+function actionSetTampilTokenUjian_(data) {
+  var idx = findRowIndexById_(SHEET.UJIAN, data.ujianId);
+  if (idx < 1) return jsonOut_({ ok: false, error: 'Ujian tidak ditemukan.' });
+  var tampil = data.tampil === true || String(data.tampil).toLowerCase() === 'true' || String(data.tampil) === '1';
+  updateRowByFields_(SHEET.UJIAN, headersOf_(SHEET.UJIAN), idx, { tampil_token: tampil ? '1' : '0' });
+  try { CacheService.getScriptCache().remove('tampil_token_siswa_c'); } catch (e) { }
+  return jsonOut_({ ok: true, tampil: tampil });
+}
+// Daftar ujian yang sedang dibuka. Token HANYA disertakan untuk ujian yang pengaturan "tampil token"-nya aktif.
 function actionGetTokenAktif_(data) {
-  var tampil = tokenSiswaAktif_();
   var now = new Date();
   var list = readAllCached_(SHEET.UJIAN).filter(function (u) {
     if (u.status !== 'aktif') return false;
@@ -2423,8 +2439,8 @@ function actionGetTokenAktif_(data) {
     var batas = u.selesai ? new Date(new Date(u.selesai).getTime() + (Number(u.toleransi_menit) || 0) * 60000) : null;
     return !(batas && now > batas);
   }).filter(function (u) { return !data.siswaId || cekIzinKelas_(u, data.siswaId).ok; }) // kelas yang belum diaktifkan tidak melihat token
-    .map(function (u) { return { judul: u.judul, token: tampil ? u.token : '' }; });
-  return jsonOut_({ ok: true, tampil: tampil, ujian: list });
+    .map(function (u) { var t = tokenTampilUjian_(u); return { judul: u.judul, token: t ? u.token : '', tampil: t }; });
+  return jsonOut_({ ok: true, tampil: list.length ? list[0].tampil : tokenSiswaAktif_(), ujian: list });
 }
 
 function getOrCreateFolder_(name) {

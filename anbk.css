@@ -470,3 +470,8 @@ html[data-skin="anbk"] #guru-portal .dash-hero, html[data-skin="anbk"] #guru-por
 #btn-muat-ulang .anbk-ic { display: inline-block; }
 #btn-muat-ulang.memuat .anbk-ic { animation: anbk-putar .8s linear infinite; }
 @keyframes anbk-putar { to { transform: rotate(360deg); } }
+
+/* Kelola Ujian: status token per ujian (tampil / disembunyikan di layar siswa) */
+.token-siswa-status { font-size: .8rem; font-weight: 700; padding: .15rem .6rem; border-radius: 999px; }
+.token-siswa-status.tampil { background: #fff3d6; color: #a76705; }
+.token-siswa-status.sembunyi { background: #dff5e9; color: #1b7f53; }

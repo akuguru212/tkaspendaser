@@ -197,6 +197,12 @@ function kelasAktifUjian_(u) {
   try { const arr = JSON.parse(raw); if (Array.isArray(arr)) return arr.map(normKelas_); } catch (e) { }
   return null;
 }
+// Tampil/sembunyikan token di layar peserta -- per ujian. '' = belum diatur: ikut pengaturan lama (default tampil).
+function tokenTampilUjian_(u, bawaan) {
+  const v = String((u && u.tampil_token) == null ? '' : u.tampil_token).trim().toLowerCase();
+  if (v === '') return bawaan !== false;
+  return !(v === '0' || v === 'false');
+}
 // Status ujian untuk guru: 'nonaktif' (dimatikan guru) | 'terjadwal' (belum dibuka) | 'selesai' (lewat batas) | 'berlangsung'.
 // Aturannya sama dengan pengecekan token siswa (jadwal + toleransi keterlambatan).
 function statusUjian_(u) {
@@ -2908,15 +2914,22 @@ const LocalBackend = (function () {
         return { ok: true, aktif: D.config.tampilTokenSiswa };
       }
       case 'getTokenAktif': {
-        const tampil = D.config.tampilTokenSiswa !== false;
+        const bawaan = D.config.tampilTokenSiswa !== false;
         const now = new Date();
         const list = D.ujian.filter(u => {
           if (u.status !== 'aktif') return false;
           if (u.mulai && now < new Date(u.mulai)) return false;
           const batas = u.selesai ? new Date(new Date(u.selesai).getTime() + (Number(u.toleransi_menit) || 0) * 60000) : null;
           return !(batas && now > batas);
-        }).filter(u => !data.siswaId || izinKelasLokal_(u, data.siswaId).ok).map(u => ({ judul: u.judul, token: tampil ? u.token : '' }));
-        return { ok: true, tampil, ujian: list };
+        }).filter(u => !data.siswaId || izinKelasLokal_(u, data.siswaId).ok).map(u => { const t = tokenTampilUjian_(u, bawaan); return { judul: u.judul, token: t ? u.token : '', tampil: t }; });
+        return { ok: true, tampil: list.length ? list[0].tampil : bawaan, ujian: list };
+      }
+      case 'setTampilTokenUjian': {
+        const ix = cariIdx(D.ujian, data.ujianId);
+        if (ix < 0) return { ok: false, error: 'Ujian tidak ditemukan.' };
+        const tampil = data.tampil === true || String(data.tampil).toLowerCase() === 'true' || String(data.tampil) === '1';
+        D.ujian[ix].tampil_token = tampil ? '1' : '0'; simpan();
+        return { ok: true, tampil };
       }
       case 'getPengaturanLock': {
         return { ok: true, aktif: D.config.deviceLockAktif !== false };
@@ -4361,6 +4374,7 @@ const UI = {
     document.getElementById('ujian-bukti-orek').value = ujian && ujian.bukti_orek ? ujian.bukti_orek : '';
     document.getElementById('ujian-survei').value = ujian ? (ujian.survei || '') : 'auto'; // ujian baru: otomatis (Numerasi -> Survei Karakter, Literasi -> Sulingjar)
     document.getElementById('ujian-survei-tampil').checked = ujian ? (String(ujian.survei_tampil) === 'true') : true; // ujian baru: nilai survei tampil ke siswa (latihan)
+    { const tt = document.getElementById('ujian-tampil-token'); if (tt) tt.value = (ujian ? tokenTampilUjian_(ujian) : true) ? '1' : '0'; }
     { const fa = document.getElementById('field-token-awal'); if (fa) fa.style.display = ujian ? 'none' : ''; const ta = document.getElementById('ujian-token-awal'); if (ta) ta.value = ''; }
     Survei.setDraft(ujian ? (ujian.survei_butir || '') : '');
     if (surveiAda_('muatPaket')) Promise.resolve(Survei.muatPaket()).then(() => Survei.statusForm()).catch(() => { });
@@ -5623,7 +5637,8 @@ const Guru = {
         return `
         <tr${mati ? ' style="opacity:.6"' : ''}>
           <td><strong>${escapeHtml_(u.judul)}</strong><br><span style="color:var(--c-muted);font-size:.78rem">${labelKategori(u.kategori)}${u.subkategori ? ' • ' + escapeHtml_(u.subkategori) : ''}</span></td>
-          <td style="white-space:nowrap"><code style="font-size:1rem;font-weight:700${mati ? ';text-decoration:line-through' : ''}">${u.token}</code> <button type="button" class="btn-salin-token" title="Salin token" aria-label="Salin token ${u.token}" onclick="event.stopPropagation();salinToken('${u.token}', this)">📋</button></td>
+          <td style="white-space:nowrap"><code style="font-size:1rem;font-weight:700${mati ? ';text-decoration:line-through' : ''}">${u.token}</code> <button type="button" class="btn-salin-token" title="Salin token" aria-label="Salin token ${u.token}" onclick="event.stopPropagation();salinToken('${u.token}', this)">📋</button>
+            <br><span class="token-siswa-status ${tokenTampilUjian_(u) ? 'tampil' : 'sembunyi'}" title="${tokenTampilUjian_(u) ? 'Token tampil di layar siswa untuk ujian ini' : 'Token disembunyikan dari layar siswa untuk ujian ini'}">${tokenTampilUjian_(u) ? '👁 Tampil di layar siswa' : '🔒 Disembunyikan'}</span></td>
           <td id="tk-ringkas-${u.id}" style="font-size:.8rem;max-width:170px">${ringkasTokenKelas_(u)}</td>
           <td>${u.durasi_menit} menit</td>
           <td style="font-size:.8rem">${formatTanggal(u.mulai)}<br>s/d ${formatTanggal(u.selesai)}</td>
@@ -5634,11 +5649,21 @@ const Guru = {
               ? `<button class="accent small" onclick="Guru.ubahStatusUjian('${u.id}', true)" title="Aktifkan kembali: token bisa dipakai siswa lagi">▶ Aktifkan</button>`
               : `<button class="secondary small" onclick="Guru.ubahStatusUjian('${u.id}', false)" title="Nonaktifkan: token tidak bisa dipakai & tidak tampil di layar peserta">⏸ Nonaktifkan</button>`}
             <button class="accent small" onclick="Guru.bukaTokenKelas('${u.id}')" title="Aktifkan / nonaktifkan token per kelas">🔑 Token Kelas</button>
+            <button class="${tokenTampilUjian_(u) ? 'secondary' : 'accent'} small" onclick="Guru.ubahTampilToken('${u.id}', ${!tokenTampilUjian_(u)})" title="${tokenTampilUjian_(u) ? 'Sembunyikan token ujian ini dari layar siswa (hanya diberikan guru/pengawas)' : 'Tampilkan token ujian ini di layar siswa'}">${tokenTampilUjian_(u) ? '🔒 Sembunyikan Token' : '👁 Tampilkan Token'}</button>
             <button class="secondary small" onclick='Guru.bukaEditUjian("${u.id}")'>Ubah</button>
             <button class="danger small" onclick="Guru.hapusUjian('${u.id}')">Hapus</button>
           </td>
         </tr>`;
       }).join('') + `</tbody></table>`;
+  },
+
+  // Tampilkan / sembunyikan token di layar siswa untuk SATU ujian (tidak mempengaruhi ujian lain).
+  async ubahTampilToken(id, tampil) {
+    const u = (state.guru.ujianList || []).find(x => x.id === id); if (!u) return;
+    const res = await api('setTampilTokenUjian', { ujianId: id, tampil });
+    if (!res || !res.ok) { toast('Gagal menyimpan pengaturan token: ' + ((res && res.error) || 'tidak ada respons'), 'error'); return; }
+    await Guru.muatDaftarUjian();
+    toast(tampil ? `Token ujian "${u.judul}" tampil di layar siswa.` : `Token ujian "${u.judul}" disembunyikan dari layar siswa. Berikan token secara langsung.`, 'success');
   },
 
   // Aktifkan / nonaktifkan satu ujian. Ujian nonaktif: tokennya ditolak, tidak tampil di layar peserta, dan siswa tidak bisa
@@ -5777,6 +5802,7 @@ const Guru = {
       ujian.tampil_detail = document.getElementById('ujian-tampil-detail').checked;
       ujian.tampil_pembahasan = document.getElementById('ujian-tampil-pembahasan').checked;
       if (!ujian.id) ujian.token_kelas = (document.getElementById('ujian-token-awal') || {}).value === 'kunci' ? '[]' : ''; // ujian baru: semua kelas, atau dikunci dulu
+      { const tt = document.getElementById('ujian-tampil-token'); if (tt) ujian.tampil_token = tt.value === '0' ? '0' : '1'; } // tampil/sembunyikan token di layar siswa: per ujian
       ujian.bukti_orek = document.getElementById('ujian-bukti-orek').value; // '' | 'wajib' | 'opsional'
       ujian.survei = document.getElementById('ujian-survei').value; // '' | 'auto' | 'karakter' | 'sulingjar'
       ujian.survei_tampil = document.getElementById('ujian-survei-tampil').checked;
