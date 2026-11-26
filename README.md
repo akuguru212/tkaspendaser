@@ -1,3 +1,16 @@
+# v43z25 — Menu "Rekap Keikutsertaan" (siapa yang sudah / belum ikut simulasi) + unduh PDF
+
+- **Menu baru** di Portal Guru: **Rekap Keikutsertaan** (di bawah Rekap Nilai).
+- **Pilih simulasi:** satu ujian, atau **Semua simulasi** (gabungan seluruh ujian).
+- **Pilih kelas:** satu kelas, atau **Semua Kelas** (seluruh siswa).
+- **Tampilkan:** Belum ikut | Sudah ikut | Semua siswa, plus kotak cari nama.
+- **Ringkasan:** jumlah siswa, sudah/belum ikut, persentase partisipasi, dan tabel ringkasan per kelas.
+- Mode **Semua simulasi:** tiap siswa menampilkan jumlah ujian yang diikuti (mis. 2 / 3) dan **daftar simulasi yang terlewat**.
+- **Unduh PDF:** hasil sesuai pilihan yang tampil (kop sekolah, ringkasan, daftar dikelompokkan per kelas, nomor halaman). Bila pustaka PDF gagal dimuat (internet lemah), otomatis memakai jendela cetak: pilih "Simpan sebagai PDF".
+- "Sudah ikut" = siswa sudah **menyelesaikan** ujian itu (sama dengan data Rekap Nilai). Siswa yang masih mengerjakan dihitung belum ikut.
+- File baru: `rekap-ikut.js`. File berubah: `index.html`, `sw.js`. `Code.gs` tidak berubah (memakai aksi server yang sudah ada).
+- Paket ini juga memuat tombol Muat Ulang soal dari v43z24.
+
 # v43z24 — Tombol "Muat Ulang" soal di layar ujian siswa
 
 - **Masalah:** di jaringan lemah, gambar pada satu soal kadang belum tampil (muncul kotak "Gambar tidak dapat dimuat"), dan siswa tidak punya cara memuat ulang tanpa me-refresh browser.

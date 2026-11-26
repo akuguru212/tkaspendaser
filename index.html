@@ -155,6 +155,7 @@
       <button class="nav-tab" data-tab="tab-bank-soal" onclick="UI.gantiTabGuru('tab-bank-soal')"><i class="fa-solid fa-layer-group nav-ico"></i><span>Bank Soal</span></button>
       <button class="nav-tab" data-tab="tab-ujian" onclick="UI.gantiTabGuru('tab-ujian')"><i class="fa-solid fa-calendar-days nav-ico"></i><span>Kelola Ujian</span></button>
       <button class="nav-tab" data-tab="tab-rekap" onclick="UI.gantiTabGuru('tab-rekap')"><i class="fa-solid fa-clipboard-check nav-ico"></i><span>Rekap Nilai</span></button>
+      <button class="nav-tab" data-tab="tab-rekap-ikut" onclick="UI.gantiTabGuru('tab-rekap-ikut')"><i class="fa-solid fa-user-check nav-ico"></i><span>Rekap Keikutsertaan</span></button>
       <button class="nav-tab" data-tab="tab-leaderboard" onclick="UI.gantiTabGuru('tab-leaderboard')"><i class="fa-solid fa-trophy nav-ico"></i><span>Leaderboard</span></button>
       <button class="nav-tab" data-tab="tab-lb-survei" onclick="UI.gantiTabGuru('tab-lb-survei')"><i class="fa-solid fa-ranking-star nav-ico"></i><span>Leaderboard Survei</span></button>
       <button class="nav-tab" data-tab="tab-survei" onclick="UI.gantiTabGuru('tab-survei')"><i class="fa-solid fa-square-poll-vertical nav-ico"></i><span>Hasil Survei</span></button>
@@ -425,6 +426,34 @@
     </section>
 
     <!-- ---------- TAB: LEADERBOARD (peringkat Literasi + Numerasi) ---------- -->
+    <!-- ---------- TAB: REKAP KEIKUTSERTAAN (siapa yang sudah / belum ikut simulasi) ---------- -->
+    <section id="tab-rekap-ikut" class="hidden am-scope">
+      <h2>Rekap Keikutsertaan</h2>
+      <p class="subtitle">Lihat siapa yang <strong>sudah</strong> dan <strong>belum</strong> mengikuti simulasi/ujian. Pilih satu simulasi atau <em>Semua simulasi</em>, lalu pilih kelas (atau semua kelas), dan unduh hasilnya sebagai <strong>PDF</strong>. "Sudah ikut" berarti siswa sudah menyelesaikan ujian itu.</p>
+      <div class="panel">
+        <div class="toolbar">
+          <div class="toolbar-actions" style="align-items:center">
+            <button type="button" class="secondary btn-segarkan" id="ri-segarkan" title="Ambil data terbaru" onclick="RekapIkut.muat(this)"><i class="fa-solid fa-rotate"></i> Segarkan</button><span class="segar-info" id="segar-info-tab-rekap-ikut" aria-live="polite"></span><span class="segar-info" id="ri-info" aria-live="polite"></span>
+          </div>
+          <div class="toolbar-actions">
+            <button type="button" class="secondary" onclick="RekapIkut.unduhPdf()" title="Unduh rekap sesuai pilihan yang tampil sebagai PDF"><i class="fa-solid fa-file-pdf"></i> Unduh PDF</button>
+          </div>
+        </div>
+        <div class="am-label">Simulasi / Ujian</div>
+        <div class="filter-bar" style="margin-bottom:.4rem"><select id="ri-ujian" onchange="RekapIkut.pilihUjian(this.value)" title="Pilih simulasi"></select></div>
+        <div class="am-label">Kelas</div>
+        <div class="am-chips" id="ri-chips-kelas"></div>
+        <div class="filter-bar" style="margin-bottom:0">
+          <select id="ri-status" onchange="RekapIkut.pilihStatus(this.value)" title="Tampilkan siswa"><option value="belum">Tampilkan: Belum ikut</option><option value="sudah">Tampilkan: Sudah ikut</option><option value="semua">Tampilkan: Semua siswa</option></select>
+          <input type="search" id="ri-cari" placeholder="🔍 Cari nama siswa..." oninput="RekapIkut.render()" autocomplete="off">
+          <span class="filter-info" id="ri-info-hasil"></span>
+        </div>
+      </div>
+      <div id="ri-stats" class="ri-stats"></div>
+      <div id="ri-kelas"></div>
+      <div class="panel"><div id="ri-tabel">Memuat Rekap Keikutsertaan... Jika tidak muncul, pastikan berkas <code>rekap-ikut.js</code> ikut diunggah ke repositori.</div></div>
+    </section>
+
     <section id="tab-leaderboard" class="hidden lb-root">
       <h2>Leaderboard</h2>
       <p class="subtitle">Peringkat siswa berdasarkan nilai <strong>Literasi</strong> dan <strong>Numerasi</strong>. Pilih <strong>Tes 1, Tes 2, ...</strong> atau <strong>Rata-rata Seluruh Tes</strong>, lalu pilih satu kelas atau seluruh kelas. Nilai Akhir = rata-rata Literasi dan Numerasi.</p>
@@ -1630,6 +1659,7 @@
 <script src="leaderboard-survei.js?v=1"></script>
 <script src="analisis-materi.js?v=4"></script>
 <script src="perkembangan.js?v=2"></script>
+<script src="rekap-ikut.js?v=1"></script>
 <script src="laporan-pdf.js?v=1"></script>
 <script src="portal-siswa.js?v=4"></script>
 <script src="foto-profil.js?v=2"></script>
