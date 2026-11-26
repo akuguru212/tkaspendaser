@@ -485,15 +485,10 @@ html[data-skin="anbk"] #guru-portal .dash-hero, html[data-skin="anbk"] #guru-por
 #survei-screen .sv-mx-wrap .sv-mx thead { background: transparent; }
 #survei-screen .sv-mx-wrap .sv-mx thead th { color: #fff; border-bottom: 0; border-left: 1px solid rgba(255,255,255,.28); letter-spacing: .1px; text-shadow: 0 1px 1px rgba(0,0,0,.18); vertical-align: middle; }
 #survei-screen .sv-mx-wrap .sv-mx thead th:first-child { border-left: 0; }
-#survei-screen .sv-mx-wrap .sv-mx thead th.sv-mx-t { background: linear-gradient(180deg, #2c5ca8, #1f4580); }
-#survei-screen .sv-mx-wrap .sv-mx thead th:nth-child(2) { background: linear-gradient(180deg, #e0525d, #c23a46); }
-#survei-screen .sv-mx-wrap .sv-mx thead th:nth-child(3) { background: linear-gradient(180deg, #f39a3d, #e07f1b); }
-#survei-screen .sv-mx-wrap .sv-mx thead th:nth-child(4) { background: linear-gradient(180deg, #46b479, #2f9a60); }
-#survei-screen .sv-mx-wrap .sv-mx thead th:nth-child(5) { background: linear-gradient(180deg, #2a9a6a, #1b7a4f); }
-#survei-screen .sv-mx-wrap .sv-mx thead th:nth-child(6) { background: linear-gradient(180deg, #1f8f8a, #146f6b); }
-#survei-screen .sv-mx-wrap .sv-mx thead th:nth-child(7) { background: linear-gradient(180deg, #2c6fb7, #1f5694); }
-/* skala 2 kolom / 3 kolom tetap enak: kolom terakhir selalu hijau tua */
-#survei-screen .sv-mx-wrap .sv-mx thead th:nth-child(2):nth-last-child(1), #survei-screen .sv-mx-wrap .sv-mx thead th:nth-child(3):nth-last-child(1) { background: linear-gradient(180deg, #2a9a6a, #1b7a4f); }
+/* Semua kolom header (Pernyataan + pilihan jawaban) satu warna biru yang sama: tenang, tidak mengalihkan fokus siswa. */
+#survei-screen .sv-mx-wrap .sv-mx thead th, #survei-screen .sv-mx-wrap .sv-mx thead th.sv-mx-t { background: #2c5ca8; background-image: linear-gradient(180deg, #2f62b0, #244f90); text-shadow: none; }
+#survei-screen .sv-mx-wrap .sv-mx thead th { border-left: 1px solid rgba(255,255,255,.16); }
+#survei-screen .sv-mx-wrap .sv-mx thead th:first-child { border-left: 0; }
 
 /* Tombol "Kembali ke Hasil" (Detail Jawaban siswa): mencolok & profesional */
 #detail-screen .detail-top { margin-bottom: 1.1rem; }
