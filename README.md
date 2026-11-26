@@ -1467,3 +1467,10 @@ Nama di bawah ikon setelah diinstal adalah **TKA SPENDASER** (`name`/`short_name
 - Layar soal: toolbar (nomor soal, timer, info, daftar soal) **menempel di atas**, pilihan jawaban berbentuk kartu, tombol Sebelumnya / Ragu-ragu / Berikutnya **menempel di bawah**, Daftar Soal & Informasi tampil sebagai *bottom sheet*.
 - Tulisan "Guru Pengajar · ..." tidak lagi melayang di atas soal, kini berada rapi di bawah kartu soal.
 - Cache PWA naik ke `spendaser-v2` agar HP siswa otomatis memuat tampilan baru.
+
+
+## Peringatan "Menjawab Terlalu Cepat" + penanda untuk guru
+
+- **Siswa**: `peringatan-cepat.js` mencatat waktu tiap soal. Saat menekan SELESAI TES, siswa yang rata-rata waktunya terlalu singkat, banyak menjawab kilat, atau selesai jauh lebih cepat dari durasi diingatkan **satu kali** (PERIKSA KEMBALI / TETAP KIRIM). Ambang bisa diubah lewat `window.CBT_CEPAT` di `config.js`.
+- **Guru**: Rekap Nilai punya kolom **Kecepatan** (⚡ Terlalu cepat / Sempat diperingatkan / Wajar + rata-rata detik per soal). Klik badge untuk rincian (alasan, nomor soal yang dijawab sangat cepat, waktu terpakai). Ada filter **⚡ Terlalu cepat saja** dan kolom di unduhan Excel. Nilai tidak diubah.
+- **Server**: sheet `Sesi` mendapat kolom baru `cepat_json` secara otomatis setelah `Code.gs` di-deploy ulang (skema otomatis). Sesi lama tampil "—".

@@ -6,7 +6,7 @@
       tombol Kembali). Alarm berhenti hanya setelah siswa menekan "Kembali ke Ujian".
    4) Pembatas screenshot (SEBAGIAN — lihat catatan): isi soal disembunyikan saat halaman kehilangan fokus,
       tombol PrintScreen / Win+Shift+S / Cmd+Shift+3-4-5 terdeteksi & dicatat, tidak bisa cetak/simpan/seleksi.
-   5) Screenshot TERDETEKSI (tombol PrintScreen / Win+Shift+S / Ctrl+Shift+S / Cmd+Shift+3-4-5) = PELANGGARAN yang dihitung
+   5) Screenshot TERDETEKSI (tombol PrintScreen (keyup di Windows) / Win+Shift+S / Ctrl+Shift+S / Cmd+Shift+3-4-5) = PELANGGARAN yang dihitung
       + alarm. Kehilangan fokus layar (aplikasi melayang, panel notifikasi, jendela lain) juga dihitung pelanggaran + alarm
       (dicek lewat event blur DAN pemeriksaan fokus berkala). Bisa dimatikan lewat config.js: CBT_FOKUS_PELANGGARAN = false.
       MASA TOLERANSI: notifikasi / pesan WA / telepon / alarm yang mengganggu SESAAT (selesai sendiri dalam <= 8 detik) TIDAK dihitung
@@ -148,6 +148,7 @@
       if (!K.aktif) return;
       const tol = K.tol();
       if (document.hidden) {
+        K.curigaiSSDariBlur();
         K.sembunyiIsi(true); K.hiddenT0 = Date.now(); clearTimeout(K.visTimer);
         const nyala = () => { if (K.aktif && document.hidden) K.alarmNyala('Anda meninggalkan halaman ujian atau layar mati.'); };
         if (tol <= 0) nyala(); else K.visTimer = setTimeout(nyala, tol);
@@ -161,6 +162,7 @@
     },
     onBlur() {
       if (!K.aktif) return;
+      K.curigaiSSDariBlur();
       K.sembunyiIsi(true);
       clearTimeout(K.blurTimer); K.blurT0 = Date.now();
       K.blurTimer = setTimeout(() => {
@@ -194,22 +196,54 @@
     onPop() { if (!K.aktif) return; try { history.pushState({ kunci: 1 }, '', location.href); } catch (e) { /* abaikan */ } K.alarmNyala('Tombol Kembali ditekan. Anda tidak boleh keluar dari ujian.'); },
 
     // ---------- 4) pembatas screenshot / salin ----------
+    // Cara kerja deteksi (browser TIDAK punya event "screenshot", jadi dipakai beberapa petunjuk sekaligus):
+    //  a) tombol screenshot terbaca langsung: PrintScreen (Windows hanya mengirim KEYUP, bukan keydown!), Alt/Ctrl+PrintScreen,
+    //     Win+Shift+S, Ctrl+Shift+S, Cmd+Shift+3/4/5/6 (dibaca lewat e.code karena e.key berubah jadi # $ % saat Shift ditekan),
+    //     Chromebook Ctrl+Shift+F5;
+    //  b) Win/Cmd+Shift ditekan lalu jendela langsung kehilangan fokus <= 2,5 dtk (alat tangkap layar bawaan OS sering
+    //     "menelan" huruf S/angkanya sehingga halaman hanya melihat Win/Cmd+Shift lalu blur).
+    // Screenshot lewat tombol fisik HP (Power+Volume / usap tiga jari) TIDAK dapat dideteksi oleh halaman web.
+    ssT: 0, metaShiftT: 0,
+    tombolSS(e) {
+      const k = String(e.key || '').toLowerCase(), c = String(e.code || '');
+      const meta = !!(e.metaKey || (e.getModifierState && e.getModifierState('OS')));
+      if (k === 'printscreen' || k === 'snapshot' || c === 'PrintScreen') return true;
+      if (meta && e.shiftKey && (c === 'KeyS' || k === 's' || /^Digit[3-6]$/.test(c) || ['3', '4', '5', '6', '#', '$', '%', '^'].indexOf(k) >= 0)) return true;
+      if (e.ctrlKey && e.shiftKey && (c === 'KeyS' || k === 's')) return true;
+      if (e.ctrlKey && e.shiftKey && (c === 'F5' || k === 'f5')) return true;
+      return false;
+    },
+    laporSS(tombol) {
+      const t = Date.now(); if (t - K.ssT < 1500) return; K.ssT = t; // keydown + keyup + blur dari satu screenshot = satu kejadian
+      K.sembunyiIsi(true);
+      try { navigator.clipboard && navigator.clipboard.writeText(' '); } catch (x) { /* abaikan */ }
+      setTimeout(() => { if (!document.hidden && document.hasFocus() && !K.alarmOn) K.sembunyiIsi(false); }, 1500);
+      K.laporHitung('screenshot', 'Screenshot terdeteksi (' + tombol + '). Ini dihitung sebagai pelanggaran.');
+      K.alarmNyala('Screenshot dilarang selama ' + K.kata() + '. Percobaan ini dicatat sebagai pelanggaran.');
+    },
+    // Jendela baru saja kehilangan fokus / disembunyikan: apakah segera setelah Win/Cmd+Shift? Bila ya = alat tangkap layar OS.
+    curigaiSSDariBlur() {
+      if (!K.aktif || !K.pesanAktif()) return;
+      if (K.metaShiftT && Date.now() - K.metaShiftT < 2500) { K.metaShiftT = 0; K.laporSS('Win/Cmd + Shift lalu jendela kehilangan fokus'); }
+    },
     onKey(e) {
       if (!K.aktif) return;
-      const k = String(e.key || '').toLowerCase();
-      const ss = k === 'printscreen' || k === 'snapshot' || (e.metaKey && e.shiftKey && ['3', '4', '5'].indexOf(k) >= 0) || (e.metaKey && e.shiftKey && (k === 's')) || (e.shiftKey && (e.metaKey || e.getModifierState && e.getModifierState('OS')) && k === 's') || (e.ctrlKey && e.shiftKey && k === 's');
-      if (ss) {
-        e.preventDefault(); K.sembunyiIsi(true);
-        try { navigator.clipboard && navigator.clipboard.writeText(' '); } catch (x) { /* abaikan */ }
-        setTimeout(() => { if (!document.hidden && document.hasFocus()) K.sembunyiIsi(false); }, 1500);
-        K.laporHitung('screenshot', 'Screenshot terdeteksi (tombol ' + e.key + '). Ini dihitung sebagai pelanggaran.');
-        K.alarmNyala('Screenshot dilarang selama ujian. Percobaan ini dicatat sebagai pelanggaran.');
+      const meta = !!(e.metaKey || (e.getModifierState && e.getModifierState('OS')));
+      if (meta && e.shiftKey) K.metaShiftT = Date.now();
+      if (K.tombolSS(e)) {
+        try { e.preventDefault(); } catch (x) { /* abaikan */ }
+        K.laporSS(e.key === ' ' ? 'Spasi' : (e.key || e.code));
         return;
       }
+      const k = String(e.key || '').toLowerCase();
       const blok = k === 'f12' || ((e.ctrlKey || e.metaKey) && ['s', 'p', 'u'].indexOf(k) >= 0) || ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j', 'c'].indexOf(k) >= 0);
       if (blok) { e.preventDefault(); e.stopPropagation(); K.catat('tombol_terlarang', e.key); }
     },
-    onKeyUp(e) { if (K.aktif && String(e.key).toLowerCase() === 'printscreen') { try { navigator.clipboard && navigator.clipboard.writeText(' '); } catch (x) { /* abaikan */ } } },
+    // Windows: PrintScreen HANYA menghasilkan keyup -- inilah yang sebelumnya lolos tanpa alarm.
+    onKeyUp(e) {
+      if (!K.aktif) return;
+      if (K.tombolSS(e)) { K.laporSS(e.key || e.code); return; }
+    },
     blokir(e) { if (K.aktif) e.preventDefault(); },
 
 

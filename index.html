@@ -417,7 +417,7 @@
           <button class="secondary" title="Hitung ulang nilai semua siswa di ujian ini memakai jawaban yang sudah tersimpan, tanpa mengulang ujian -- berguna kalau ada perbaikan pada logika penilaian (mis. soal dengan opsi teracak)." onclick="Guru.hitungUlangNilai()">🔄 Hitung Ulang Nilai</button>
         </div>
         <div class="filter-bar">
-          <input type="search" id="cari-rekap" placeholder="🔍 Cari nama siswa..." oninput="Guru.renderTabelRekap_()" autocomplete="off"><label class="filter-cek" id="lbl-blokir-rekap" title="Tampilkan hanya yang diblokir"><input type="checkbox" id="blokir-rekap" onchange="Guru.renderTabelRekap_()"> 🚫 Diblokir saja <span id="blokir-rekap-jml"></span></label><select id="status-rekap" onchange="Guru.renderTabelRekap_()" title="Filter hasil: lulus/remedial atau kategori nilai" style="width:auto"><option value="">Semua Hasil</option><option value="lulus">✅ Lulus</option><option value="remedial">🔁 Remedial</option><option value="kat:istimewa">🏅 Istimewa (≥ 95)</option><option value="kat:baik">👍 Baik (≥ 76,67)</option><option value="kat:memadai">➖ Memadai (50 – 76,66)</option><option value="kat:kurang">⚠️ Kurang (&lt; 50)</option></select>
+          <input type="search" id="cari-rekap" placeholder="🔍 Cari nama siswa..." oninput="Guru.renderTabelRekap_()" autocomplete="off"><label class="filter-cek" id="lbl-blokir-rekap" title="Tampilkan hanya yang diblokir"><input type="checkbox" id="blokir-rekap" onchange="Guru.renderTabelRekap_()"> 🚫 Diblokir saja <span id="blokir-rekap-jml"></span></label><label class="filter-cek" id="lbl-cepat-rekap" title="Tampilkan hanya siswa yang menjawab terlalu cepat / sempat diperingatkan"><input type="checkbox" id="cepat-rekap" onchange="Guru.renderTabelRekap_()"> ⚡ Terlalu cepat saja <span id="cepat-rekap-jml"></span></label><select id="status-rekap" onchange="Guru.renderTabelRekap_()" title="Filter hasil: lulus/remedial atau kategori nilai" style="width:auto"><option value="">Semua Hasil</option><option value="lulus">✅ Lulus</option><option value="remedial">🔁 Remedial</option><option value="kat:istimewa">🏅 Istimewa (≥ 95)</option><option value="kat:baik">👍 Baik (≥ 76,67)</option><option value="kat:memadai">➖ Memadai (50 – 76,66)</option><option value="kat:kurang">⚠️ Kurang (&lt; 50)</option></select>
           <select id="kelas-rekap" onchange="Guru.renderTabelRekap_()" title="Filter per kelas"><option value="">Semua Kelas</option></select>
           <span class="filter-info" id="kelas-rekap-info"></span>
         </div>
@@ -1666,10 +1666,11 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=82"></script>
+<script src="app.js?v=83"></script>
 <script src="anbk.js?v=67"></script>
+<script src="peringatan-cepat.js?v=2"></script>
 <script src="survei.js?v=18"></script>
-<script src="kunci-ujian.js?v=7"></script>
+<script src="kunci-ujian.js?v=8"></script>
 <script src="leaderboard.js?v=1"></script>
 <script src="leaderboard-survei.js?v=1"></script>
 <script src="analisis-materi.js?v=4"></script>

@@ -3062,7 +3062,7 @@ const LocalBackend = (function () {
         const siswaMap = {}; D.siswa.forEach(s => siswaMap[s.id] = s);
         const rekap = sesiList.map(s => {
           const siswa = siswaMap[s.siswa_id] || {};
-          return { sesiId: s.id, siswaId: s.siswa_id, nama: siswa.nama || '(tidak dikenal)', kelas: siswa.kelas || '-', nilai: s.nilai, lulus: s.lulus, pelanggaran: s.pelanggaran, mulai: s.mulai, selesai: s.selesai, status: s.status };
+          return { sesiId: s.id, siswaId: s.siswa_id, nama: siswa.nama || '(tidak dikenal)', kelas: siswa.kelas || '-', nilai: s.nilai, lulus: s.lulus, pelanggaran: s.pelanggaran, mulai: s.mulai, selesai: s.selesai, status: s.status, cepat: (() => { try { return s.cepat_json ? JSON.parse(s.cepat_json) : null; } catch (e) { return null; } })() };
         });
         rekap.forEach(r => { r.bukti = (D.buktiOrek || []).filter(b => b.sesi_id === r.sesiId).map(fotoBuktiLokal); });
         return { ok: true, data: rekap, buktiMode: modeBuktiLokal(D.ujian.find(u => u.id === data.ujianId)) };
@@ -3601,6 +3601,7 @@ const LocalBackend = (function () {
         if (sesi.status === 'selesai') return { ok: true, nilai: sesi.nilai, lulus: sesi.lulus, sudahSelesai: true, buktiOrek: modeBuktiSub };
         const jawaban = JSON.parse(data.jawaban || '{}');
         const hasil = hitungDanSelesaikanSesi(D, sesi, jawaban, 'selesai');
+        if (data.cepat) { sesi.cepat_json = String(data.cepat).slice(0, 3000); simpan(); }
         return { ok: true, nilai: hasil.nilai, lulus: hasil.lulus, detail: hasil.detail, buktiOrek: modeBuktiSub };
       }
       case 'getDetailJawaban': {
@@ -5885,7 +5886,8 @@ const Guru = {
   rekapTersaring_() {
     const saringBlokir = !!document.getElementById('blokir-rekap')?.checked;
     const hasil = document.getElementById('status-rekap')?.value || ''; // '' | 'lulus' | 'remedial'
-    return (state.guru._rekapAktif || []).filter(r => cocokFilterSiswa_(r, 'kelas-rekap', 'cari-rekap') && (!saringBlokir || r.status === 'diblokir')
+    const saringCepat = !!document.getElementById('cepat-rekap')?.checked;
+    return (state.guru._rekapAktif || []).filter(r => cocokFilterSiswa_(r, 'kelas-rekap', 'cari-rekap') && (!saringBlokir || r.status === 'diblokir') && (!saringCepat || Guru.cepatBermasalah_(r))
       && (!hasil || (hasil.indexOf('kat:') === 0 ? kategoriNilai_(r.nilai).kode === hasil.slice(4) : (hasil === 'lulus') === (String(r.lulus) === 'true'))));
   },
 
@@ -5900,6 +5902,46 @@ const Guru = {
     return '<span style="color:var(--c-muted)">—</span>';
   },
 
+  // ---------------- KECEPATAN MENGERJAKAN (peringatan "terlalu cepat") ----------------
+  // r.cepat = {w: sempat diperingatkan, t: saat dikumpulkan masih terlalu cepat, r: rata-rata detik/soal, n, k, m, d, a, no}
+  cepatBermasalah_(r) { return !!(r && r.cepat && (r.cepat.t || r.cepat.w)); },
+  selCepatRekap_(r) {
+    const c = r.cepat;
+    if (!c) return '<span style="color:var(--c-muted)" title="Tidak ada data kecepatan (ujian lama atau fitur nonaktif)">—</span>';
+    const rata = String(c.r).replace('.', ',') + ' dtk/soal';
+    const klik = `onclick="Guru.bukaDetailCepat_('${escapeHtml_(r.sesiId)}')" style="cursor:pointer" role="button" tabindex="0"`;
+    if (c.t) return `<span class="badge no" ${klik} title="Dikumpulkan dengan jawaban terlalu cepat${c.w ? ' (siswa sudah diperingatkan, tetap mengirim)' : ''}. Klik untuk rincian.">⚡ Terlalu cepat · ${rata}</span>`;
+    if (c.w) return `<span class="badge warn" ${klik} title="Sempat diperingatkan lalu memeriksa kembali. Klik untuk rincian.">Sempat diperingatkan · ${rata}</span>`;
+    return `<span class="badge ok" ${klik} title="Klik untuk rincian">Wajar · ${rata}</span>`;
+  },
+  bukaDetailCepat_(sesiId) {
+    const r = (state.guru._rekapAktif || []).find(x => String(x.sesiId) === String(sesiId));
+    if (!r || !r.cepat) return;
+    const c = r.cepat;
+    const st = c.t ? (c.w ? 'Diperingatkan, tetap mengirim dengan jawaban terlalu cepat' : 'Terlalu cepat (tidak sempat diperingatkan, mis. waktu habis/dikumpulkan otomatis)')
+      : (c.w ? 'Sempat diperingatkan, lalu memeriksa kembali jawabannya' : 'Kecepatan mengerjakan wajar');
+    const li = (c.a || []).map(a => `<li>${escapeHtml_(a)}</li>`).join('');
+    const nomor = (c.no || []).length ? (c.no || []).map(n => `<span style="display:inline-block;min-width:26px;text-align:center;margin:0 4px 4px 0;padding:2px 6px;border-radius:4px;background:#ffc107;font-size:.8rem">${n}</span>`).join('') : '<em>tidak ada</em>';
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(15,30,55,.55);display:grid;place-items:center;padding:16px';
+    el.innerHTML = `<div class="panel" style="max-width:480px;width:100%;max-height:90vh;overflow:auto;background:var(--c-surface,#fff);padding:20px;border-radius:10px">
+      <h3 style="margin:0 0 4px">⚡ Kecepatan Mengerjakan</h3>
+      <p class="subtitle" style="margin:0 0 10px">${escapeHtml_(r.nama)} • ${escapeHtml_(r.kelas)}</p>
+      <p><strong>${escapeHtml_(st)}</strong></p>
+      <table class="ledger" style="margin:8px 0"><tbody>
+        <tr><td>Rata-rata per soal terjawab</td><td><strong>${String(c.r).replace('.', ',')} detik</strong></td></tr>
+        <tr><td>Soal terjawab</td><td>${c.n}</td></tr>
+        <tr><td>Soal dijawab sangat cepat</td><td>${c.k}</td></tr>
+        <tr><td>Waktu terpakai</td><td>${c.m ? String(c.m).replace('.', ',') + ' menit' : '-'}${c.d ? ' dari ' + c.d + ' menit' : ''}</td></tr>
+      </tbody></table>
+      ${li ? `<p style="margin:6px 0 2px"><strong>Alasan terdeteksi:</strong></p><ul style="margin:0 0 8px;padding-left:20px">${li}</ul>` : ''}
+      <p style="margin:6px 0 4px"><strong>Nomor soal yang dijawab sangat cepat:</strong></p><div>${nomor}</div>
+      <p class="subtitle" style="font-size:.78rem;margin-top:10px">Ini hanya penanda untuk guru; nilai tidak diubah. Gunakan bersama Detail Jawaban sebelum mengambil kesimpulan.</p>
+      <div style="text-align:right;margin-top:10px"><button type="button" class="secondary">Tutup</button></div></div>`;
+    el.addEventListener('click', ev => { if (ev.target === el || ev.target.tagName === 'BUTTON') el.remove(); });
+    document.body.appendChild(el);
+  },
+
   renderTabelRekap_() {
     const cont = document.getElementById('tabel-rekap');
     // Ingat centang yang sudah dipilih guru supaya tidak hilang saat data disegarkan.
@@ -5907,6 +5949,7 @@ const Guru = {
     const semua = state.guru._rekapAktif || [];
     if (semua.length === 0) { tampilkanInfoFilter_('kelas-rekap-info', 0, 0); cont.innerHTML = '<p class="subtitle">Belum ada siswa yang <strong>menyelesaikan</strong> ujian ini (siswa yang masih mengerjakan tidak dihitung di sini — lihat tab "Pemantauan Ujian" untuk yang sedang berlangsung).</p>'; return; }
     hanyaBlokir_('blokir-rekap', semua.filter(r => r.status === 'diblokir').length);
+    hanyaBlokir_('cepat-rekap', semua.filter(r => Guru.cepatBermasalah_(r)).length);
     const data = Guru.rekapTersaring_();
     const angka = data.map(r => Number(r.nilai)).filter(n => !isNaN(n) && n !== null);
     const rata = angka.length ? (angka.reduce((a, b) => a + b, 0) / angka.length) : null;
@@ -5917,12 +5960,14 @@ const Guru = {
     if (data.length === 0) { cont.innerHTML = '<p class="subtitle">Tidak ada siswa yang cocok dengan kelas/pencarian ini.</p>'; return; }
     const adaSurvei = !!state.guru._rekapSurveiJenis;
     const adaKolomBukti = !!state.guru._rekapBuktiMode || semua.some(r => Array.isArray(r.bukti) && r.bukti.length);
-    cont.innerHTML = `<table class="ledger"><thead><tr><th style="width:2rem"><input type="checkbox" id="rekap-pilih-semua" title="Pilih semua yang tampil" onchange="Guru.pilihSemuaRekap(this.checked)"></th><th>Nama</th><th>Kelas</th><th>Nilai</th><th>Kategori</th>${adaSurvei ? `<th title="Nilai survei 0-100 (jawaban terbaik = skor 4) — klik Detail Jawaban untuk pembahasan">${state.guru._rekapSurveiJenis === 'karakter' ? 'Nilai Survei Karakter' : 'Nilai Sulingjar'}</th>` : ''}${adaKolomBukti ? '<th>Bukti Orak-Orik</th>' : ''}<th>Status</th><th>Pelanggaran</th><th>Selesai</th><th>Durasi</th><th></th></tr></thead><tbody>` +
+    const adaCepat = semua.some(r => r.cepat);
+    cont.innerHTML = `<table class="ledger"><thead><tr><th style="width:2rem"><input type="checkbox" id="rekap-pilih-semua" title="Pilih semua yang tampil" onchange="Guru.pilihSemuaRekap(this.checked)"></th><th>Nama</th><th>Kelas</th><th>Nilai</th><th>Kategori</th>${adaSurvei ? `<th title="Nilai survei 0-100 (jawaban terbaik = skor 4) — klik Detail Jawaban untuk pembahasan">${state.guru._rekapSurveiJenis === 'karakter' ? 'Nilai Survei Karakter' : 'Nilai Sulingjar'}</th>` : ''}${adaKolomBukti ? '<th>Bukti Orak-Orik</th>' : ''}${adaCepat ? '<th title=\"Kecepatan mengerjakan: siswa yang menjawab terlalu cepat ditandai\">Kecepatan</th>' : ''}<th>Status</th><th>Pelanggaran</th><th>Selesai</th><th>Durasi</th><th></th></tr></thead><tbody>` +
       data.map(r => `<tr>
         <td><input type="checkbox" class="rekap-cek" value="${escapeHtml_(r.sesiId || '')}" ${r.sesiId ? '' : 'disabled'} ${r.sesiId && tercentang.has(String(r.sesiId)) ? 'checked' : ''}></td>
         <td>${escapeHtml_(r.nama)}</td><td>${escapeHtml_(r.kelas)}</td><td><strong>${r.nilai}</strong></td><td>${badgeKategori_(r.nilai)}</td>
         ${adaSurvei ? `<td>${Survei.selRekap(r)}</td>` : ''}
         ${adaKolomBukti ? `<td>${Guru.selBuktiRekap_(r)}</td>` : ''}
+        ${adaCepat ? `<td>${Guru.selCepatRekap_(r)}</td>` : ''}
         <td><span class="badge ${String(r.lulus) === 'true' ? 'ok' : 'no'}">${String(r.lulus) === 'true' ? 'Lulus' : 'Remedial'}</span></td>
         <td>${r.pelanggaran || 0} ${r.status === 'diblokir' ? '<span class="badge warn">Diblokir</span>' : ''}</td>
         <td style="font-size:.8rem">${formatTanggal(r.selesai)}</td>
@@ -6333,7 +6378,7 @@ const Guru = {
   },
 
   hapusSemuaNilaiUjian() {
-    const disaring = filterAktif_('kelas-rekap', 'cari-rekap') || !!document.getElementById('blokir-rekap')?.checked || !!document.getElementById('status-rekap')?.value;
+    const disaring = filterAktif_('kelas-rekap', 'cari-rekap') || !!document.getElementById('blokir-rekap')?.checked || !!document.getElementById('cepat-rekap')?.checked || !!document.getElementById('status-rekap')?.value;
     const ids = Guru.rekapTersaring_().map(r => r.sesiId).filter(Boolean);
     if (!ids.length) { toast('Belum ada nilai untuk dihapus.', 'error'); return; }
     const kelasDipilih = document.getElementById('kelas-rekap')?.value || '';
@@ -6373,7 +6418,7 @@ const Guru = {
       return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
     };
     const buatSheet = (arr, denganUjian) => {
-      const headers = ['No'].concat(denganUjian ? ['Ujian'] : [], ['Nama', 'Kelas', 'Nilai', 'Keterangan', 'Kategori', 'Pelanggaran', 'Mulai', 'Selesai', 'Durasi Pengerjaan', 'Durasi (menit)', 'Foto Bukti Orak-Orik']);
+      const headers = ['No'].concat(denganUjian ? ['Ujian'] : [], ['Nama', 'Kelas', 'Nilai', 'Keterangan', 'Kategori', 'Pelanggaran', 'Mulai', 'Selesai', 'Durasi Pengerjaan', 'Durasi (menit)', 'Foto Bukti Orak-Orik', 'Kecepatan Mengerjakan', 'Rata-rata Detik/Soal']);
       // Hasil survei (Survei Karakter / Sulingjar) di samping nilai tes — hanya untuk ekspor satu ujian yang memakai survei
       const svSet = !denganUjian ? state.guru._rekapSurveiSet : null;
       const adaSv = !!svSet && arr.some(r => r.survei);
@@ -6392,7 +6437,9 @@ const Guru = {
           fmtWaktu(r.mulai), fmtWaktu(r.selesai),
           detik === null ? '-' : formatDurasi_(detik),
           detik === null ? '' : Math.round(detik / 6) / 10,
-          Array.isArray(r.bukti) ? r.bukti.length : 0
+          Array.isArray(r.bukti) ? r.bukti.length : 0,
+          !r.cepat ? '' : (r.cepat.t ? (r.cepat.w ? 'Terlalu cepat (diperingatkan, tetap kirim)' : 'Terlalu cepat') : (r.cepat.w ? 'Sempat diperingatkan' : 'Wajar')),
+          !r.cepat ? '' : r.cepat.r
         ], adaSv ? (() => {
           const x = Survei.ringkasSurvei(r);
           if (!x) return svSet.dim.map(() => '').concat(['', 'Belum mengisi', '', '']);
@@ -6400,7 +6447,7 @@ const Guru = {
         })() : []);
       });
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      ws['!cols'] = (denganUjian ? [5, 28] : [5]).concat([30, 10, 8, 12, 12, 12, 18, 18, 20, 14, 14], adaSv ? svSet.dim.map(() => 16).concat([16, 16, 20, 18]) : []).map(w => ({ wch: w }));
+      ws['!cols'] = (denganUjian ? [5, 28] : [5]).concat([30, 10, 8, 12, 12, 12, 18, 18, 20, 14, 14, 30, 14], adaSv ? svSet.dim.map(() => 16).concat([16, 16, 20, 18]) : []).map(w => ({ wch: w }));
       ws['!freeze'] = { xSplit: 0, ySplit: 1 };
       ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(rows.length, 1), c: headers.length - 1 } }) };
       return ws;
@@ -9318,7 +9365,7 @@ const ExamEngine = {
     clearInterval(state.autosaveHandle);
     AntiCheat.nonaktifkan();
     KumpulUI.tampilKirim(alasan);
-    const res = await api('submitUjian', { sesiId: state.sesiId, jawaban: JSON.stringify(state.jawaban) });
+    const res = await api('submitUjian', { sesiId: state.sesiId, jawaban: JSON.stringify(state.jawaban), cepat: (window.PeringatanCepat ? window.PeringatanCepat.ringkas() : '') });
     hapusCacheLokal(state.sesiId);
     if (res.ok) {
       // NILAI SUDAH TERSIMPAN di server di titik ini (submitUjian sukses). Bila guru mengaktifkan bukti

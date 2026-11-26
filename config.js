@@ -26,3 +26,17 @@ window.CBT_API_URL = 'https://script.google.com/macros/s/AKfycbwYGCTFwSJ6w9qvdV_
 //   Kejadiannya dicatat ke Detail Pelanggaran guru dengan awalan "[Survei]" (tidak menambah hitungan pelanggaran ujian). Matikan:
 //     window.CBT_ANTICHEAT_SURVEI = false;
 // ----------------------------------------------------------------------------
+
+// ----------------------------------------------------------------------------
+// PERINGATAN MENJAWAB TERLALU CEPAT (layar ujian siswa; diingatkan satu kali saat SELESAI TES)
+// Hapus tanda // untuk mengubah. Nilai di bawah adalah nilai bawaan.
+//   window.CBT_CEPAT = {
+//     aktif: true,          // false = matikan
+//     rataDetik: 25,        // rata-rata detik per soal di bawah ini = terlalu cepat
+//     soalDetik: 10,        // satu soal dijawab kurang dari ini = "kilat"
+//     persenKilat: 40,      // >= persen ini soal "kilat" -> peringatan
+//     pakaiPersen: 15,      // total waktu pakai < persen ini dari durasi -> peringatan
+//     minSoal: 5,
+//     kategori: null        // mis. 'Literasi|Numerasi' (null = semua ujian)
+//   };
+// ----------------------------------------------------------------------------

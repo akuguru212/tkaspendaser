@@ -125,7 +125,9 @@ var SCHEMA = {
   // 'tambahan_detik' dipakai fitur "Pemantauan Ujian" (tombol "Tambah Waktu") --
   // jumlah detik ekstra yang diberikan guru ke satu sesi siswa tertentu, di luar
   // durasi_menit standar ujian. Kosong/0 berarti tidak ada tambahan.
-  Sesi: ['id', 'ujian_id', 'siswa_id', 'device_id', 'mulai', 'selesai', 'status', 'pelanggaran', 'urutan_json', 'jawaban_json', 'ragu_json', 'nilai', 'lulus', 'last_ping', 'tambahan_detik'],
+  // 'cepat_json' = ringkasan kecepatan mengerjakan dari klien (peringatan-cepat.js): rata-rata detik/soal, soal yang
+  // dijawab sangat cepat, apakah siswa sempat diperingatkan, dan apakah saat dikumpulkan masih tergolong terlalu cepat.
+  Sesi: ['id', 'ujian_id', 'siswa_id', 'device_id', 'mulai', 'selesai', 'status', 'pelanggaran', 'urutan_json', 'jawaban_json', 'ragu_json', 'nilai', 'lulus', 'last_ping', 'tambahan_detik', 'cepat_json'],
   PelanggaranLog: ['id', 'sesi_id', 'siswa_id', 'ujian_id', 'waktu', 'jenis', 'detail'],
   Config: ['key', 'value'],
   // Foto bukti orak-orik (coretan) jawaban siswa -- fitur opsional per ujian (kolom Ujian.bukti_orek:
@@ -941,7 +943,8 @@ function actionGetRekapNilai_(data) {
     return {
       sesiId: s.id, siswaId: s.siswa_id, nama: siswa.nama || '(tidak dikenal)', kelas: siswa.kelas || '-',
       nilai: s.nilai, lulus: s.lulus, pelanggaran: s.pelanggaran, mulai: s.mulai, selesai: s.selesai, status: s.status,
-      bukti: buktiPerSesi[s.id] || []
+      bukti: buktiPerSesi[s.id] || [],
+      cepat: bacaCepat_(s.cepat_json) // ringkasan kecepatan mengerjakan (null = tidak ada data / sesi lama)
     };
   });
   return jsonOut_({ ok: true, data: rekap, buktiMode: modeBuktiUjian_(ujianRekap) });
@@ -3104,6 +3107,28 @@ function actionLapor_(data) {
   return jsonOut_({ ok: true, blokir: false, pelanggaran: pelanggaranBaru });
 }
 
+// Ringkasan kecepatan mengerjakan dari klien -> JSON string yang sudah dibersihkan (angka dipaksa numerik, daftar
+// dibatasi) supaya data sembarang dari klien tidak ikut tersimpan. '' bila tidak ada/rusak.
+function bersihkanCepat_(raw) {
+  if (!raw) return '';
+  try {
+    var o = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!o || typeof o !== 'object') return '';
+    var angka = function (v) { v = Number(v); return isFinite(v) ? Math.round(v * 10) / 10 : 0; };
+    var bersih = {
+      v: 1, w: o.w ? 1 : 0, t: o.t ? 1 : 0,
+      r: angka(o.r), n: angka(o.n), k: angka(o.k), m: angka(o.m), d: angka(o.d),
+      a: (Array.isArray(o.a) ? o.a : []).slice(0, 4).map(function (x) { return String(x).slice(0, 160); }),
+      no: (Array.isArray(o.no) ? o.no : []).slice(0, 60).map(function (x) { return Math.round(Number(x)) || 0; }).filter(function (x) { return x > 0; })
+    };
+    return JSON.stringify(bersih);
+  } catch (e) { return ''; }
+}
+function bacaCepat_(json) {
+  if (!json) return null;
+  try { var o = JSON.parse(json); return (o && typeof o === 'object') ? o : null; } catch (e) { return null; }
+}
+
 function actionSubmitUjian_(data) {
   var state = ambilSesiState_(data.sesiId);
   if (!state) return jsonOut_({ ok: false, error: 'Sesi tidak ditemukan.' });
@@ -3112,10 +3137,13 @@ function actionSubmitUjian_(data) {
   }
   var jawaban = JSON.parse(data.jawaban || '{}');
   var hasil = hitungNilai_(state, jawaban);
-  simpanSesiState_(data.sesiId, {
+  var perubahanSelesai = {
     status: 'selesai', selesai: new Date().toISOString(),
     jawaban_json: JSON.stringify(jawaban), nilai: hasil.nilai, lulus: hasil.lulus
-  });
+  };
+  var cepatBersih = bersihkanCepat_(data.cepat);
+  if (cepatBersih) perubahanSelesai.cepat_json = cepatBersih;
+  simpanSesiState_(data.sesiId, perubahanSelesai);
   // Nilai SUDAH tersimpan di atas. Klien memakai buktiOrek utk memutuskan apakah perlu halaman
   // "Unggah bukti orak-orik" sebelum nilai akhir ditampilkan ke siswa.
   return jsonOut_({ ok: true, nilai: hasil.nilai, lulus: hasil.lulus, detail: hasil.detail, buktiOrek: modeBuktiDariSesi_(state) });
