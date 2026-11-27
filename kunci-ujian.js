@@ -418,38 +418,63 @@
    - Utama   : Screen Wake Lock API (Chrome/Edge/Samsung Internet/Safari 16.4+), diminta ulang bila dilepas sistem
                atau saat siswa kembali ke halaman.
    - Cadangan: video senyap tak terlihat yang terus berputar (cara "NoSleep") untuk browser tanpa Wake Lock,
-               atau bila Wake Lock ditolak (mis. mode hemat baterai). Perlu satu ketukan layar agar boleh diputar.
+               bila Wake Lock ditolak (mis. mode hemat baterai), dan SELALU di iPhone/iPad yang dipasang di Layar Utama
+               (Wake Lock di sana tidak andal pada iOS lama). Perlu satu ketukan layar agar boleh diputar.
+   - v43z57  : video cadangan memakai berkas video mini sungguhan (mp4/webm tertanam) -- lebih andal daripada video dari <canvas>;
+               perlombaan permintaan Wake Lock diperbaiki; status bisa dicek lewat LayarMenyala.status().
    ============================================================================ */
 (function () {
   'use strict';
   const IDS = ['ujian-screen', 'survei-screen'];
-  const LM = { lock: null, video: null, canvas: null, timer: null, memintaWake: false, adaGestur: false };
+  const MP4 = 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAMxbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAB9AAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAlt0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAB9AAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAABAAAAAQAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAAfQAAAAAAABAAAAAAHTbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAABAAAAAgABVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABfm1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAAT5zdGJsAAAAtnN0c2QAAAAAAAAAAQAAAKZhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAABAAEABIAAAASAAAAAAAAAABFUxhdmM2MC4zMS4xMDIgbGlieDI2NAAAAAAAAAAAAAAAGP//AAAALGF2Y0MBQsAK/+EAFWdCwAraewEQAAADABAAAAMAQPEiagEABGjOPIAAAAAQcGFzcAAAAAEAAAABAAAAFGJ0cnQAAAAAAAAKrAAACqwAAAAYc3R0cwAAAAAAAAABAAAABAAAIAAAAAAUc3RzcwAAAAAAAAABAAAAAQAAABxzdHNjAAAAAAAAAAEAAAABAAAABAAAAAEAAAAkc3RzegAAAAAAAAAAAAAABAAAApAAAAAJAAAACQAAAAkAAAAUc3RjbwAAAAAAAAABAAADYQAAAGJ1ZHRhAAAAWm1ldGEAAAAAAAAAIWhkbHIAAAAAAAAAAG1kaXJhcHBsAAAAAAAAAAAAAAAALWlsc3QAAAAlqXRvbwAAAB1kYXRhAAAAAQAAAABMYXZmNjAuMTYuMTAwAAAACGZyZWUAAAKzbWRhdAAAAnoGBf//dtxF6b3m2Ui3lizYINkj7u94MjY0IC0gY29yZSAxNjQgcjMxMDggMzFlMTlmOSAtIEguMjY0L01QRUctNCBBVkMgY29kZWMgLSBDb3B5bGVmdCAyMDAzLTIwMjMgLSBodHRwOi8vd3d3LnZpZGVvbGFuLm9yZy94MjY0Lmh0bWwgLSBvcHRpb25zOiBjYWJhYz0wIHJlZj0xIGRlYmxvY2s9MTowOjAgYW5hbHlzZT0weDE6MHgxIG1lPWhleCBzdWJtZT0yIHBzeT0xIHBzeV9yZD0xLjAwOjAuMDAgbWl4ZWRfcmVmPTAgbWVfcmFuZ2U9MTYgY2hyb21hX21lPTEgdHJlbGxpcz0wIDh4OGRjdD0wIGNxbT0wIGRlYWR6b25lPTIxLDExIGZhc3RfcHNraXA9MSBjaHJvbWFfcXBfb2Zmc2V0PTAgdGhyZWFkcz0xIGxvb2thaGVhZF90aHJlYWRzPTEgc2xpY2VkX3RocmVhZHM9MCBucj0wIGRlY2ltYXRlPTEgaW50ZXJsYWNlZD0wIGJsdXJheV9jb21wYXQ9MCBzdGl0Y2hhYmxlPTEgY29uc3RyYWluZWRfaW50cmE9MCBiZnJhbWVzPTAgd2VpZ2h0cD0wIGtleWludD0yNTAga2V5aW50X21pbj0yIHNjZW5lY3V0PTQwIGludHJhX3JlZnJlc2g9MCByY19sb29rYWhlYWQ9MTAgcmM9Y3JmIG1idHJlZT0xIGNyZj0yMy4wIHFjb21wPTAuNjAgcXBtaW49MCBxcG1heD02OSBxcHN0ZXA9NCBpcF9yYXRpbz0xLjQwIGFxPTE6MS4wMACAAAAADmWIhAX///8PRQABPf+AAAAABUGaIBf1AAAABUGaQBf1AAAABUGaYBX1';
+  const WEBM = 'data:video/webm;base64,GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAInEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHYTbuMU6uEElTDZ1OsggEeTbuMU6uEHFO7a1OsggIR7AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsirXsYMPQkBNgI1MYXZmNjAuMTYuMTAwV0GNTGF2ZjYwLjE2LjEwMESJiECfQAAAAAAAFlSua8GuAQAAAAAAADjXgQFzxYgGXqJrMUhzH5yBACK1nIN1bmSIgQCGhVZfVlA4g4EBI+ODhB3NZQDgibCBELqBEJqBAhJUw2f8c3OgY8CAZ8iaRaOHRU5DT0RFUkSHjUxhdmY2MC4xNi4xMDBzc9ZjwItjxYgGXqJrMUhzH2fIoUWjh0VOQ09ERVJEh5RMYXZjNjAuMzEuMTAyIGxpYnZweGfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDIuMDAwMDAwMDAwAB9DtnXt54EAo6OBAACAEAIAnQEqEAAQAABHCIWFiIWEiAICAAwNYAD+/6tQgKOVgQH0ALEBAAUQrAAYABhYL/QACAAAo5WBA+gAsQEABRCsABgAGFgv9AAIAACjlYEF3ACxAQAFEKwAGAAYWC/0AAgAABxTu2uRu4+zgQC3iveBAfGCAZ/wgQM=';
+  const LM = { lock: null, video: null, canvas: null, timer: null, gambarTimer: null, memintaWake: false, adaGestur: false };
 
   const perlu = () => IDS.some(id => { const e = document.getElementById(id); return e && !e.classList.contains('hidden') && e.offsetParent !== null; }) && !document.hidden;
+  // iPhone/iPad yang dipasang di Layar Utama (PWA): Wake Lock sering "berhasil" tetapi layar tetap padam -> video cadangan selalu dipakai.
+  const iosPwa = () => {
+    try {
+      const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent || '') || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const mandiri = window.navigator.standalone === true || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+      return ios && mandiri;
+    } catch (e) { return false; }
+  };
+  const videoAktif = () => !!(LM.video && !LM.video.paused);
 
   async function wake() {
-    if (LM.lock || LM.memintaWake || !('wakeLock' in navigator)) return !!LM.lock;
+    if (LM.lock) return true;
+    if (!('wakeLock' in navigator)) return false;
+    if (LM.memintaWake) return true; // permintaan sedang berjalan: jangan anggap gagal (hindari video cadangan menyala sia-sia)
     LM.memintaWake = true;
     try {
-      LM.lock = await navigator.wakeLock.request('screen');
-      LM.lock.addEventListener('release', () => { LM.lock = null; if (perlu()) setTimeout(nyalakan, 400); });
+      const l = await navigator.wakeLock.request('screen');
+      if (!perlu()) { try { l.release(); } catch (e) { /* abaikan */ } return false; } // halaman sudah ditutup/disembunyikan selama menunggu
+      LM.lock = l;
+      l.addEventListener('release', () => { if (LM.lock === l) LM.lock = null; if (perlu()) setTimeout(nyalakan, 400); });
       return true;
     } catch (e) { LM.lock = null; return false; } finally { LM.memintaWake = false; }
   }
 
-  // Cadangan: video dari <canvas> yang terus berubah, diputar tanpa suara & tak terlihat.
+  // Cadangan: video mini senyap (berkas tertanam), atau video dari <canvas> bila format tidak didukung.
   function siapVideo() {
     if (LM.video) return true;
     try {
-      const c = document.createElement('canvas'); c.width = 16; c.height = 16; LM.canvas = c;
-      if (!c.captureStream) return false;
-      const ctx = c.getContext('2d'); let n = 0;
-      const gambar = () => { ctx.fillStyle = (n++ % 2) ? '#000' : '#010101'; ctx.fillRect(0, 0, 16, 16); };
-      gambar(); LM.gambarTimer = setInterval(gambar, 1000);
       const v = document.createElement('video');
-      v.setAttribute('playsinline', ''); v.setAttribute('muted', ''); v.muted = true; v.loop = true; v.setAttribute('aria-hidden', 'true');
-      v.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:.01;pointer-events:none;z-index:-1';
-      v.srcObject = c.captureStream(2);
+      v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', ''); v.setAttribute('muted', ''); v.setAttribute('loop', '');
+      v.muted = true; v.loop = true; v.playsInline = true; v.setAttribute('aria-hidden', 'true'); v.tabIndex = -1;
+      v.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;opacity:.01;pointer-events:none;z-index:-1';
+      let sumber = '';
+      if (v.canPlayType && v.canPlayType('video/mp4; codecs="avc1.42E01E"')) sumber = MP4;
+      else if (v.canPlayType && v.canPlayType('video/webm; codecs="vp8"')) sumber = WEBM;
+      if (sumber) v.src = sumber;
+      else {
+        const c = document.createElement('canvas'); c.width = 16; c.height = 16; LM.canvas = c;
+        if (!c.captureStream) return false;
+        const ctx = c.getContext('2d'); let n = 0;
+        const gambar = () => { ctx.fillStyle = (n++ % 2) ? '#000' : '#010101'; ctx.fillRect(0, 0, 16, 16); };
+        gambar(); LM.gambarTimer = setInterval(gambar, 1000);
+        v.srcObject = c.captureStream(2);
+      }
       document.body.appendChild(v); LM.video = v; return true;
     } catch (e) { return false; }
   }
@@ -461,20 +486,26 @@
   async function nyalakan() {
     if (!perlu()) return;
     const ok = await wake();
-    if (!ok) putarVideo(); // Wake Lock tidak ada/ditolak -> pakai cadangan
+    if (!perlu()) return;
+    if (!ok || iosPwa()) putarVideo(); // Wake Lock tidak ada/ditolak (atau iOS PWA) -> pakai cadangan
   }
   function matikan() {
     try { if (LM.lock) LM.lock.release(); } catch (e) { /* abaikan */ } LM.lock = null;
-    if (LM.video) { try { LM.video.pause(); LM.video.remove(); } catch (e) { /* abaikan */ } LM.video = null; clearInterval(LM.gambarTimer); LM.canvas = null; }
+    clearInterval(LM.gambarTimer); LM.gambarTimer = null;
+    if (LM.video) { try { LM.video.pause(); LM.video.remove(); } catch (e) { /* abaikan */ } LM.video = null; LM.canvas = null; }
   }
   function tick() {
-    if (perlu()) { if (!LM.lock && !(LM.video && !LM.video.paused)) nyalakan(); }
-    else if (LM.lock || LM.video) matikan();
+    if (perlu()) {
+      if (LM.video && LM.video.paused) putarVideo();               // video terhenti sistem: putar lagi
+      else if ((!LM.lock && !videoAktif()) || (iosPwa() && !videoAktif())) nyalakan();
+    } else if (LM.lock || LM.video) matikan();
   }
   function gestur() {
     if (!perlu()) return;
-    if (!LM.lock) { if (LM.video && LM.video.paused) putarVideo(); else if (!LM.video) nyalakan(); }
+    if (LM.video && LM.video.paused) putarVideo();
+    else if (!LM.lock || (iosPwa() && !LM.video)) nyalakan();
   }
+  LM.status = () => ({ halamanAktif: perlu(), wakeLock: !!LM.lock, video: videoAktif(), wakeLockDidukung: 'wakeLock' in navigator, iosPwa: iosPwa() });
 
   document.addEventListener('visibilitychange', () => { if (document.hidden) { LM.lock = null; } else { setTimeout(() => { matikan(); nyalakan(); }, 200); } });
   ['pointerdown', 'touchstart', 'click'].forEach(t => document.addEventListener(t, gestur, true));

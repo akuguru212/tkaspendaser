@@ -641,8 +641,37 @@ const Survei = (function () {
     });
   }
 
+  // ---- Pop up "Mengirim survei..." (memakai layar #overlay-kirim yang sama dengan pengiriman jawaban ujian) ----
+  const elK = (id) => document.getElementById(id);
+  function namaJenisKirim() { try { return (JENIS && JENIS[S.jenis] && JENIS[S.jenis].nama) || 'survei'; } catch (e) { return 'survei'; } }
+  function tampilKirimSurvei() {
+    const o = elK('overlay-kirim'); if (!o) return;
+    try { if (typeof KumpulUI !== 'undefined') KumpulUI.tutup(); } catch (e) { /* abaikan */ }
+    const sp = elK('kirim-spinner'); if (sp) { sp.className = 'kumpul-spinner'; sp.innerHTML = ''; }
+    const j = elK('kirim-judul'); if (j) j.textContent = 'Mengirim ' + namaJenisKirim() + '...';
+    const t = elK('kirim-sub'); if (t) t.textContent = 'Mohon tunggu dan jangan menutup halaman ini.';
+    o.classList.remove('hidden');
+  }
+  function gagalKirimSurvei(percobaanBerikut) {
+    const sp = elK('kirim-spinner'); if (sp) sp.className = 'kumpul-spinner err';
+    const j = elK('kirim-judul'); if (j) j.textContent = 'Koneksi bermasalah';
+    const t = elK('kirim-sub'); if (t) t.textContent = 'Jawaban Anda aman di perangkat ini. Mencoba mengirim ulang otomatis (percobaan ke-' + percobaanBerikut + ')...';
+    setTimeout(() => { const s2 = elK('kirim-spinner'); if (s2 && s2.className.indexOf('err') >= 0) s2.className = 'kumpul-spinner'; }, 800);
+  }
+  async function suksesKirimSurvei() {
+    const sp = elK('kirim-spinner'); if (sp) { sp.className = 'kumpul-spinner ok'; sp.innerHTML = '<i class="fa-solid fa-check" style="font-size:1.6rem;line-height:44px;color:var(--c-success)"></i>'; }
+    const j = elK('kirim-judul'); if (j) j.textContent = namaJenisKirim().replace(/^./, (h) => h.toUpperCase()) + ' Terkirim';
+    const t = elK('kirim-sub'); if (t) t.textContent = 'Terima kasih. Menyiapkan halaman berikutnya...';
+    await new Promise((r) => setTimeout(r, 700));
+  }
+  function sembunyikanKirimSurvei() {
+    const o = elK('overlay-kirim'); if (o) o.classList.add('hidden');
+    const sp = elK('kirim-spinner'); if (sp) { sp.innerHTML = ''; sp.className = 'kumpul-spinner'; }
+  }
+
   async function kirim() {
     if (S.kirimBusy) return; S.kirimBusy = true;
+    let overlayTampil = false;
     try {
       const J = S.set;
       const kualitas = periksaKualitas(S.jenis, S.jawaban, S.detik, S.set);
@@ -657,18 +686,21 @@ const Survei = (function () {
       }
       const durasi = Math.round((Date.now() - S.mulai) / 1000);
       const btn = $('sv-btn-kirim'); if (btn) { btn.disabled = true; btn.textContent = 'Mengirim...'; }
+      tampilKirimSurvei(); overlayTampil = true;
       let res = null;
       for (let k = 1; k <= 4; k++) {
         try { res = await api('simpanSurvei', { sesiId: S.sesiId, siswaId: state.user.id, jenis: S.jenis, jawaban: JSON.stringify(S.jawaban), durasiDetik: durasi, kualitas: JSON.stringify({ baik: kualitas.baik, alasan: kualitas.alasan, rataDetik: kualitas.rataDetik, nilai: kualitas.nilai, komponen: kualitas.komponen }) }); } catch (e) { res = null; }
         if (res && res.ok) break;
+        if (k < 4) gagalKirimSurvei(k + 1);
         await new Promise(r => setTimeout(r, 900 * k));
       }
-      if (!res || !res.ok) { toast((res && res.error) || 'Survei belum terkirim. Periksa koneksi lalu coba lagi.', 'error'); if (btn) { btn.disabled = false; btn.textContent = 'SELESAI SURVEI'; } return; }
+      if (!res || !res.ok) { sembunyikanKirimSurvei(); overlayTampil = false; toast((res && res.error) || 'Survei belum terkirim. Periksa koneksi lalu coba lagi.', 'error'); if (btn) { btn.disabled = false; btn.textContent = 'SELESAI SURVEI'; } return; }
       try { sessionStorage.removeItem('cbt_survei_' + S.sesiId); sessionStorage.removeItem(KUNCI_WAKTU()); } catch (e) { }
       hentikanWaktu();
       S.kualitasAkhir = { baik: kualitas.baik, alasan: kualitas.alasan, rataDetik: kualitas.rataDetik, nilai: kualitas.nilai, komponen: kualitas.komponen };
+      await suksesKirimSurvei(); sembunyikanKirimSurvei(); overlayTampil = false;
       S.selesai && S.selesai(res);
-    } finally { S.kirimBusy = false; }
+    } finally { if (overlayTampil) sembunyikanKirimSurvei(); S.kirimBusy = false; }
   }
 
   // Dipanggil sebelum layar nilai tampil. Mengembalikan Promise yang selesai setelah survei terkirim (atau tidak diperlukan).

@@ -277,8 +277,58 @@ var _aksiSaatIni_ = '';
 // (sering dipakai saat ujian berlangsung, jadi jangan sampai memaksa semua siswa membaca ulang sheet).
 var AKSI_TANPA_BUMP_ = { pemantauanTambahWaktu: 1, pemantauanForceFinish: 1, pemantauanHapusPelanggaran: 1, pemantauanReset: 1, hapusNilaiSiswa: 1, resetDevice: 1, resetDeviceKelas: 1, blokirSiswa: 1 };
 
+// ----------------------------------------------------------------------------
+// OTORISASI GURU (v43z56)
+// Sebelumnya server menjalankan aksi guru (getBankSoal = kunci jawaban, getDaftarSiswa = password siswa,
+// hapusSiswa, dst.) hanya dengan guruId tanpa bukti bahwa pemanggilnya guru. Sekarang login guru
+// mengembalikan TOKEN ACAK (disimpan di CacheService, berlaku 6 jam dan diperpanjang setiap dipakai).
+// Semua aksi di AKSI_GURU_ wajib membawa token itu (field "tokenGuru"); tanpa token yang sah server menolak.
+// ----------------------------------------------------------------------------
+var GURU_TOKEN_TTL = 21600; // detik (6 jam = batas CacheService)
+var AKSI_GURU_ = {
+  simpanSoal: 1, importSoal: 1, hapusSoal: 1, hapusSoalBanyak: 1, ubahStatusSoalBanyak: 1, ubahNamaKategori: 1, getBankSoal: 1,
+  simpanUjian: 1, hapusUjian: 1, getDaftarUjian: 1, getRekapNilai: 1, hitungUlangNilaiUjian: 1, getAnalisisSoal: 1,
+  getLogPelanggaran: 1, resetDevice: 1, resetDeviceKelas: 1, getPemantauanUjian: 1, pemantauanTambahWaktu: 1,
+  pemantauanForceFinish: 1, pemantauanHapusPelanggaran: 1, pemantauanReset: 1, hapusNilaiSiswa: 1, paksaFlushSesiSekarang: 1,
+  importSiswa: 1, updateSiswa: 1, hapusSiswa: 1, hapusKelas: 1, getDaftarSiswa: 1, blokirSiswa: 1, hapusFotoProfilGuru: 1,
+  setTokenKelas: 1, setAntiCurangUjian: 1, setTampilTokenUjian: 1, getPaketSurvei: 1, simpanPaketSurvei: 1, hapusPaketSurvei: 1,
+  getRekapSurvei: 1, updateAkunGuru: 1, simpanTema: 1, simpanBranding: 1, uploadGambar: 1, getPengaturanLock: 1,
+  simpanPengaturanLock: 1, getPengaturanTokenSiswa: 1, simpanPengaturanTokenSiswa: 1
+};
+// Dipakai guru DAN siswa: dijaga hanya bila dipanggil sebagai guru (tanpa siswaId).
+var AKSI_GURU_BILA_TANPA_SISWA_ = { getAnalisisMateri: 1, getDetailJawaban: 1 };
+
+function buatTokenGuru_(guruId) {
+  var t = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+  CacheService.getScriptCache().put('gt_' + t, String(guruId), GURU_TOKEN_TTL);
+  return t;
+}
+
+// Mengembalikan guruId pemilik token yang sah ('' bila tidak sah/kedaluwarsa) dan memperpanjang masa berlakunya.
+function guruDariToken_(token) {
+  token = String(token || '');
+  if (!/^[0-9a-f]{64}$/.test(token)) return '';
+  var cache = CacheService.getScriptCache();
+  var id = cache.get('gt_' + token);
+  if (!id) return '';
+  cache.put('gt_' + token, id, GURU_TOKEN_TTL);
+  return id;
+}
+
+// null = lolos; selain itu = jawaban penolakan yang langsung dikembalikan ke pemanggil.
+function periksaAksesGuru_(action, data) {
+  var wajib = AKSI_GURU_[action] === 1 || (AKSI_GURU_BILA_TANPA_SISWA_[action] === 1 && !(data && data.siswaId));
+  if (!wajib) return null;
+  var guruId = guruDariToken_(data && data.tokenGuru);
+  if (!guruId) return jsonOut_({ ok: false, authExpired: true, error: 'Sesi guru tidak sah atau sudah berakhir. Silakan login ulang.' });
+  if (data.guruId && String(data.guruId) !== String(guruId)) return jsonOut_({ ok: false, error: 'Akses ditolak.' });
+  return null;
+}
+
 function route_(action, data) {
   _aksiSaatIni_ = String(action || '');
+  var tolakAkses_ = periksaAksesGuru_(action, data);
+  if (tolakAkses_) return tolakAkses_;
   pastikanSkemaTerbaru_(); // self-healing: tambahkan kolom baru dari SCHEMA jika belum ada
   var lock = LockService.getScriptLock();
   switch (action) {
@@ -589,7 +639,7 @@ function actionLogin_(data) {
     if (!guru || String(guru.password) !== password) {
       return jsonOut_({ ok: false, error: 'Username atau password guru salah.' });
     }
-    return jsonOut_({ ok: true, user: { id: guru.id, nama: guru.nama, username: guru.username, role: 'guru' } });
+    return jsonOut_({ ok: true, user: { id: guru.id, nama: guru.nama, username: guru.username, role: 'guru', tokenGuru: buatTokenGuru_(guru.id) } });
   }
 
   if (role === 'siswa') {
