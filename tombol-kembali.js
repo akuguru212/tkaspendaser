@@ -14,6 +14,13 @@
    tangkap, kita lakukan satu tindakan, lalu penjaga dipasang lagi. Jadi berapa kali pun Kembali ditekan,
    siswa tidak pernah keluar tanpa konfirmasi, dan riwayat browser tidak menumpuk.
    Batas: pop up konfirmasi dapat diatur lewat TombolKembali.KONFIRMASI_KELUAR (true/false).
+
+   v43z58 — Kembali ditekan cepat / saat pop up "Yakin Anda akan keluar?" masih tampil:
+     Chrome HP menganggap entri riwayat yang dibuat TANPA sentuhan pengguna (mis. penjaga yang dipasang ulang
+     di dalam peristiwa popstate) sebagai entri yang boleh DILEWATI, sehingga tekanan Kembali berikutnya
+     langsung keluar aplikasi. Perbaikan: penjaga ditumpuk sampai MAKS_JAGA lapis, tiap lapis dipasang saat
+     siswa MENGETUK layar (jadi sah, tidak dilewati). Beberapa tekanan Kembali beruntun tetap tertahan.
+     Selain itu, Kembali saat pop up keluar masih tampil = menutup pop up dan kembali ke Beranda.
    ============================================================================ */
 'use strict';
 const TombolKembali = (function () {
@@ -31,7 +38,16 @@ const TombolKembali = (function () {
       !!(typeof AntiCheat !== 'undefined' && AntiCheat.modeSurvei);
   }
   const stateSkrg = () => { try { return history.state || null; } catch (e) { return null; } };
-  const dorong = (tanda) => { try { history.pushState({ [tanda]: 1 }, '', location.href); } catch (e) { /* abaikan */ } };
+  const MAKS_JAGA = 4;   // jumlah lapis penjaga yang disiapkan (penyangga untuk tekanan Kembali beruntun)
+  const dorong = (tanda, n) => { try { history.pushState({ [tanda]: n || 1 }, '', location.href); } catch (e) { /* abaikan */ } };
+  const kedalaman = () => { const s = stateSkrg(); return (s && Number(s[T_JAGA])) || 0; };
+  // Tambah satu lapis penjaga (hanya dipanggil dari ketukan/sentuhan siswa agar tidak dilewati Chrome).
+  function tambahJaga() {
+    if (!adaSiswa() || keluar || wilayahUjian() || !sudahDisentuh()) return;
+    const s = stateSkrg(); if (!s) return;
+    if (s[T_DASAR]) { dorong(T_JAGA, 1); return; }
+    if (s[T_JAGA] && kedalaman() < MAKS_JAGA) dorong(T_JAGA, kedalaman() + 1);
+  }
 
   // Chrome (HP) MELEWATI entri riwayat yang dibuat oleh halaman yang belum pernah disentuh pengguna. Jadi
   // penjaga baru dipasang setelah ada sentuhan/ketukan pertama (sesi yang dipulihkan setelah aplikasi dibuka
@@ -70,7 +86,7 @@ const TombolKembali = (function () {
   function pasang() {
     if (!adaSiswa() || keluar || wilayahUjian()) { hilangkanKetukLayar(); return; }
     const s = stateSkrg();
-    if (s && s[T_JAGA]) return;
+    if (s && s[T_JAGA]) { tambahJaga(); return; }
     if (!sudahDisentuh()) { tungguSentuhan(); return; }
     if (s && s[T_DASAR]) { dorong(T_JAGA); return; }
     try { history.replaceState({ [T_DASAR]: 1 }, '', location.href); } catch (e) { /* abaikan */ }
@@ -119,7 +135,12 @@ const TombolKembali = (function () {
   }
 
   function tindak() {
-    if (tutupSesuatuYangTerbuka()) return;
+    const popupKeluarTerbuka = popupTampil;
+    if (tutupSesuatuYangTerbuka()) {
+      // Kembali saat pop up "Yakin keluar?" masih tampil: tutup pop up, tetap di aplikasi, arahkan ke Beranda.
+      if (popupKeluarTerbuka) { try { if (typeof PortalSiswa !== 'undefined') PortalSiswa.kembaliBeranda(); } catch (e) { /* abaikan */ } }
+      return;
+    }
     if (kembaliSatuHalaman()) return;
     tanyaKeluar();   // sudah di halaman paling awal (Beranda): tanyakan dulu sebelum keluar
   }
@@ -128,7 +149,7 @@ const TombolKembali = (function () {
     if (keluar) return bereskan(e);
     if (!adaSiswa() || wilayahUjian()) return;   // bukan wilayah modul ini: perilaku lama tetap berlaku
     const s = e.state || stateSkrg();
-    if (!(s && s[T_JAGA])) dorong(T_JAGA);       // penjaga dipasang lagi supaya tekanan berikutnya juga tertangkap
+    if (!(s && s[T_JAGA])) dorong(T_JAGA, 1);    // cadangan: penjaga dipasang lagi (bisa dilewati Chrome bila tanpa sentuhan; penyangga ketukan di bawah yang diandalkan)
     tindak();
   }
 
@@ -148,6 +169,8 @@ const TombolKembali = (function () {
 
   // ---- pemasangan ----
   window.addEventListener('popstate', onPop);
+  // Setiap ketukan siswa mengisi ulang penyangga penjaga (sampai MAKS_JAGA lapis).
+  ['touchend', 'click'].forEach(t => document.addEventListener(t, () => { try { tambahJaga(); } catch (e) { /* abaikan */ } }, true));
   // Setiap kali layar siswa (non-ujian) tampil, penjaga dipastikan ada. Jalan lewat klik siswa, jadi
   // browser menerima entri riwayat tersebut (Chrome mengabaikan entri yang dibuat tanpa interaksi).
   const _tampilkan = UI.tampilkan;
