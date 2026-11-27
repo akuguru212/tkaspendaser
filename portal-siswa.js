@@ -27,7 +27,8 @@ const PortalSiswa = (function () {
     ['leaderboard', 'Leaderboard', 'fa-trophy', 'Peringkat'],
     ['analisis', 'Analisis Materi', 'fa-magnifying-glass-chart', 'Analisis']
   ];
-  const JUDUL = { dashboard: 'Dashboard', selesai: 'Simulasi yang Telah Diselesaikan', grafik: 'Grafik Perkembangan Skor', riwayat: 'Riwayat Simulasi', leaderboard: 'Leaderboard', analisis: 'Analisis Materi' };
+  const JUDUL = { dashboard: 'Dashboard', selesai: 'Simulasi yang Telah Diselesaikan', grafik: 'Grafik Perkembangan Skor', riwayat: 'Riwayat Simulasi', leaderboard: 'Leaderboard', analisis: 'Analisis Materi', profil: 'Profil Siswa' };
+  const VIEW_LAIN = ['profil']; // halaman yang tidak tampil di bilah menu bawah
 
   // ---------------- gaya ----------------
   (function () {
@@ -177,6 +178,60 @@ const PortalSiswa = (function () {
   #sw-screen table.sw-r td { border: 0; padding: .15rem 0; display: flex; justify-content: space-between; gap: .8rem; text-align: right; }
   #sw-screen table.sw-r td::before { content: attr(data-l); font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: #8a96a5; font-weight: 700; text-align: left; flex: 0 0 auto; }
 }
+/* ---------- halaman PROFIL SISWA ---------- */
+#sw-screen .sw-extra { display: block; margin-top: .6rem; padding-top: .6rem; border-top: 1px solid #eef1f5; }
+#sw-screen .sw-profil-link { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: .7rem; width: 100%; padding: .62rem .75rem; border-radius: 10px; font: 500 14px/1.2 'Poppins', sans-serif; color: #44505e; -webkit-tap-highlight-color: transparent; }
+#sw-screen .sw-profil-link i { width: 20px; text-align: center; color: #8a96a5; font-size: .95rem; }
+#sw-screen .sw-profil-link:hover { background: #eef4ff; }
+#sw-screen .sw-profil-link.on { background: var(--sw-blue); color: #fff; font-weight: 600; box-shadow: 0 6px 14px -6px rgba(13,110,253,.6); }
+#sw-screen .sw-profil-link.on i { color: #fff; }
+#sw-screen .sw-profil-link:focus-visible { outline: 3px solid rgba(13,110,253,.35); outline-offset: 2px; }
+#sw-screen .sw-pf-id { overflow: hidden; }
+#sw-screen .sw-pf-cover { height: 104px; background: linear-gradient(120deg, #1d4f8c, #326698 55%, #2b7bd1); position: relative; overflow: hidden; }
+#sw-screen .sw-pf-cover::before { content: ''; position: absolute; right: -40px; top: -80px; width: 260px; height: 260px; border-radius: 50%; background: rgba(255,255,255,.09); }
+#sw-screen .sw-pf-cover::after { content: ''; position: absolute; left: 22%; bottom: -90px; width: 190px; height: 190px; border-radius: 50%; background: rgba(255,255,255,.06); }
+#sw-screen .sw-pf-idin { display: flex; align-items: flex-end; gap: 1.1rem; padding: 0 1.4rem 1.2rem; margin-top: -48px; position: relative; flex-wrap: wrap; }
+#sw-screen .sw-pf-avbtn { flex: none; }
+#sw-screen .sw-pf-av { display: block; }
+#sw-screen .sw-pf-av .fp-av { width: 104px; height: 104px; font-size: 38px; box-shadow: 0 0 0 5px #fff, 0 10px 24px rgba(20,50,100,.28); }
+#sw-screen .sw-pf-avbtn .fp-cam { width: 30px; height: 30px; font-size: 13px; right: 2px; bottom: 2px; }
+#sw-screen .sw-pf-nm { flex: 1 1 240px; min-width: 0; padding-top: 52px; }
+#sw-screen .sw-pf-nm h3 { margin: 0; font: 700 21px/1.25 'Poppins', sans-serif; color: var(--sw-ink); word-break: break-word; }
+#sw-screen .sw-pf-nm p { margin: .15rem 0 .6rem; font-size: 13px; color: #6c757d; }
+#sw-screen .sw-pf-chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+#sw-screen .sw-pf-chip { display: inline-flex; align-items: center; gap: .4rem; padding: .22rem .7rem; border-radius: 999px; font-size: .75rem; font-weight: 600; color: #2b5fb4; background: #eef4ff; border: 1px solid #d6e5fb; }
+#sw-screen .sw-pf-chip.ok { color: #1b7f53; background: #e3f5ec; border-color: #c4e8d5; }
+#sw-screen .sw-pf-chip.bad { color: #c0334a; background: #fdeaed; border-color: #f6ccd3; }
+#sw-screen .sw-pf-aksi { padding-top: 52px; }
+#sw-screen .sw-pf-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+#sw-screen .sw-pf-panel { padding: 16px 20px 8px; }
+#sw-screen .sw-pf-panel h3 { display: flex; align-items: center; gap: .6rem; margin: 0 0 .5rem; padding-bottom: .7rem; border-bottom: 1px solid #eef1f5; font: 600 15.5px/1.3 'Poppins', sans-serif; color: var(--sw-ink); }
+#sw-screen .sw-pf-panel h3 .sw-pf-hi { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; font-size: .9rem; color: var(--k, #2563eb); background: color-mix(in srgb, var(--k, #2563eb) 13%, #fff); }
+#sw-screen .sw-pf-dl { margin: 0; }
+#sw-screen .sw-pf-row { display: grid; grid-template-columns: 22px minmax(104px, 38%) minmax(0, 1fr); gap: .65rem; align-items: start; padding: .72rem 0; border-bottom: 1px solid #f1f4f8; }
+#sw-screen .sw-pf-row:last-child { border-bottom: 0; }
+#sw-screen .sw-pf-row > i { color: #8a96a5; font-size: .88rem; text-align: center; padding-top: .18rem; }
+#sw-screen .sw-pf-row dt { margin: 0; font-size: .78rem; font-weight: 600; color: #6c757d; letter-spacing: .01em; padding-top: .08rem; }
+#sw-screen .sw-pf-row dd { margin: 0; font-size: .92rem; font-weight: 600; color: var(--sw-ink); line-height: 1.4; word-break: break-word; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+#sw-screen .sw-pf-row dd small { font-weight: 500; color: #6c757d; font-size: .76rem; }
+#sw-screen .sw-pf-kosong { font-weight: 500; font-style: italic; color: #9aa5b1; }
+#sw-screen .sw-pf-salin { all: unset; box-sizing: border-box; cursor: pointer; width: 28px; height: 28px; border-radius: 8px; display: inline-grid; place-items: center; color: #5b6673; background: #f1f4f8; font-size: .78rem; -webkit-tap-highlight-color: transparent; }
+#sw-screen .sw-pf-salin:hover { background: #e3ecfb; color: var(--sw-blue); }
+#sw-screen .sw-pf-salin:focus-visible { outline: 3px solid rgba(13,110,253,.35); outline-offset: 2px; }
+#sw-screen .sw-pf-info { display: flex; gap: .75rem; align-items: flex-start; padding: .85rem 1rem; border-radius: 12px; background: #f5f8fd; border: 1px solid #dfe8f6; font-size: .8rem; line-height: 1.6; color: #44505e; }
+#sw-screen .sw-pf-info i { color: var(--sw-blue); margin-top: .2rem; }
+@media (max-width: 960px) { #sw-screen .sw-extra { display: none; } #sw-screen .sw-pf-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  #sw-screen .sw-pf-cover { height: 84px; }
+  #sw-screen .sw-pf-idin { flex-direction: column; align-items: center; text-align: center; padding: 0 1rem 1.1rem; margin-top: -52px; }
+  #sw-screen .sw-pf-nm { padding-top: 0; flex-basis: auto; width: 100%; }
+  #sw-screen .sw-pf-chips { justify-content: center; }
+  #sw-screen .sw-pf-aksi { padding-top: 0; width: 100%; } #sw-screen .sw-pf-aksi .sw-btn { width: 100%; justify-content: center; }
+  #sw-screen .sw-pf-panel { padding: 14px 16px 6px; }
+  #sw-screen .sw-pf-row { grid-template-columns: 20px minmax(0, 1fr); row-gap: .1rem; }
+  #sw-screen .sw-pf-row dt { grid-column: 2; } #sw-screen .sw-pf-row dd { grid-column: 2; }
+  #sw-screen .sw-pf-row > i { grid-row: 1 / span 2; }
+}
 /* kartu "Akun Saya" di layar konfirmasi peserta */
 .sw-entry { padding: 22px 26px 24px 44px; display: flex; flex-direction: column; gap: 1rem; }
 .sw-entry .sw-entry-head { display: flex; align-items: center; gap: .9rem; }
@@ -213,7 +268,17 @@ const PortalSiswa = (function () {
     return l === true ? '<span class="sw-st lulus">Lulus</span>' : (l === false ? '<span class="sw-st remedial">Remedial</span>' : '<span class="sw-st netral">Selesai</span>');
   }
   const jenisR = (r) => PG.jenisItem(r);
-  const namaDepan = (n) => { const s = String(n || '').trim().split(/\s+/)[0] || 'Siswa'; return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase(); };
+  // Nama panggilan untuk sapaan. Nama depan orang Bali umumnya sama (Wayan/Putu/Gede, Made/Kadek, Nyoman/Komang, Ketut),
+  // jadi kata urutan lahir & gelar dilewati dan dipakai nama tengah (atau belakang bila tidak ada nama tengah).
+  const KATA_LEWAT = ['wayan', 'putu', 'gede', 'gde', 'made', 'kadek', 'nengah', 'nyoman', 'komang', 'ketut', 'ni', 'i', 'luh', 'ngurah', 'anak', 'agung', 'gusti', 'ida', 'bagus', 'dewa', 'desak', 'cokorda', 'ayu', 'sang', 'ketut', 'pande', 'jero'];
+  const namaDepan = (n) => {
+    const kata = String(n || '').trim().split(/\s+/).filter(Boolean);
+    if (!kata.length) return 'Siswa';
+    const sisa = kata.filter(k => KATA_LEWAT.indexOf(k.toLowerCase()) < 0);
+    // kata pertama setelah nama urutan lahir/gelar (nama tengah); bila tidak ada, pakai kata terakhir
+    const pilih = sisa[0] || kata[kata.length - 1];
+    return pilih.charAt(0).toUpperCase() + pilih.slice(1).toLowerCase();
+  };
   const inisial = (n) => String(n || '?').trim().split(/\s+/).slice(0, 2).map(w => w.charAt(0)).join('').toUpperCase() || '?';
 
   // ---------------- data ----------------
@@ -246,6 +311,7 @@ const PortalSiswa = (function () {
     const u = state.user || {};
     $('sw-side').innerHTML = `<div class="sw-prof"><div class="sw-av">${esc(inisial(u.nama))}</div><div><b>${esc(u.nama || '-')}</b><small>${u.kelas ? 'Kelas ' + esc(u.kelas) + ' · ' : ''}${esc(u.username || '')}</small></div></div>
       <nav class="sw-nav" aria-label="Menu siswa">${MENU.map(m => `<button type="button" data-v="${m[0]}" class="${PS.view === m[0] ? 'on' : ''}" ${PS.view === m[0] ? 'aria-current="page"' : ''} aria-label="${m[1]}" onclick="PortalSiswa.buka('${m[0]}')"><i class="fa-solid ${m[2]}"></i><span class="sw-tf">${m[1]}</span><span class="sw-ts">${m[3]}</span></button>`).join('')}</nav>
+      <div class="sw-extra"><button type="button" class="sw-profil-link ${PS.view === 'profil' ? 'on' : ''}" data-v="profil" ${PS.view === 'profil' ? 'aria-current="page"' : ''} onclick="PortalSiswa.buka('profil')"><i class="fa-solid fa-id-card"></i><span>Profil Saya</span></button></div>
       <button type="button" class="sw-cta" onclick="PortalSiswa.mulaiSimulasi()"><i class="fa-solid fa-play"></i> Mulai Simulasi</button>`;
   }
   function judulHalaman(sub) {
@@ -255,7 +321,8 @@ const PortalSiswa = (function () {
 
   function renderView() {
     const isi = $('sw-isi'); if (!isi) return;
-    document.querySelectorAll('#sw-side .sw-nav button').forEach(b => { const on = b.dataset.v === PS.view; b.classList.toggle('on', on); if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+    document.querySelectorAll('#sw-side button[data-v]').forEach(b => { const on = b.dataset.v === PS.view; b.classList.toggle('on', on); if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+    if (PS.view === 'profil') { vProfil(isi); window.scrollTo(0, 0); return; }
     if (PS.galat && !PS.data) {
       isi.innerHTML = `<div class="sw-konten">${judulHalaman('')}<div class="sw-card sw-galat"><i class="fa-solid fa-triangle-exclamation"></i><b>${esc(PS.galat)}</b><p style="margin:.4rem 0 .8rem;font-size:.84rem">Pastikan koneksi internet stabil. Untuk Mode Server, pastikan <code>Code.gs</code> terbaru sudah dipasang (aksi <code>getPortalSiswa</code>).</p><button type="button" class="sw-btn solid" onclick="PortalSiswa.segarkan()">Coba lagi</button></div></div>`;
       return;
@@ -443,10 +510,81 @@ const PortalSiswa = (function () {
     AnalisisMateri.renderSiswa();
   }
 
+  // ---------------- PROFIL SISWA ----------------
+  const KOSONG = '<span class="sw-pf-kosong">Belum diisi</span>';
+  const nilaiPf = (v) => { const t = String(v == null ? '' : v).trim(); return t ? esc(t) : KOSONG; };
+  function jkTeks(v) { const t = String(v || '').trim().toLowerCase(); return /^l/.test(t) ? 'Laki-laki' : (/^p/.test(t) ? 'Perempuan' : ''); }
+  function umurTeks(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || '')); if (!m) return '';
+    const n = new Date(); let th = n.getFullYear() - (+m[1]), bl = n.getMonth() + 1 - (+m[2]);
+    if (n.getDate() < (+m[3])) bl--;
+    if (bl < 0) { th--; bl += 12; }
+    return (th < 0 || th > 60) ? '' : th + ' tahun' + (bl ? ' ' + bl + ' bulan' : '');
+  }
+  function barisPf(ikon, label, isi) { return `<div class="sw-pf-row"><i class="fa-solid ${ikon}" aria-hidden="true"></i><dt>${label}</dt><dd>${isi}</dd></div>`; }
+  function vProfil(isi) {
+    const u = state.user || {};
+    const iso = (typeof Anbk !== 'undefined' && u.tanggal_lahir) ? Anbk.isoTgl(u.tanggal_lahir) : '';
+    const tglTeks = (typeof Anbk !== 'undefined' && u.tanggal_lahir) ? Anbk.tglPanjang(u.tanggal_lahir) : '';
+    const umur = umurTeks(iso), jk = jkTeks(u.jenis_kelamin);
+    const blok = !!(u.blokir && u.blokir.aktif);
+    const chipJk = jk ? `<span class="sw-pf-chip"><i class="fa-solid ${jk === 'Perempuan' ? 'fa-venus' : 'fa-mars'}"></i>${jk}</span>` : '';
+    let ringkas;
+    if (PS.data) {
+      const rk = ringkasan();
+      ringkas = `<div class="sw-kpis">
+        ${kpi('fa-circle-check', '#198754', 'Simulasi Selesai', rk.nUjian, `${rk.nTes} tes · ${rk.nPercobaan} percobaan`)}
+        ${kpi('fa-chart-simple', '#2563eb', 'Rata-rata Nilai', rk.rata == null ? '–' : fmt(rk.rata), 'Dari semua simulasi')}
+        ${kpi('fa-ranking-star', '#d6455d', 'Peringkat Kelas', rk.saya ? '#' + rk.saya.rank : '–', rk.saya ? `dari ${rk.total} siswa` : 'Belum ada peringkat')}
+      </div>`;
+    } else {
+      ringkas = `<div class="sw-kpis">${'<div class="sw-skel" style="height:78px"></div>'.repeat(3)}</div>`;
+    }
+    isi.innerHTML = `<div class="sw-konten" style="display:grid;gap:1rem">${judulHalaman('Data diri dan akun peserta simulasi. Data pribadi dikelola oleh guru.')}
+      <div class="sw-card sw-pf-id">
+        <div class="sw-pf-cover"></div>
+        <div class="sw-pf-idin">
+          <button type="button" class="fp-av-btn sw-pf-avbtn" aria-label="Ubah foto profil" title="Ubah foto profil" onclick="FotoProfil.buka(this)"><span class="sw-pf-av"></span><span class="fp-cam" aria-hidden="true"><i class="fa-solid fa-camera"></i></span></button>
+          <div class="sw-pf-nm"><h3>${esc(u.nama || '-')}</h3><p>Peserta Simulasi TKA · SMP Negeri 2 Seririt</p>
+            <div class="sw-pf-chips">${u.kelas ? `<span class="sw-pf-chip"><i class="fa-solid fa-chalkboard-user"></i>Kelas ${esc(u.kelas)}</span>` : ''}${u.nisn ? `<span class="sw-pf-chip"><i class="fa-solid fa-id-badge"></i>NISN ${esc(u.nisn)}</span>` : ''}${chipJk}<span class="sw-pf-chip ${blok ? 'bad' : 'ok'}"><i class="fa-solid ${blok ? 'fa-ban' : 'fa-circle-check'}"></i>${blok ? 'Akun Diblokir' : 'Akun Aktif'}</span></div></div>
+          <div class="sw-pf-aksi"><button type="button" class="sw-btn" onclick="FotoProfil.buka(this)"><i class="fa-solid fa-camera"></i> Ubah Foto &amp; Karakter</button></div>
+        </div>
+      </div>
+      <div class="sw-pf-grid">
+        <div class="sw-card sw-pf-panel"><h3><span class="sw-pf-hi" style="--k:#2563eb"><i class="fa-solid fa-user"></i></span>Data Pribadi</h3>
+          <dl class="sw-pf-dl">
+            ${barisPf('fa-signature', 'Nama Lengkap', nilaiPf(u.nama))}
+            ${barisPf('fa-id-badge', 'NISN', nilaiPf(u.nisn))}
+            ${barisPf('fa-venus-mars', 'Jenis Kelamin', jk ? esc(jk) : KOSONG)}
+            ${barisPf('fa-location-dot', 'Tempat Lahir', nilaiPf(u.tempat_lahir))}
+            ${barisPf('fa-cake-candles', 'Tanggal Lahir', tglTeks ? esc(tglTeks) + (umur ? ` <small>(${esc(umur)})</small>` : '') : KOSONG)}
+          </dl></div>
+        <div class="sw-card sw-pf-panel"><h3><span class="sw-pf-hi" style="--k:#7c3aed"><i class="fa-solid fa-school"></i></span>Data Sekolah &amp; Akun</h3>
+          <dl class="sw-pf-dl">
+            ${barisPf('fa-building-columns', 'Sekolah', 'SMP Negeri 2 Seririt')}
+            ${barisPf('fa-chalkboard-user', 'Kelas', nilaiPf(u.kelas))}
+            ${barisPf('fa-at', 'Username', u.username ? `${esc(u.username)}<button type="button" class="sw-pf-salin" aria-label="Salin username" title="Salin username" onclick="PortalSiswa.salinUsername()"><i class="fa-regular fa-copy"></i></button>` : KOSONG)}
+            ${barisPf('fa-shield-halved', 'Status Akun', `<span class="sw-pf-chip ${blok ? 'bad' : 'ok'}"><i class="fa-solid ${blok ? 'fa-ban' : 'fa-circle-check'}"></i>${blok ? 'Diblokir' : 'Aktif'}</span>`)}
+            ${barisPf('fa-graduation-cap', 'Peran', 'Peserta Simulasi')}
+          </dl></div>
+      </div>
+      ${ringkas}
+      <div class="sw-pf-info"><i class="fa-solid fa-circle-info" aria-hidden="true"></i><div>Data pribadi diisi oleh guru atau admin sekolah. Bila ada data yang belum diisi atau kurang tepat (misalnya nama, NISN, atau tanggal lahir), silakan hubungi guru kelas agar diperbaiki. Kata sandi tidak ditampilkan demi keamanan akun.</div></div>
+    </div>`;
+    if (typeof FotoProfil !== 'undefined') FotoProfil.terapkanAvatar();
+  }
+  function salinUsername() {
+    const t = (state.user && state.user.username) || ''; if (!t) return;
+    const ok = () => { if (typeof toast === 'function') toast('Username disalin.', 'success'); };
+    const cadangan = () => { try { const a = document.createElement('textarea'); a.value = t; a.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(a); a.select(); document.execCommand('copy'); a.remove(); ok(); } catch (e) { /* abaikan */ } };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok, cadangan); else cadangan();
+  }
+  function bukaProfil(el) { const m = el && el.closest ? el.closest('.anbk-usermenu') : null; if (m) m.classList.add('hidden'); buka('profil'); }
+
   // ---------------- navigasi ----------------
   function buka(v, arg) {
     if (typeof state === 'undefined' || !state.user || state.user.role !== 'siswa') return;
-    if (!MENU.some(m => m[0] === v)) v = 'dashboard';
+    if (!MENU.some(m => m[0] === v) && VIEW_LAIN.indexOf(v) < 0) v = 'dashboard';
     PS.view = v;
     if (v === 'analisis') AnalisisMateri.resetJenis(arg);
     UI.tampilkan('sw-screen');
@@ -475,8 +613,14 @@ const PortalSiswa = (function () {
   }
   // pintu masuk tambahan di layar konfirmasi peserta (menu pengguna & layar hasil)
   function pasangPintuMasuk() {
-    ['siswa-portal', 'tes-konfirmasi-screen'].forEach(id => {
-      const m = document.querySelector('#' + id + ' .anbk-usermenu'); if (!m || m.querySelector('[data-aksi="sw"]')) return;
+    ['sw-screen', 'siswa-portal', 'tes-konfirmasi-screen'].forEach(id => {
+      const m = document.querySelector('#' + id + ' .anbk-usermenu'); if (!m) return;
+      if (!m.querySelector('[data-aksi="profil"]')) {
+        const bp = document.createElement('button'); bp.type = 'button'; bp.setAttribute('data-aksi', 'profil'); bp.setAttribute('onclick', 'PortalSiswa.bukaProfil(this)');
+        bp.innerHTML = '<i class="fa-solid fa-id-card"></i> Profil Saya';
+        m.insertBefore(bp, m.firstChild);
+      }
+      if (id === 'sw-screen' || m.querySelector('[data-aksi="sw"]')) return;
       const b = document.createElement('button'); b.type = 'button'; b.setAttribute('data-aksi', 'sw'); b.setAttribute('onclick', "PortalSiswa.buka('dashboard')");
       b.innerHTML = '<i class="fa-solid fa-gauge-high"></i> Dashboard Saya';
       m.insertBefore(b, m.firstChild);
@@ -492,5 +636,5 @@ const PortalSiswa = (function () {
   function bukaSegar(v) { PS.waktu = 0; buka(v); }
   pasangPintuMasuk();
 
-  return { buka, bukaSegar, segarkan, mulaiSimulasi, toggleSeri, filterRiwayat, cariRiwayat, detail, lbPilihTes, lbPilihScope, toggleMenuUser, _PS: PS };
+  return { buka, bukaSegar, segarkan, mulaiSimulasi, toggleSeri, filterRiwayat, cariRiwayat, detail, lbPilihTes, lbPilihScope, toggleMenuUser, salinUsername, bukaProfil, _PS: PS };
 })();

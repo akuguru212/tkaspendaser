@@ -1,3 +1,11 @@
+# v43z48 — Portal Siswa: halaman PROFIL SISWA + tombol navigasi soal (HP)
+- Baru: menu **Profil Saya** (ikon di pojok kanan atas = menu pengguna; di desktop juga di sidebar). Menampilkan foto/karakter, nama lengkap,
+  NISN, jenis kelamin, tempat & tanggal lahir (+ usia), sekolah, kelas, username (bisa disalin), status akun, dan ringkasan belajar.
+  Data diambil dari akun siswa yang sudah ada (diisi guru), jadi Code.gs TIDAK perlu diubah. Kolom kosong tampil "Belum diisi".
+- Tombol "Soal sebelumnya" di HP kembali merah (sebelumnya tertimpa gradasi putih).
+- Sapaan "Halo, ...!" kini memakai nama tengah/belakang (melewati Wayan/Putu/Gede, Made/Kadek, Nyoman/Komang, Ketut, Ni, I, Luh, dst.).
+- File berubah: portal-siswa.js, foto-profil.js, mobile.css, index.html, sw.js.
+
 # v43z47 — Detail Jawaban (HP): tombol "Kembali ke Hasil" mencolok & timbul
 
 - **Masalah:** di HP tombol *Kembali ke Hasil* pada halaman Detail Jawaban tampak polos (putih).

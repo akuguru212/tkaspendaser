@@ -283,6 +283,12 @@ const FotoProfil = (function () {
         }
       }
     }
+    // avatar besar di halaman Profil Siswa
+    const pf = document.querySelector('#sw-isi .sw-pf-av');
+    if (pf) {
+      const kP = foto || (kar ? spec : ('k:' + bukaSeed(u)));
+      if (pf.dataset.fpSrc !== kP) { pf.innerHTML = avatarHtml(u.nama, foto, 'fp-live', bukaSeed(u), spec); pf.dataset.fpSrc = kP; }
+    }
     // avatar besar di banner Dashboard
     const hero = document.querySelector('#sw-isi .sw-hero');
     if (hero) {
