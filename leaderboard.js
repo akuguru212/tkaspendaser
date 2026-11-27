@@ -71,6 +71,11 @@ const Leaderboard = (function () {
 #guru-portal .lb-root table.lb-table td { padding: .5rem .5rem; border-bottom: 1px solid var(--c-line); vertical-align: middle; }
 #guru-portal .lb-root table.lb-table tbody tr:last-child td { border-bottom: 0; }
 #guru-portal .lb-root table.lb-table tbody tr:hover td { background: var(--c-hover); }
+@media (max-width: 900px) {
+  #guru-portal .lb-root table.lb-table td:nth-child(2) { position: sticky; left: 0; z-index: 1; background: var(--c-surface); box-shadow: 1px 0 0 var(--c-line); }
+  #guru-portal .lb-root table.lb-table th:nth-child(2) { left: 0; z-index: 3; box-shadow: 1px 0 0 var(--c-line); }
+  #guru-portal .lb-root .lb-scroll { -webkit-overflow-scrolling: touch; }
+}
 #guru-portal .lb-root .lb-c { text-align: center !important; }
 #guru-portal .lb-root tr.lb-r1 td { background: color-mix(in srgb, #f4c542 17%, var(--c-surface)); }
 #guru-portal .lb-root tr.lb-r2 td { background: color-mix(in srgb, #aab4c2 17%, var(--c-surface)); }

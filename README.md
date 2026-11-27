@@ -1,3 +1,14 @@
+# v43z62 — Tampilan tabel Hasil Survei (desktop & HP) + kolom nama menempel di tabel lebar
+
+- **Masalah:** tabel Hasil Survei (guru) memakai kelas `table-wrap` / `data-table` yang belum punya CSS sama sekali, sehingga seluruh halaman ikut bergeser ke samping, nama siswa terpotong, judul dimensi dipotong ("satua…", "gen…"), dan kolom Catatan / Detail menumpuk.
+- **Desktop (`survei.js` v28):** tabel kini berada di kotak yang bisa digeser sendiri (halaman tidak ikut bergeser), judul kolom tampil lengkap, kolom **No & Nama menempel** di kiri saat digeser, sel rata tengah, waktu tidak terpecah, kolom aksi (Perhatian BK + Detail) rapi. Berlaku juga untuk tabel "Rata-rata nilai survei per kelas".
+- **HP (layar <= 640 px):** tiap siswa tampil sebagai **kartu** (nama di atas, lalu pasangan label-nilai, tombol aksi di bawah). Label diambil otomatis dari judul kolom.
+- **Halaman lain:** pada layar <= 900 px, kolom **Nama** ikut menempel saat tabel digeser di Analisis Materi (`analisis-materi.js` v7), Perkembangan Siswa (`perkembangan.js` v3), dan Leaderboard / Leaderboard Survei (`leaderboard.js` v2). Tampilan desktop tabel-tabel itu tidak berubah.
+- Isi, angka, dan perilaku tabel TIDAK berubah; hanya tampilan. `Code.gs` tidak berubah.
+- Unggah: `survei.js`, `analisis-materi.js`, `perkembangan.js`, `leaderboard.js`, `index.html`, `sw.js` (`hp59`), `README.md`.
+
+---
+
 # v43z61 — Analisis Materi: pengisian survei "perlu dicek" kini ditandai & bisa diabaikan
 
 - **Masalah:** pengisian Survei Karakter / Sulingjar yang ditandai *perlu dicek* (terlalu cepat, jawaban seragam, atau bertentangan) ikut dihitung penuh di rata-rata kelas tanpa penanda apa pun, dan bila satu survei diisi berulang, yang dipilih adalah nilai tertinggi, bukan yang kualitasnya baik.

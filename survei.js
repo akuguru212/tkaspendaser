@@ -91,6 +91,43 @@ const Survei = (function () {
 .sv-bk-chip { display: inline-block; margin: 2px 6px 2px 0; }
 .sv-aksi-btn { white-space: nowrap; }
 
+/* ---- tabel hasil survei (guru): rapi, bisa digeser di dalam kotaknya, kolom No & Nama menempel, jadi kartu di HP ---- */
+.table-wrap { overflow: auto; max-width: 100%; max-height: 74vh; border: 1px solid var(--c-line, #dee2e6); border-radius: 14px; background: var(--c-surface, #fff); -webkit-overflow-scrolling: touch; margin: .4rem 0 .9rem; }
+.table-wrap table.data-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .86rem; }
+.table-wrap .data-table th { position: sticky; top: 0; z-index: 2; background: var(--c-surface, #fff); padding: .6rem .55rem; font-size: .76rem; font-weight: 700; line-height: 1.25; color: var(--c-muted, #6c757d); text-align: center; vertical-align: bottom; border-bottom: 2px solid var(--c-line, #dee2e6); min-width: 78px; }
+.table-wrap .data-table td { padding: .5rem .55rem; text-align: center; vertical-align: middle; white-space: nowrap; border-bottom: 1px solid var(--c-line, #dee2e6); }
+.table-wrap .data-table tbody tr:last-child td { border-bottom: 0; }
+.table-wrap .data-table tbody tr:hover td { background: var(--c-hover, #f3f6fb); }
+.table-wrap .data-table .badge { white-space: nowrap; }
+.table-wrap .data-table .sv-kes-mini { white-space: normal; min-width: 112px; font-size: .7rem; margin-top: 3px; line-height: 1.25; }
+.table-wrap .data-table td.aksi { min-width: 132px; }
+.table-wrap .data-table td.aksi .badge { margin-bottom: .35rem; }
+.table-wrap .data-table tr.sv-semua td { font-weight: 700; }
+@media (min-width: 641px) {
+  .table-wrap .data-table.dt-kartu th:nth-child(1), .table-wrap .data-table.dt-kartu td:nth-child(1) { position: sticky; left: 0; width: 44px; min-width: 44px; background: var(--c-surface, #fff); }
+  .table-wrap .data-table.dt-kartu th:nth-child(2), .table-wrap .data-table.dt-kartu td:nth-child(2) { position: sticky; left: 44px; min-width: 168px; max-width: 230px; text-align: left; white-space: normal; font-weight: 600; background: var(--c-surface, #fff); box-shadow: 1px 0 0 var(--c-line, #dee2e6); }
+  .table-wrap .data-table.dt-kartu td:nth-child(1), .table-wrap .data-table.dt-kartu td:nth-child(2) { z-index: 1; }
+  .table-wrap .data-table.dt-kartu th:nth-child(1), .table-wrap .data-table.dt-kartu th:nth-child(2) { z-index: 3; }
+  .table-wrap .data-table.dt-kartu tbody tr:hover td:nth-child(1), .table-wrap .data-table.dt-kartu tbody tr:hover td:nth-child(2) { background: var(--c-hover, #f3f6fb); }
+}
+@media (max-width: 640px) {
+  .table-wrap.dt-wrap { overflow: visible; max-height: none; border: 0; border-radius: 0; background: transparent; margin: .4rem 0; }
+  .table-wrap.dt-wrap .data-table.dt-kartu, .table-wrap.dt-wrap .data-table.dt-kartu tbody { display: block; width: 100%; min-width: 0; }
+  .table-wrap.dt-wrap .data-table.dt-kartu thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .table-wrap.dt-wrap .data-table.dt-kartu tr { display: block; background: var(--c-surface, #fff); border: 1px solid var(--c-line, #dee2e6); border-radius: 14px; padding: .4rem .95rem .6rem; margin-bottom: .75rem; box-shadow: 0 1px 4px rgba(28,35,51,.06); }
+  .table-wrap.dt-wrap .data-table.dt-kartu tbody tr:hover td { background: transparent; }
+  .table-wrap.dt-wrap .data-table.dt-kartu td { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .15rem .8rem; text-align: right; padding: .42rem 0; border: 0; border-bottom: 1px dashed var(--c-line, #dee2e6); white-space: normal; min-width: 0; }
+  .table-wrap.dt-wrap .data-table.dt-kartu td[data-label]::before { content: attr(data-label); flex: 1 1 42%; text-align: left; font-size: .72rem; font-weight: 700; color: var(--c-muted, #6c757d); }
+  .table-wrap.dt-wrap .data-table.dt-kartu td:nth-child(1) { display: none; }
+  .table-wrap.dt-wrap .data-table.dt-kartu td:nth-child(2) { display: block; text-align: left; font-size: 1rem; font-weight: 700; padding: .55rem 0 .5rem; border-bottom: 1px solid var(--c-line, #dee2e6); white-space: normal; }
+  .table-wrap.dt-wrap .data-table.dt-kartu td:nth-child(2)::before { display: none; }
+  .table-wrap.dt-wrap .data-table.dt-kartu .sv-kes-mini { min-width: 0; flex: 1 0 100%; text-align: right; margin: 0; }
+  .table-wrap.dt-wrap .data-table.dt-kartu td.aksi { justify-content: flex-start; gap: .5rem; border-bottom: 0; padding-top: .7rem; min-width: 0; }
+  .table-wrap.dt-wrap .data-table.dt-kartu td.aksi::before { display: none; }
+  .table-wrap.dt-wrap .data-table.dt-kartu td.aksi .badge { margin: 0; }
+  .table-wrap.dt-wrap .data-table.dt-kartu td.aksi br { display: none; }
+}
+
 /* tampilan matriks (beberapa pernyataan per halaman, gaya ANBK) */
 .sv-kode { color: #8a94a0; font-size: .62em; font-style: italic; white-space: nowrap; }
 .sv-ket-m { font-size: 13px; color: #343a40; margin-bottom: 10px; }
@@ -855,12 +892,19 @@ const Survei = (function () {
     const lemah = `<div class="sv-lemah"><b>5 butir dengan nilai terendah (bahan perbaikan)</b><ol>${butir.map(x => `<li><span>${esc(x.b[4])}</span> <em>${esc(J.dimNama[x.b[1]])}</em> <b style="color:${kategoriIndeks(x.m).warna}">${fmt(x.m)}</b></li>`).join('')}</ol></div>`;
     const perhatian = G.jenis === 'sulingjar' ? rows.filter(r => dijawabPerhatian(r, J).length).length : 0;
     ring.innerHTML = `<div class="sv-info"><span><b>${rows.length}</b> siswa mengisi</span>${G.belum ? `<span><b>${G.belum}</b> belum mengisi</span>` : ''}<span><b>${rows.filter(r => !r._q.baik).length}</b> pengisian perlu dicek</span><span title="Siswa yang keluar layar penuh/pindah tab/aplikasi/screenshot saat mengisi survei"><b>${rows.filter(r => r._lg.pelanggaran > 0).length}</b> siswa ada pelanggaran survei</span>${(() => { const v = rows.map(r => r.kualitas && r.kualitas.nilai).filter(x => x !== undefined && x !== null); return v.length ? `<span>Rata-rata Nilai Kesungguhan <b>${fmt(bulat2(v.reduce((a, c) => a + c, 0) / v.length))}</b></span>` : ''; })()}<span>Rata-rata nilai survei <b>${fmt(totalKelas)}</b></span>${perhatian ? `<span class="sv-warn"><i class="fa-solid fa-circle-exclamation"></i> <b>${perhatian}</b> siswa melaporkan pengalaman tidak aman (beberapa kali/sering)</span>` : ''}</div><div class="sv-kartu-wrap">${kartu}</div>${htmlEvaluasi(rows, J, rata)}${htmlPerKelas(rows, J)}${lemah}<p class="subtitle" style="margin:.4rem 0">Nilai survei skala 0–100 (makin tinggi makin baik; jawaban terbaik = skor 4). Kategori Baik ≥ 75, Sedang 50–74,99, Perlu perhatian &lt; 50 hanyalah acuan latihan.</p>`;
-    const th = J.dim.map(d => `<th title="${esc(d[1])}">${esc(d[1].length > 22 ? d[1].slice(0, 20) + '…' : d[1])}</th>`).join('');
-    cont.innerHTML = `<div class="table-wrap"><table class="data-table"><thead><tr><th>No</th><th>Nama</th><th>Kelas</th>${th}<th>${G.jenis === 'karakter' ? 'Nilai Survei Karakter' : 'Nilai Sulingjar'}</th><th>Waktu</th><th>Nilai Kesungguhan</th><th>Kualitas Pengisian</th><th title="Kejadian anti-nyontek saat survei (tidak menambah pelanggaran ujian)">Pelanggaran Survei</th>${G.jenis === 'sulingjar' ? '<th>Catatan</th>' : ''}<th title="Lihat jawaban siswa ini per dimensi dan per butir">Detail Jawaban</th></tr></thead><tbody>${rows.map((r, i) => {
+    const th = J.dim.map(d => `<th title="${esc(d[1])}">${esc(d[1])}</th>`).join('');
+    cont.innerHTML = `<div class="table-wrap dt-wrap"><table class="data-table dt-kartu"><thead><tr><th>No</th><th>Nama</th><th>Kelas</th>${th}<th>${G.jenis === 'karakter' ? 'Nilai Survei Karakter' : 'Nilai Sulingjar'}</th><th>Waktu</th><th>Nilai Kesungguhan</th><th>Kualitas Pengisian</th><th title="Kejadian anti-nyontek saat survei (tidak menambah pelanggaran ujian)">Pelanggaran Survei</th>${G.jenis === 'sulingjar' ? '<th>Catatan</th>' : ''}<th title="Lihat jawaban siswa ini per dimensi dan per butir">Detail Jawaban</th></tr></thead><tbody>${rows.map((r, i) => {
       const sel = J.dim.map(d => { const x = r._h.dim[d[0]].indeks; const k = kategoriIndeks(x); return `<td><span class="sv-lencana" style="background:${k.latar};color:${k.warna}">${fmt(x)}</span></td>`; }).join('');
       const cat = G.jenis === 'sulingjar' ? `<td>${dijawabPerhatian(r, J).length ? '<span class="badge no" title="Menjawab Beberapa kali/Sering pada butir pengalaman tidak aman. Tindak lanjuti secara rahasia.">Perlu tindak lanjut</span>' : '-'}</td>` : '';
       return `<tr><td>${i + 1}</td><td><a href="#" onclick="Survei.bukaDetail('${esc(String(r.sesiId))}');return false" title="Lihat detail jawaban survei">${esc(r.nama)}</a></td><td>${esc(r.kelas)}</td>${sel}<td><b>${fmt(r._h.total)}</b></td><td>${r.durasi ? Math.floor(r.durasi / 60) + ' mnt ' + (r.durasi % 60) + ' dtk' : '-'}</td><td>${r.kualitas && r.kualitas.nilai !== undefined ? `<span class="sv-lencana" style="background:${kategoriKesungguhan(r.kualitas.nilai).latar};color:${kategoriKesungguhan(r.kualitas.nilai).warna}" title="${kategoriKesungguhan(r.kualitas.nilai).label}">${r.kualitas.nilai}</span>` : '-'}</td><td>${r._q.baik ? '<span class="badge ok">Baik</span>' : `<span class="badge no" title="${esc(r._q.alasan.join('; '))}">Perlu dicek</span>`}</td><td>${selLgSurvei(r._lg)}</td>${cat}<td class="aksi">${(() => { const bk = analisisBK(r); return bk.perlu ? '<span class="badge no" title="Ada dimensi bernilai rendah atau pengalaman tidak aman. Layak ditindaklanjuti guru BK.">⚠ Perhatian BK</span><br>' : ''; })()}<button type="button" class="secondary small sv-aksi-btn" onclick="Survei.bukaDetail('${esc(String(r.sesiId))}')">🔍 Detail</button></td></tr>`;
     }).join('')}</tbody></table></div>`;
+    labeliTabel(cont);
+  }
+  // label tiap sel (dipakai tampilan kartu di HP): diambil dari judul kolom
+  function labeliTabel(wadah) {
+    const t = wadah.querySelector('table.dt-kartu'); if (!t) return;
+    const lab = Array.from(t.querySelectorAll('thead th')).map(h => h.textContent.trim());
+    t.querySelectorAll('tbody tr').forEach(tr => Array.from(tr.children).forEach((td, i) => { if (lab[i] !== undefined) td.setAttribute('data-label', lab[i]); }));
   }
 
   function rataDim(rows, J) {
@@ -886,7 +930,7 @@ const Survei = (function () {
   function htmlPerKelas(rows, J) {
     const kelas = Array.from(new Set(rows.map(r => r.kelas))).sort();
     if (kelas.length < 2) return '';
-    const th = J.dim.map(d => `<th title="${esc(d[1])}">${esc(d[1].length > 20 ? d[1].slice(0, 18) + '…' : d[1])}</th>`).join('');
+    const th = J.dim.map(d => `<th title="${esc(d[1])}">${esc(d[1])}</th>`).join('');
     const baris = kelas.concat(['__semua']).map(kl => {
       const sub = kl === '__semua' ? rows : rows.filter(r => r.kelas === kl); const m = rataDim(sub, J);
       const sel = J.dim.map(d => { const k = kategoriIndeks(m[d[0]]); return `<td><span class="sv-lencana" style="background:${k.latar};color:${k.warna}">${fmt(m[d[0]])}</span></td>`; }).join('');

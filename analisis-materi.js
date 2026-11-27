@@ -130,6 +130,11 @@ const AnalisisMateri = (function () {
 #tab-analisis-materi table.am-table th { position: sticky; top: 0; z-index: 2; background: var(--c-surface); text-align: left; padding: .6rem .6rem; font-size: .72rem; letter-spacing: .05em; text-transform: uppercase; color: var(--c-muted); border-bottom: 2px solid var(--c-line); white-space: nowrap; }
 #tab-analisis-materi table.am-table td { padding: .5rem .6rem; border-bottom: 1px solid var(--c-line); vertical-align: top; }
 #tab-analisis-materi table.am-table tbody tr:hover td { background: var(--c-hover); }
+@media (max-width: 900px) {
+  #tab-analisis-materi table.am-table td:nth-child(2) { position: sticky; left: 0; z-index: 1; background: var(--c-surface); box-shadow: 1px 0 0 var(--c-line); }
+  #tab-analisis-materi table.am-table th:nth-child(2) { left: 0; z-index: 3; box-shadow: 1px 0 0 var(--c-line); }
+  #tab-analisis-materi .am-scroll { -webkit-overflow-scrolling: touch; }
+}
 #tab-analisis-materi .am-nama { font-weight: 700; min-width: 150px; color: var(--c-text); }
 #tab-analisis-materi .am-sk { min-width: 80px; font-weight: 700; font-variant-numeric: tabular-nums; }
 #tab-analisis-materi .am-sk .am-bar { margin-top: 4px; }

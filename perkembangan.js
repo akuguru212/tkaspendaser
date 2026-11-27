@@ -85,6 +85,11 @@ const Perkembangan = (function () {
 #tab-perkembangan table.pg-table th { position: sticky; top: 0; z-index: 2; background: var(--c-surface); text-align: left; padding: .6rem .6rem; font-size: .72rem; letter-spacing: .05em; text-transform: uppercase; color: var(--c-muted); border-bottom: 2px solid var(--c-line); white-space: nowrap; }
 #tab-perkembangan table.pg-table td { padding: .5rem .6rem; border-bottom: 1px solid var(--c-line); vertical-align: middle; }
 #tab-perkembangan table.pg-table tbody tr:hover td { background: var(--c-hover); }
+@media (max-width: 900px) {
+  #tab-perkembangan table.pg-table td:nth-child(2) { position: sticky; left: 0; z-index: 1; background: var(--c-surface); box-shadow: 1px 0 0 var(--c-line); }
+  #tab-perkembangan table.pg-table th:nth-child(2) { left: 0; z-index: 3; box-shadow: 1px 0 0 var(--c-line); }
+  #tab-perkembangan .pg-scroll { -webkit-overflow-scrolling: touch; }
+}
 #tab-perkembangan .pg-nama { font-weight: 700; min-width: 150px; color: var(--c-text); }
 #tab-perkembangan .pg-n { font-variant-numeric: tabular-nums; text-align: center; font-weight: 700; }
 #tab-perkembangan .pg-n.rendah { color: #c0334a; } #tab-perkembangan .pg-n.tinggi { color: #1b7f53; } #tab-perkembangan .pg-n.kosong { color: var(--c-muted); font-weight: 400; }
