@@ -447,7 +447,8 @@ body.kunci-aktif #ujian-screen img, body.kunci-aktif #survei-screen img { -webki
   /* tombol navigasi bawah: timbul */
   #ujian-screen .anbk-nav .anbk-btn { border: 1px solid transparent; border-bottom-width: 4px; transition: transform .08s ease, box-shadow .08s ease, border-bottom-width .08s ease; }
   #ujian-screen .anbk-nav .anbk-btn:active { transform: translateY(2px) !important; border-bottom-width: 2px; }
-  #ujian-screen #btn-soal-prev { background: linear-gradient(180deg, #ffffff 0%, #e4eaf2 100%) !important; border-color: #d3dce8 !important; border-bottom-color: #b5c2d3 !important; box-shadow: 0 6px 12px -7px rgba(24,48,84,.45), inset 0 1px 0 #fff; }
+  #ujian-screen #btn-soal-prev { background: linear-gradient(180deg, #ef5b6b 0%, #dc3545 100%) !important; color: #fff !important; border-color: #dc3545 !important; border-bottom-color: #a71d2a !important; box-shadow: 0 8px 14px -7px rgba(220,53,69,.75), inset 0 1px 0 rgba(255,255,255,.35); }
+  #ujian-screen #btn-soal-prev i { color: #fff !important; }
   #ujian-screen .anbk-ragu { background: linear-gradient(180deg, #ffe8a3 0%, #ffd34d 100%) !important; border-color: #f0bf2f !important; border-bottom-color: #c99200 !important; color: #5c3d00 !important; box-shadow: 0 6px 12px -7px rgba(201,146,0,.65), inset 0 1px 0 rgba(255,255,255,.7); }
   #ujian-screen .anbk-ragu:has(input:checked) { background: linear-gradient(180deg, #ffd34d 0%, #ffb800 100%) !important; border-color: #e0a800 !important; border-bottom-color: #a87600 !important; }
   #ujian-screen #btn-soal-next { background: linear-gradient(180deg, #3d8bff 0%, #0d6efd 100%) !important; border-color: #0d6efd !important; border-bottom-color: #0a4db0 !important; box-shadow: 0 8px 14px -7px rgba(13,110,253,.75), inset 0 1px 0 rgba(255,255,255,.35) !important; }
