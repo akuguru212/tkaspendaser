@@ -3800,14 +3800,16 @@ const Auth = {
   async logout() {
     if (BuktiUI.peringatanKeluar()) return; // masih di langkah unggah bukti: tidak boleh keluar
     BuktiTertunda.hapus();
-    if (state.user && state.user.role === 'siswa') {
+    const adalahSiswa = !!(state.user && state.user.role === 'siswa');
+    if (adalahSiswa) {
       await api('logout', { role: 'siswa', siswaId: state.user.id });
     }
     clearInterval(state.pingHandle);
     clearInterval(state.autoRefreshHandle);
     sessionStorage.removeItem('cbt_user');
     state.user = null;
-    location.reload();
+    // Siswa: riwayat browser dibereskan dulu (tombol-kembali.js) supaya layar login tidak menyisakan entri "Kembali".
+    if (adalahSiswa && typeof TombolKembali !== 'undefined') TombolKembali.selesaiLogout(); else location.reload();
   },
 
   pulihkanSesiLogin() {

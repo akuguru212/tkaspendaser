@@ -1,3 +1,27 @@
+# v43z53 — Warna tombol navigasi layar ujian (HP) sama dengan TKA asli
+
+- **Masalah:** di HP tombol bawah layar ujian memakai gradasi (merah agak pucat, kuning krem pucat).
+- **Perbaikan (`mobile.css` v14, layar ≤ 640px):** warna solid seperti TKA asli — **Soal sebelumnya = merah `#dc3545`**, **Ragu-ragu = kuning terang `#ffc107`** (saat dicentang tetap kuning, kotak hitam terisi + garis tepi), **Soal berikutnya = biru `#0d6efd`**; tombol **Selesai** tetap hijau. Efek timbul (sisi bawah lebih gelap, turun 2px saat ditekan) dipertahankan. Tampilan laptop/tablet sudah memakai warna ini dan tidak berubah; halaman survei tidak berubah.
+- File berubah: `mobile.css` (v14), `index.html`, `sw.js` (cache `hp46`), `README.md`.
+
+---
+
+# v43z52 — Tombol Kembali HP (portal siswa) + tombol "Kembali ke Beranda" di halaman Profil
+
+- **Halaman Profil Saya:** kini ada tombol **Kembali ke Beranda** di bagian atas (di HP selebar kartu, biru & timbul).
+- **Tombol Kembali HP / browser** (berkas baru `tombol-kembali.js`), hanya untuk akun siswa:
+  1. Tekan **sekali** = pindah ke **halaman sebelumnya** di dalam aplikasi (bukan keluar aplikasi). Urutannya mengikuti halaman yang dibuka, mis. Beranda → Grafik → Riwayat → Profil; tekan Kembali tiga kali = Riwayat, Grafik, Beranda.
+  2. Bila sudah di **Beranda** (tidak ada halaman sebelumnya) dan Kembali ditekan lagi → muncul pop up **"Yakin Anda akan keluar?"** (*Tetap di Aplikasi* / *Ya, Keluar*). *Ya, Keluar* = keluar dari akun (sama dengan menu Keluar) lalu layar login; Kembali sekali lagi di layar login = keluar dari aplikasi seperti biasa.
+  3. Layar token → kembali ke halaman portal terakhir; konfirmasi tes → layar token; detail jawaban → hasil/riwayat; hasil → Beranda. Bila ada pop up / menu pengguna / jendela foto profil terbuka, Kembali menutupnya lebih dulu.
+- **TIDAK berlaku di halaman ujian, survei, dan unggah bukti:** di sana kunci ujian lama (`kunci-ujian.js`, `BuktiUI`) tetap berjalan persis seperti sebelumnya.
+- **Cara kerja:** riwayat browser hanya diberi 2 entri (dasar + penjaga) dan dipasang ulang tiap Kembali ditekan, jadi riwayat tidak menumpuk dan siswa tidak bisa keluar tanpa konfirmasi. Pop up bisa dimatikan dengan `TombolKembali.KONFIRMASI_KELUAR = false` (di akhir berkas `tombol-kembali.js`).
+- Diuji di Chromium (tampilan HP 390 px): urutan Kembali berlapis, pop up, tombol Profil, jalur token, ujian (kunci ujian asli), survei, kembali ke Beranda setelah ujian, dan Ya, Keluar.
+- File berubah: `tombol-kembali.js` (baru), `portal-siswa.js` (v8), `app.js` (v85, hanya akhir `Auth.logout`), `mobile.css` (v13), `index.html`, `sw.js` (cache `hp45`), `README.md`. `Code.gs` TIDAK berubah.
+
+---
+
+# v43z51 — Tulisan "Guru Pengajar" (HP) dipindah ke belakang tombol navigasi bawah (tidak lagi menimpa tombol)
+
 # v43z48 — Portal Siswa: halaman PROFIL SISWA + tombol navigasi soal (HP)
 - Baru: menu **Profil Saya** (ikon di pojok kanan atas = menu pengguna; di desktop juga di sidebar). Menampilkan foto/karakter, nama lengkap,
   NISN, jenis kelamin, tempat & tanggal lahir (+ usia), sekolah, kelas, username (bisa disalin), status akun, dan ringkasan belajar.

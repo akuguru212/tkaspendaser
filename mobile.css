@@ -169,8 +169,8 @@
   #ujian-screen #btn-soal-prev i, #ujian-screen #btn-soal-next i { font-size: 17px; }
   #ujian-screen .anbk-nav .anbk-btn:active { transform: scale(.98); }
 
-  /* tulisan nama guru: tidak lagi melayang menutupi soal */
-  #ujian-screen .exam-watermark { position: static !important; align-self: center; max-width: 100%; margin: 0; padding: 14px 20px 0; text-align: center; white-space: normal !important; font-size: 11.5px; line-height: 1.45; letter-spacing: .02em; color: #7a8696; opacity: 1; text-shadow: none; }
+  /* tulisan nama guru: ditaruh DI BELAKANG tombol navigasi bawah (lapisan di bawah bilah tombol), tidak menutupi soal maupun tombol */
+  #ujian-screen .exam-watermark { position: fixed !important; left: 0; right: 0; bottom: calc(28px + env(safe-area-inset-bottom, 0px)); z-index: 1 !important; margin: 0; padding: 0 16px; max-width: none; text-align: center; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; font-size: 11.5px; line-height: 1.4; letter-spacing: .02em; color: #7a8696; opacity: 1; text-shadow: none; pointer-events: none; user-select: none; -webkit-user-select: none; }
   #ujian-screen::after { content: ""; display: block; flex: none; height: calc(92px + env(safe-area-inset-bottom, 0px)); }
 
   /* ------------------------------ Bottom sheet (Daftar Soal & Informasi) ------------------------------ */
@@ -447,12 +447,12 @@ body.kunci-aktif #ujian-screen img, body.kunci-aktif #survei-screen img { -webki
   /* tombol navigasi bawah: timbul */
   #ujian-screen .anbk-nav .anbk-btn { border: 1px solid transparent; border-bottom-width: 4px; transition: transform .08s ease, box-shadow .08s ease, border-bottom-width .08s ease; }
   #ujian-screen .anbk-nav .anbk-btn:active { transform: translateY(2px) !important; border-bottom-width: 2px; }
-  #ujian-screen #btn-soal-prev { background: linear-gradient(180deg, #ef5b6b 0%, #dc3545 100%) !important; color: #fff !important; border-color: #dc3545 !important; border-bottom-color: #a71d2a !important; box-shadow: 0 8px 14px -7px rgba(220,53,69,.75), inset 0 1px 0 rgba(255,255,255,.35); }
+  #ujian-screen #btn-soal-prev { background: #dc3545 !important; color: #fff !important; border-color: #dc3545 !important; border-bottom-color: #a71d2a !important; box-shadow: 0 8px 14px -7px rgba(220,53,69,.8); }
   #ujian-screen #btn-soal-prev i { color: #fff !important; }
-  #ujian-screen .anbk-ragu { background: linear-gradient(180deg, #ffe8a3 0%, #ffd34d 100%) !important; border-color: #f0bf2f !important; border-bottom-color: #c99200 !important; color: #5c3d00 !important; box-shadow: 0 6px 12px -7px rgba(201,146,0,.65), inset 0 1px 0 rgba(255,255,255,.7); }
-  #ujian-screen .anbk-ragu:has(input:checked) { background: linear-gradient(180deg, #ffd34d 0%, #ffb800 100%) !important; border-color: #e0a800 !important; border-bottom-color: #a87600 !important; }
-  #ujian-screen #btn-soal-next { background: linear-gradient(180deg, #3d8bff 0%, #0d6efd 100%) !important; border-color: #0d6efd !important; border-bottom-color: #0a4db0 !important; box-shadow: 0 8px 14px -7px rgba(13,110,253,.75), inset 0 1px 0 rgba(255,255,255,.35) !important; }
-  #ujian-screen #btn-soal-next.selesai { background: linear-gradient(180deg, #34b878 0%, #198754 100%) !important; border-color: #198754 !important; border-bottom-color: #0f6a40 !important; box-shadow: 0 8px 14px -7px rgba(25,135,84,.75), inset 0 1px 0 rgba(255,255,255,.3) !important; }
+  #ujian-screen .anbk-ragu { background: #ffc107 !important; border-color: #ffc107 !important; border-bottom-color: #c79100 !important; color: #3a3a3a !important; box-shadow: 0 8px 14px -7px rgba(255,193,7,.95); }
+  #ujian-screen .anbk-ragu:has(input:checked) { background: #ffc107 !important; border-color: #ffc107 !important; border-bottom-color: #c79100 !important; box-shadow: 0 8px 14px -7px rgba(255,193,7,.95), inset 0 0 0 2px #3a3a3a; }
+  #ujian-screen #btn-soal-next { background: #0d6efd !important; border-color: #0d6efd !important; border-bottom-color: #0a4db0 !important; box-shadow: 0 8px 14px -7px rgba(13,110,253,.8) !important; }
+  #ujian-screen #btn-soal-next.selesai { background: #198754 !important; border-color: #198754 !important; border-bottom-color: #0f6a40 !important; box-shadow: 0 8px 14px -7px rgba(25,135,84,.8) !important; }
   #ujian-screen .anbk-nav .anbk-btn:disabled { transform: none !important; box-shadow: none !important; }
 }
 @media (max-width: 340px) {
@@ -493,4 +493,21 @@ body.kunci-aktif #ujian-screen img, body.kunci-aktif #survei-screen img { -webki
     box-shadow: 0 4px 8px -5px rgba(13,79,196,.7), inset 0 1px 0 rgba(255,255,255,.25);
   }
   #detail-screen .detail-top > button.secondary:focus-visible:not(#_):not(#_) { outline: 3px solid rgba(13,110,253,.4); outline-offset: 3px; }
+}
+
+
+/* ============================================================================
+   v43z52 — Halaman Profil (HP): tombol "Kembali ke Beranda" selebar kartu, biru & timbul
+   ============================================================================ */
+@media (max-width: 640px) {
+  #sw-screen.am-scope .sw-pf-kembali { display: block; }
+  #sw-screen.am-scope .sw-pf-kembali .sw-btn:not(#_):not(#_) {
+    width: 100%; min-height: 50px; justify-content: center; gap: .6rem;
+    font-size: 14.5px; font-weight: 700; color: #fff; border-radius: 14px; border: 0; border-bottom: 4px solid #0a4fb4;
+    background: linear-gradient(180deg, #3b86ff 0%, #0d6efd 100%);
+    box-shadow: 0 8px 16px -6px rgba(13,110,253,.55); -webkit-tap-highlight-color: transparent;
+    transition: transform .08s, border-bottom-width .08s;
+  }
+  #sw-screen.am-scope .sw-pf-kembali .sw-btn:active:not(#_):not(#_) { transform: translateY(2px); border-bottom-width: 2px; }
+  #sw-screen.am-scope .sw-pf-kembali .sw-btn:focus-visible:not(#_):not(#_) { outline: 3px solid rgba(13,110,253,.4); outline-offset: 3px; }
 }

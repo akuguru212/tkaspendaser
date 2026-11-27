@@ -203,6 +203,8 @@ const PortalSiswa = (function () {
 #sw-screen .sw-pf-chip.ok { color: #1b7f53; background: #e3f5ec; border-color: #c4e8d5; }
 #sw-screen .sw-pf-chip.bad { color: #c0334a; background: #fdeaed; border-color: #f6ccd3; }
 #sw-screen .sw-pf-aksi { padding-top: 52px; }
+#sw-screen .sw-pf-kembali { display: flex; }
+#sw-screen .sw-pf-kembali .sw-btn { padding: .6rem 1.2rem; box-shadow: 0 8px 18px -8px rgba(13,110,253,.7); }
 #sw-screen .sw-pf-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
 #sw-screen .sw-pf-panel { padding: 16px 20px 8px; }
 #sw-screen .sw-pf-panel h3 { display: flex; align-items: center; gap: .6rem; margin: 0 0 .5rem; padding-bottom: .7rem; border-bottom: 1px solid #eef1f5; font: 600 15.5px/1.3 'Poppins', sans-serif; color: var(--sw-ink); }
@@ -250,7 +252,7 @@ const PortalSiswa = (function () {
   })();
 
   // ---------------- status ----------------
-  const PS = { view: 'dashboard', uid: null, data: null, am: null, galat: '', waktu: 0, memuat: false, ada: false, td: null, items: [], lbTes: 'semua', lbScope: 'kelas', jenisRiwayat: 'semua', cari: '', seri: { akhir: true, literasi: true, numerasi: true, lainnya: true, kelas: true }, dariDetail: false };
+  const PS = { view: 'dashboard', uid: null, data: null, am: null, galat: '', waktu: 0, memuat: false, ada: false, td: null, items: [], lbTes: 'semua', lbScope: 'kelas', jenisRiwayat: 'semua', cari: '', nav: [], seri: { akhir: true, literasi: true, numerasi: true, lainnya: true, kelas: true }, dariDetail: false };
 
   const tglPendek = (v) => { const d = new Date(v); return isNaN(d) ? '–' : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }); };
   const jamTxt = (v) => { const d = new Date(v); return isNaN(d) ? '' : d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(':', '.'); };
@@ -540,7 +542,7 @@ const PortalSiswa = (function () {
     } else {
       ringkas = `<div class="sw-kpis">${'<div class="sw-skel" style="height:78px"></div>'.repeat(3)}</div>`;
     }
-    isi.innerHTML = `<div class="sw-konten" style="display:grid;gap:1rem">${judulHalaman('Data diri dan akun peserta simulasi. Data pribadi dikelola oleh guru.')}
+    isi.innerHTML = `<div class="sw-konten" style="display:grid;gap:1rem"><div class="sw-pf-kembali"><button type="button" class="sw-btn solid" id="sw-pf-kembali" onclick="PortalSiswa.kembaliBeranda()"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Kembali ke Beranda</button></div>${judulHalaman('Data diri dan akun peserta simulasi. Data pribadi dikelola oleh guru.')}
       <div class="sw-card sw-pf-id">
         <div class="sw-pf-cover"></div>
         <div class="sw-pf-idin">
@@ -582,9 +584,16 @@ const PortalSiswa = (function () {
   function bukaProfil(el) { const m = el && el.closest ? el.closest('.anbk-usermenu') : null; if (m) m.classList.add('hidden'); buka('profil'); }
 
   // ---------------- navigasi ----------------
-  function buka(v, arg) {
+  // mundur = true bila dipanggil dari tombol Kembali (HP/browser): tidak dicatat sebagai halaman baru
+  function buka(v, arg, mundur) {
     if (typeof state === 'undefined' || !state.user || state.user.role !== 'siswa') return;
     if (!MENU.some(m => m[0] === v) && VIEW_LAIN.indexOf(v) < 0) v = 'dashboard';
+    if (!mundur) {
+      // Beranda = titik awal: tumpukan dikosongkan. Halaman lain: halaman yang ditinggalkan dicatat
+      // supaya tombol Kembali HP membawa siswa ke halaman sebelumnya.
+      if (v === 'dashboard') PS.nav = [];
+      else if (v !== PS.view && $('sw-screen') && !$('sw-screen').classList.contains('hidden')) { PS.nav.push(PS.view); if (PS.nav.length > 25) PS.nav.shift(); }
+    }
     PS.view = v;
     if (v === 'analisis') AnalisisMateri.resetJenis(arg);
     UI.tampilkan('sw-screen');
@@ -592,6 +601,17 @@ const PortalSiswa = (function () {
     renderView();
     muat(false);
   }
+  // Tombol Kembali HP/browser (lihat tombol-kembali.js). true = sudah pindah ke halaman sebelumnya;
+  // false = sudah di Beranda dan tidak ada halaman sebelumnya (pemanggil menanyakan "Yakin keluar?").
+  function kembali() {
+    if (PS.nav.length) { buka(PS.nav.pop(), undefined, true); return true; }
+    if (PS.view !== 'dashboard') { buka('dashboard', undefined, true); return true; }
+    return false;
+  }
+  // Tombol "Kembali ke Beranda" (halaman Profil): Beranda menjadi halaman awal lagi.
+  function kembaliBeranda() { PS.nav = []; buka('dashboard', undefined, true); }
+  // Dari layar token (Mulai Simulasi) kembali ke halaman portal yang terakhir dibuka.
+  function bukaTerakhir() { buka(PS.view || 'dashboard', undefined, true); }
   function segarkan() { muat(true); }
   function mulaiSimulasi() { if (_konfirmasi) _konfirmasi(); }
   function toggleMenuUser(ev) { if (typeof Anbk !== 'undefined') Anbk.menuUser(ev); }
@@ -604,8 +624,8 @@ const PortalSiswa = (function () {
   };
   const _konfirmasi = (typeof Anbk !== 'undefined') ? Anbk.tampilKonfirmasiData : null;
   // setelah login (dan saat kembali ke beranda) siswa mendarat di Dashboard
-  if (typeof Anbk !== 'undefined') Anbk.tampilKonfirmasiData = function () { PortalSiswa.buka('dashboard'); };
-  UI.kembaliKeBerandaSiswa = function () { PS.waktu = 0; PortalSiswa.buka('dashboard'); };
+  if (typeof Anbk !== 'undefined') Anbk.tampilKonfirmasiData = function () { PS.nav = []; PortalSiswa.buka('dashboard'); };
+  UI.kembaliKeBerandaSiswa = function () { PS.waktu = 0; PS.nav = []; PortalSiswa.buka('dashboard'); };
   // tombol "Kembali" pada Detail Jawaban: balik ke Riwayat bila dibuka dari portal
   if (typeof ExamEngine !== 'undefined') {
     const _tutup = ExamEngine.tutupDetailJawaban;
@@ -636,5 +656,5 @@ const PortalSiswa = (function () {
   function bukaSegar(v) { PS.waktu = 0; buka(v); }
   pasangPintuMasuk();
 
-  return { buka, bukaSegar, segarkan, mulaiSimulasi, toggleSeri, filterRiwayat, cariRiwayat, detail, lbPilihTes, lbPilihScope, toggleMenuUser, salinUsername, bukaProfil, _PS: PS };
+  return { buka, bukaSegar, kembali, kembaliBeranda, bukaTerakhir, segarkan, mulaiSimulasi, toggleSeri, filterRiwayat, cariRiwayat, detail, lbPilihTes, lbPilihScope, toggleMenuUser, salinUsername, bukaProfil, _PS: PS };
 })();
