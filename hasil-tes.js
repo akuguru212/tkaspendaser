@@ -67,7 +67,72 @@ const HasilTes = (function () {
   #cetak-area .ht-baik { background:#e3f4ea !important; color:#14693d; font-weight:700; text-align:center; }
   #cetak-area .ht-ket { margin:2px 0; font-size:9pt; }
   #cetak-area .ht-grup { margin:7px 0 3px; padding:2px 6px; border-left:4px solid #1f4e79; background:#eef2f7 !important; font-weight:700; font-size:9.5pt; break-after:avoid; }
-}`;
+}
+/* ===== v4: perapian tata letak ===== */
+/* Jendela detail: tinggi dibatasi layar, isi bisa digulir, tombol selalu terlihat */
+#modal-ht-detail { align-items: center; padding: 1rem; }
+#modal-ht-detail .modal { display:flex; flex-direction:column; width:100%; max-width:960px; max-height:calc(100vh - 2rem); max-height:calc(100dvh - 2rem); overflow:hidden; padding:1.3rem 1.5rem 1rem; }
+#modal-ht-detail .modal > * { flex:none; }
+#modal-ht-detail .modal > .ht-isi { flex:1 1 auto; min-height:0; max-height:none; overflow-y:auto; overscroll-behavior:contain; padding-right:.4rem; margin-top:.3rem; }
+#modal-ht-detail .dsw-aksi { flex-shrink:0; margin-top:.8rem; padding-top:.8rem; border-top:1px solid var(--c-line,#dee2e6); gap:.5rem; }
+#modal-ht-detail .dsw-head { margin-bottom:.5rem; }
+#modal-ht-detail .dsw-head h3 { font-size:1.2rem; line-height:1.25; }
+#modal-ht-detail .dsw-chips { margin-bottom:.2rem; }
+/* Kotak ringkasan materi: label di kiri (boleh turun baris), persen di kanan TIDAK turun baris */
+#modal-ht-detail .ht-2k { gap:.8rem; align-items:start; }
+#modal-ht-detail .ht-kotak h4 { font-size:.88rem; padding-bottom:.35rem; margin-bottom:.2rem; border-bottom:1px solid var(--c-line,#dee2e6); }
+#modal-ht-detail .ht-baris { align-items:flex-start; padding:.3rem 0; line-height:1.3; }
+#modal-ht-detail .ht-baris > span:first-child { flex:1 1 auto; min-width:0; overflow-wrap:anywhere; }
+#modal-ht-detail .ht-baris > .ht-chip { flex:none; white-space:nowrap; min-width:84px; }
+#modal-ht-detail .ht-nomor { margin:-.1rem 0 .25rem; padding-bottom:.25rem; font-size:.72rem; line-height:1.35; border-bottom:1px dashed var(--c-line,#dee2e6); }
+#modal-ht-detail .ht-baris + .ht-nomor { border-bottom:1px dashed var(--c-line,#dee2e6); }
+#modal-ht-detail .ht-baris:has(+ .ht-nomor) { border-bottom:0; padding-bottom:0; }
+#modal-ht-detail .ht-grup { align-items:flex-start; margin:1rem 0 .4rem; line-height:1.3; }
+#modal-ht-detail .ht-grup > span:last-child { flex:none; white-space:nowrap; font-size:.82rem; }
+#modal-ht-detail .ht-tab { display:flex; flex-wrap:wrap; gap:.4rem; margin:.7rem 0; }
+@media (max-width:640px) {
+  #modal-ht-detail { padding:0; align-items:flex-end; }
+  #modal-ht-detail .modal { max-height:94dvh; border-radius:16px 16px 0 0; padding:1rem 1rem .6rem; }
+  #modal-ht-detail .dsw-aksi { position:sticky; bottom:0; background:var(--c-surface,#fff); }
+  #modal-ht-detail .dsw-aksi > button { flex:1 1 40%; }
+}
+/* Panel utama: tabel ringkas, tidak melebar ke samping */
+#tab-hasil-tes .ht-matriks-wrap { margin:.4rem 0 .8rem; }
+#tab-hasil-tes details.ht-det { border:1px solid var(--c-line,#dee2e6); border-radius:12px; background:var(--c-surface,#fff); margin:.6rem 0 .9rem; }
+#tab-hasil-tes details.ht-det > summary { cursor:pointer; padding:.65rem .9rem; font-weight:700; font-size:.9rem; list-style:none; display:flex; align-items:center; gap:.5rem; }
+#tab-hasil-tes details.ht-det > summary::-webkit-details-marker { display:none; }
+#tab-hasil-tes details.ht-det > summary::before { content:'▸'; display:inline-block; transition:transform .15s; color:var(--c-muted,#6c757d); }
+#tab-hasil-tes details.ht-det[open] > summary::before { transform:rotate(90deg); }
+#tab-hasil-tes details.ht-det > summary small { font-weight:500; color:var(--c-muted,#6c757d); font-size:.76rem; }
+#tab-hasil-tes details.ht-det > .ht-det-isi { padding:0 .9rem .8rem; }
+#tab-hasil-tes .ht-kls-tbl th:first-child, #tab-hasil-tes .ht-kls-tbl td:first-child { text-align:left; white-space:normal; min-width:210px; }
+#tab-hasil-tes .ht-kls-tbl th { min-width:64px; }
+#tab-hasil-tes .ht-kls-tbl tr.ht-ringkas-baris td { font-weight:700; background:color-mix(in srgb, var(--c-primary,#0d6efd) 5%, var(--c-surface,#fff)); }
+@media (min-width:641px) {
+  #tab-hasil-tes .dt-ringkas { table-layout:auto; }
+  #tab-hasil-tes .dt-ringkas th, #tab-hasil-tes .dt-ringkas td { min-width:0; }
+  #tab-hasil-tes .dt-ringkas td.ht-tags { white-space:normal; text-align:left; min-width:190px; max-width:300px; line-height:1.9; }
+  #tab-hasil-tes .dt-ringkas td.ht-tags .am-tag { white-space:normal; font-size:.7rem; padding:.08rem .5rem; margin:0 .2rem .15rem 0; text-align:left; line-height:1.3; }
+  #tab-hasil-tes .dt-ringkas th.ht-tags-th { text-align:left; }
+  #tab-hasil-tes .dt-ringkas td.ht-bsk { white-space:nowrap; }
+}
+#tab-hasil-tes .dt-ringkas .ht-lain { font-size:.7rem; color:var(--c-muted,#6c757d); white-space:nowrap; }
+#tab-hasil-tes .ht-chip { white-space:nowrap; }
+
+#modal-ht-remedial { align-items:center; padding:1rem; }
+#modal-ht-remedial .modal { display:flex; flex-direction:column; width:100%; max-height:calc(100vh - 2rem); max-height:calc(100dvh - 2rem); overflow:hidden; }
+#modal-ht-remedial .modal > * { flex:none; }
+#modal-ht-remedial .modal > .ht-isi { flex:1 1 auto; min-height:0; max-height:none; overflow-y:auto; overscroll-behavior:contain; }
+#modal-ht-remedial .ht-baris > .ht-chip { flex:none; white-space:nowrap; }
+@media (max-width:640px) { #modal-ht-remedial { padding:0; align-items:flex-end; } #modal-ht-remedial .modal { max-height:94dvh; border-radius:16px 16px 0 0; } }
+
+#tab-hasil-tes .ht-matriks { font-size:.8rem; }
+#tab-hasil-tes .ht-matriks th { min-width:96px; max-width:128px; font-size:.68rem; white-space:normal; vertical-align:bottom; }
+#tab-hasil-tes .ht-matriks th:first-child, #tab-hasil-tes .ht-matriks td:first-child { position:sticky; left:0; z-index:1; background:var(--c-surface,#fff); text-align:left; min-width:170px; max-width:210px; white-space:normal; font-weight:600; box-shadow:1px 0 0 var(--c-line,#dee2e6); }
+#tab-hasil-tes .ht-matriks th:first-child { z-index:3; }
+#tab-hasil-tes .ht-matriks th:nth-child(2), #tab-hasil-tes .ht-matriks td:nth-child(2) { min-width:52px; }
+#tab-hasil-tes .ht-matriks tbody tr:hover td:first-child { background:var(--c-hover,#f3f6fb); }
+`;
     document.head.appendChild(st);
   })();
 
@@ -191,13 +256,28 @@ const HasilTes = (function () {
     const kelasList = Array.from(new Set(rows.map(r => r.kelas)));
     let perKelas = '';
     if (kelasList.length > 1) {
-      const th = stat.map(x => `<th title="${esc(x.lb)}">${esc(x.lb)}</th>`).join('');
-      const br = kelasList.map(kl => { const sub = rows.filter(r => r.kelas === kl); return `<tr><td>${esc(kl)}</td><td>${sub.length}</td><td><b>${f1(rata(sub.map(r => r.nilai)))}</b></td>${stat.map(x => { const v = sub.map(r => r.peta[x.lb]).filter(Boolean); return `<td>${v.length ? chipM({ persen: rata(v.map(T => T.persen)), level: lv(rata(v.map(T => T.persen))), label: x.lb, benar: '-', n: '-' }) : '–'}</td>`; }).join('')}</tr>`; }).join('');
-      perKelas = `<div class="sv-kelas"><b>Rata-rata per kelas</b><div class="table-wrap"><table class="data-table"><thead><tr><th>Kelas</th><th>Siswa</th><th>Nilai</th>${th}</tr></thead><tbody>${br}</tbody></table></div></div>`;
+      // Dibalik: materi di baris, kelas di kolom -> tabel ringkas dan tidak melebar ke samping
+      const kl = kelasList.slice().sort((a, b) => String(a).localeCompare(String(b), 'id', { numeric: true }));
+      const perK = (k) => rows.filter(r => r.kelas === k);
+      const thK = kl.map(k => `<th>${esc(k)}</th>`).join('');
+      const barisRingkas = `<tr class="ht-ringkas-baris"><td>Jumlah siswa</td>${kl.map(k => `<td>${perK(k).length}</td>`).join('')}<td>${rows.length}</td></tr>`
+        + `<tr class="ht-ringkas-baris"><td>Rata-rata nilai</td>${kl.map(k => `<td>${f1(rata(perK(k).map(r => r.nilai)))}</td>`).join('')}<td>${f1(rata(nm))}</td></tr>`;
+      const barisMateri = stat.map(x => `<tr><td>${esc(x.lb)}</td>${kl.map(k => { const v = perK(k).map(r => r.peta[x.lb]).filter(Boolean); return `<td>${v.length ? chipP(rata(v.map(T => T.persen)), x.lb + ' — kelas ' + k) : '–'}</td>`; }).join('')}<td>${chipP(x.p, x.lb + ' — semua kelas')}</td></tr>`).join('');
+      perKelas = `<div class="sv-kelas"><b>Rata-rata penguasaan materi per kelas</b><div class="table-wrap"><table class="data-table ht-kls-tbl"><thead><tr><th>Materi</th>${thK}<th>Semua</th></tr></thead><tbody>${barisRingkas}${barisMateri}</tbody></table></div></div>`;
     }
     ring.innerHTML = `<div class="sv-info"><span><b>${rows.length}</b> siswa</span><span>Rata-rata nilai <b>${f1(rata(nm))}</b></span><span>Tertinggi <b>${f1(Math.max.apply(null, nm))}</b></span><span>Terendah <b>${f1(Math.min.apply(null, nm))}</b></span><span><b>${rows.filter(r => r.kurang.length).length}</b> siswa punya materi kurang</span></div><div class="sv-kartu-wrap">${kartu}</div>${ev}${perKelas}${htmlSubMateri(rows, kelasList)}<p class="subtitle" style="margin:.4rem 0">Penguasaan materi = skor diperoleh / skor maksimal soal pada materi itu. Kurang &lt; ${TH_KURANG}%, cukup ${TH_KURANG}–${TH_BAIK - 1}%, baik ≥ ${TH_BAIK}%.</p>`;
-    const th = G.materi.map(lb => `<th title="${esc(lb)}">${esc(lb)}</th>`).join('');
-    cont.innerHTML = `<div class="table-wrap dt-wrap"><table class="data-table dt-kartu"><thead><tr><th>No</th><th>Nama</th><th>Kelas</th><th>Nilai</th><th>Kategori</th><th>Benar / Salah / Kosong</th>${th}<th>Materi yang kurang</th><th>Materi yang sudah baik</th><th>Detail Jawaban</th></tr></thead><tbody>${rows.map((r, i) => `<tr><td>${i + 1}</td><td><a href="#" onclick="HasilTes.bukaDetail('${esc(String(r.sesiId))}');return false" title="Lihat detail jawaban">${esc(r.nama)}</a></td><td>${esc(r.kelas)}</td><td><b>${f1(r.nilai)}</b></td><td>${badgeKategori_(r.nilai)}</td><td>${r.benar} / ${r.salah + r.sebagian} / ${r.kosong}</td>${G.materi.map(lb => `<td>${chipM(r.peta[lb])}</td>`).join('')}<td>${r.kurang.length ? r.kurang.map(T => `<span class="am-tag kurang">${esc(T.label)} ${bulat(T.persen)}%</span>`).join(' ') : '–'}</td><td>${r.baik.length ? r.baik.map(T => `<span class="am-tag baik">${esc(T.label)} ${bulat(T.persen)}%</span>`).join(' ') : '–'}</td><td class="aksi"><button type="button" class="secondary small sv-aksi-btn" onclick="HasilTes.bukaDetail('${esc(String(r.sesiId))}')">🔍 Detail</button></td></tr>`).join('')}</tbody></table></div>`;
+    const dibuka = !!cont.querySelector('details.ht-det[open]');
+    const MAXT = 3;
+    const tags = (arr, kls, r) => {
+      if (!arr.length) return '–';
+      const t = arr.slice(0, MAXT).map(T => `<span class="am-tag ${kls}" title="${esc(T.label)} ${bulat(T.persen)}%">${esc(T.label)} ${bulat(T.persen)}%</span>`).join(' ');
+      const sisa = arr.length - MAXT;
+      return t + (sisa > 0 ? ` <a href="#" class="ht-lain" onclick="HasilTes.bukaDetail('${esc(String(r.sesiId))}');return false" title="Lihat semua di jendela detail">+${sisa} lainnya</a>` : '');
+    };
+    const thM = G.materi.map(lb => `<th title="${esc(lb)}">${esc(lb)}</th>`).join('');
+    const tabelRingkas = `<div class="table-wrap dt-wrap"><table class="data-table dt-kartu dt-ringkas"><thead><tr><th>No</th><th>Nama</th><th>Kelas</th><th>Nilai</th><th>Kategori</th><th>Benar / Salah / Kosong</th><th class="ht-tags-th">Materi yang kurang</th><th class="ht-tags-th">Materi yang sudah baik</th><th>Detail Jawaban</th></tr></thead><tbody>${rows.map((r, i) => `<tr><td>${i + 1}</td><td><a href="#" onclick="HasilTes.bukaDetail('${esc(String(r.sesiId))}');return false" title="Lihat detail jawaban">${esc(r.nama)}</a></td><td>${esc(r.kelas)}</td><td><b>${f1(r.nilai)}</b></td><td>${badgeKategori_(r.nilai)}</td><td class="ht-bsk">${r.benar} / ${r.salah + r.sebagian} / ${r.kosong}</td><td class="ht-tags">${tags(r.kurang, 'kurang', r)}</td><td class="ht-tags">${tags(r.baik, 'baik', r)}</td><td class="aksi"><button type="button" class="secondary small sv-aksi-btn" onclick="HasilTes.bukaDetail('${esc(String(r.sesiId))}')">🔍 Detail</button></td></tr>`).join('')}</tbody></table></div>`;
+    const matriks = `<details class="ht-det"${dibuka ? ' open' : ''}><summary>Matriks penguasaan per materi <small>(${G.materi.length} materi &times; ${rows.length} siswa — geser ke samping untuk melihat semua)</small></summary><div class="ht-det-isi"><div class="table-wrap ht-matriks-wrap"><table class="data-table ht-matriks"><thead><tr><th>Nama</th><th>Kelas</th>${thM}</tr></thead><tbody>${rows.map(r => `<tr><td><a href="#" onclick="HasilTes.bukaDetail('${esc(String(r.sesiId))}');return false">${esc(r.nama)}</a></td><td>${esc(r.kelas)}</td>${G.materi.map(lb => `<td>${chipM(r.peta[lb])}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div></details>`;
+    cont.innerHTML = tabelRingkas + matriks;
     try { const t = cont.querySelector('table.dt-kartu'); const lab = Array.from(t.querySelectorAll('thead th')).map(h => h.textContent.trim()); t.querySelectorAll('tbody tr').forEach(tr => Array.from(tr.children).forEach((td, i) => { if (lab[i] !== undefined) td.setAttribute('data-label', lab[i]); })); } catch (e) { }
   }
 
@@ -288,7 +368,7 @@ const HasilTes = (function () {
     const items = D.items, semua = D.filter === 'semua';
     const grup = kelompok(r, items, semua);
     const nBelum = items.filter(i => i.status !== 'benar').length;
-    const tab = `<div style="display:flex;gap:.4rem;margin:.6rem 0"><button type="button" class="secondary small${!semua ? ' active' : ''}" onclick="HasilTes.ubahFilter('salah')">Yang Salah / Belum Benar (${nBelum})</button><button type="button" class="secondary small${semua ? ' active' : ''}" onclick="HasilTes.ubahFilter('semua')">Semua Soal (${items.length})</button></div>`;
+    const tab = `<div class="ht-tab"><button type="button" class="secondary small${!semua ? ' active' : ''}" onclick="HasilTes.ubahFilter('salah')">Yang Salah / Belum Benar (${nBelum})</button><button type="button" class="secondary small${semua ? ' active' : ''}" onclick="HasilTes.ubahFilter('semua')">Semua Soal (${items.length})</button></div>`;
     const badan = grup.length ? grup.map(g => `<div class="ht-grup ${g.T ? g.T.level : ''}"><span>${esc(g.lb)}<small class="ht-sub">${g.subs.length ? 'Sub materi: ' + esc(g.subs.join('; ')) + ' · ' : ''}No. soal: ${g.nomor.join(', ')}</small></span><span>${g.T ? bulat(g.T.persen) + '% · ' + LAB[g.T.level] : ''}</span></div>` + g.li.map(x => ExamEngine.htmlItemDetail_(x.it, x.no, { guru: true })).join('')).join('') : '<div class="dj-kosong"><p>Semua jawaban siswa ini benar. Tidak ada soal yang perlu dievaluasi.</p></div>';
     const box = $('ht-d-isi'); box.innerHTML = ringkasHtml(r, items) + tab + badan; renderMatika(box);
   }
