@@ -591,6 +591,7 @@
           </div>
           <div class="toolbar-actions">
             <button type="button" title="Laporan PDF untuk dibagikan ke siswa: per siswa, per kelas, atau seluruh siswa" onclick="LaporanPdf.buka()"><i class="fa-solid fa-file-pdf"></i> Laporan PDF</button>
+            <button type="button" title="PDF rekap untuk guru: kelas mana lemah/kuat di materi apa, dan siswa mana bermasalah di topik apa" onclick="LaporanPdf.bukaRekap()"><i class="fa-solid fa-chart-column"></i> PDF Rekap Topik</button>
             <button type="button" class="secondary" title="Unduh Excel: per siswa, per materi, dan detail" onclick="AnalisisMateri.unduh()">⬇ Unduh Excel</button>
             <button type="button" class="secondary" title="Cetak / simpan PDF sesuai pilihan yang tampil" onclick="AnalisisMateri.cetak()">🖨 Cetak PDF</button>
           </div>
@@ -604,6 +605,7 @@
         <div class="filter-bar" style="margin-bottom:0">
           <input type="search" id="am-g-cari" placeholder="🔍 Cari nama siswa / materi..." oninput="AnalisisMateri.render()" autocomplete="off">
           <label class="filter-cek" title="Sembunyikan siswa yang tidak punya materi kurang (tampilan Per Siswa)"><input type="checkbox" id="am-g-hanya" onchange="AnalisisMateri.render()"> Hanya yang punya materi kurang</label>
+          <label class="filter-cek" title="Keluarkan pengisian Survei Karakter / Sulingjar yang ditandai perlu dicek (terlalu cepat / seragam / bertentangan) dari semua tampilan, PDF, dan Excel"><input type="checkbox" id="am-g-abaikan" onchange="AnalisisMateri.pilihAbaikanCek(this.checked)"> Abaikan pengisian survei perlu dicek</label>
           <span class="filter-info" id="am-g-info"></span>
         </div>
       </div>
@@ -1701,10 +1703,10 @@
 <script src="kunci-ujian.js?v=12"></script>
 <script src="leaderboard.js?v=1"></script>
 <script src="leaderboard-survei.js?v=1"></script>
-<script src="analisis-materi.js?v=4"></script>
+<script src="analisis-materi.js?v=6"></script>
 <script src="perkembangan.js?v=2"></script>
 <script src="rekap-ikut.js?v=1"></script>
-<script src="laporan-pdf.js?v=1"></script>
+<script src="laporan-pdf.js?v=3"></script>
 <script src="portal-siswa.js?v=8"></script>
 <script src="tombol-kembali.js?v=6"></script>
 <script src="foto-profil.js?v=3"></script>

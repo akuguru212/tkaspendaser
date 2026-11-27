@@ -78,7 +78,7 @@ const LaporanPdf = (function () {
 
     L.halamanBaru = () => {
       doc.addPage(); L.y = TOP;
-      font(7.5, false); warna(WARNA.mute); doc.text(t('Laporan Hasil Belajar - ' + info.nama + ' (' + info.kelas + ')'), MX, L.y + 3);
+      font(7.5, false); warna(WARNA.mute); doc.text(t(info.judulHalaman || ('Laporan Hasil Belajar - ' + info.nama + ' (' + info.kelas + ')')), MX, L.y + 3);
       doc.setDrawColor(...WARNA.garis); doc.setLineWidth(0.2); doc.line(MX, L.y + 5, W - MX, L.y + 5);
       L.y += 10;
     };
@@ -521,5 +521,218 @@ const LaporanPdf = (function () {
     }
   }
 
-  return { buka, tutup, ubah, buat, _tulis: tulisLaporan, _t: t };
+
+  // ============================================================================================
+  // PDF REKAP TOPIK: perbandingan antar KELAS (matriks kelas x materi), ringkasan tiap kelas (materi lemah & kuat),
+  // dan rincian PER SISWA (materi yang kurang & yang sudah baik). Literasi, Numerasi, Survei Karakter, Sulingjar.
+  // ============================================================================================
+  const NAMA_JN = { literasi: 'Literasi', numerasi: 'Numerasi', karakter: 'Survei Karakter', sulingjar: 'Sulingjar', lainnya: 'Mapel Lain' };
+  const LABEL_JN = { literasi: 'Materi', numerasi: 'Materi', karakter: 'Dimensi', sulingjar: 'Dimensi', lainnya: 'Materi' };
+  const adaSv = (k) => k === 'karakter' || k === 'sulingjar';
+  const lembut = (rgb, a) => [Math.round(rgb[0] * a + 255 * (1 - a)), Math.round(rgb[1] * a + 255 * (1 - a)), Math.round(rgb[2] * a + 255 * (1 - a))];
+
+  function matriksPdf(L, mx, dk, k) {
+    const doc = L.doc, satuan = adaSv(k) ? '' : '%';
+    const labW = 60, maxKol = 8;
+    for (let c0 = 0; c0 < mx.kelas.length; c0 += maxKol) {
+      const kol = mx.kelas.slice(c0, c0 + maxKol), cw = Math.min(24, (L.CW - labW) / kol.length);
+      const kepala = () => {
+        L.ruang(8);
+        doc.setFillColor(...WARNA.latar); doc.rect(L.MX, L.y, labW + cw * kol.length, 6.2, 'F');
+        L.font(8, true); L.warna(WARNA.teks); doc.text(t(LABEL_JN[k]), L.MX + 1.5, L.y + 4.2);
+        kol.forEach((kl, i) => doc.text(t(kl), L.MX + labW + cw * i + cw / 2, L.y + 4.2, { align: 'center' }));
+        L.y += 6.6;
+      };
+      kepala();
+      const sel = (x, y, h, tk, teks, sub) => {
+        const rgb = WARNA[tk]; doc.setFillColor(...lembut(rgb, 0.2)); doc.rect(x + 0.3, y + 0.3, cw - 0.6, h - 0.6, 'F');
+        L.font(8.4, true); L.warna(rgb); doc.text(t(teks), x + cw / 2, y + (sub ? h / 2 - 0.3 : h / 2 + 1.1), { align: 'center' });
+        if (sub) { L.font(6, false); doc.text(t(sub), x + cw / 2, y + h / 2 + 2.3, { align: 'center' }); }
+      };
+      mx.baris.forEach(b => {
+        L.font(8, false);
+        const bl = doc.splitTextToSize(t(b.label), labW - 3), h = Math.max(8, bl.length * 3.5 + 2.5);
+        if (L.y + h > 297 - 17) { L.halamanBaru(); kepala(); }
+        L.font(8, false); L.warna(WARNA.teks); bl.forEach((x, i) => doc.text(x, L.MX + 1.5, L.y + 4 + i * 3.5));
+        kol.forEach((kl, i) => {
+          const x = L.MX + labW + cw * i, tt = b.sel[kl];
+          if (tt) sel(x, L.y, h, tt.level, bulat(tt.rata) + satuan, tt.kurang.length + '/' + tt.n + ' kurang' + (tt.cek ? ', ' + tt.cek + ' cek' : ''));
+          else { doc.setFillColor(244, 245, 247); doc.rect(x + 0.3, L.y + 0.3, cw - 0.6, h - 0.6, 'F'); L.font(8, false); L.warna(WARNA.mute); doc.text('-', x + cw / 2, L.y + h / 2 + 1.1, { align: 'center' }); }
+        });
+        L.y += h;
+      });
+      // baris rata-rata kelas
+      if (L.y + 9 > 297 - 17) { L.halamanBaru(); kepala(); }
+      L.font(8, true); L.warna(WARNA.teks); doc.text('Rata-rata kelas', L.MX + 1.5, L.y + 5.4);
+      kol.forEach((kl, i) => { const P = dk.find(d => d.kelas === kl).per[k]; sel(L.MX + labW + cw * i, L.y, 9, AM().levelUntuk(k, P.rata), bulat(P.rata) + satuan, P.n + ' siswa' + (P.cek ? ', ' + P.cek + ' cek' : '')); });
+      L.y += 12;
+    }
+  }
+
+  function tulisRekap(doc, dk, js, opsi, ctx, siswaAll) {
+    const L = Lembar(doc, { nama: '', kelas: '', judulHalaman: 'Rekap Analisis Topik - ' + ctx.namaSekolah });
+    doc.setFillColor(...WARNA.biru); doc.rect(0, 0, 210, 31, 'F');
+    let tx = 16;
+    if (ctx.logo) { try { doc.setFillColor(255, 255, 255); doc.roundedRect(15, 6, 19, 19, 3, 3, 'F'); const r = Math.min(15 / ctx.logo.w, 15 / ctx.logo.h); const w = ctx.logo.w * r, h = ctx.logo.h * r; doc.addImage(ctx.logo.data, 'PNG', 24.5 - w / 2, 15.5 - h / 2, w, h); tx = 38; } catch (e) { tx = 16; } }
+    L.font(14.5, true); L.warna(WARNA.putih); doc.text(t(ctx.namaSekolah), tx, 14.5);
+    L.font(9, false); doc.text('REKAP ANALISIS TOPIK PER KELAS & SISWA', tx, 20.5);
+    L.font(8, false); doc.text(t('Tanggal laporan: ' + ctx.tanggal), tx, 25.5);
+    L.y = 37;
+    const nSiswa = dk.reduce((a, d) => a + d.nSiswa, 0);
+    doc.setFillColor(...WARNA.latar); doc.setDrawColor(...WARNA.garis); doc.setLineWidth(0.25); doc.roundedRect(L.MX, L.y, L.CW, ctx.cekTeks ? 20 : 15, 2.5, 2.5, 'FD');
+    L.font(8.6, false); L.warna(WARNA.teks);
+    doc.text(t('Kelas: ' + (dk.length === 1 ? dk[0].kelas : 'semua (' + dk.length + ' kelas)') + '   |   Siswa: ' + nSiswa), L.MX + 3, L.y + 5.6);
+    doc.text(t('Cakupan: ' + (js.filter(k => dk.some(d => d.per[k])).map(k => NAMA_JN[k]).join(', ') || '-')), L.MX + 3, L.y + 10.8);
+    if (ctx.cekTeks) { L.font(7.8, false); L.warna(WARNA.kurang); doc.text(t(ctx.cekTeks), L.MX + 3, L.y + 16); }
+    L.y += ctx.cekTeks ? 24 : 19;
+    // legenda
+    [['baik', 'Sudah baik'], ['cukup', 'Cukup / Sedang'], ['kurang', 'Perlu diperkuat / perhatian']].forEach((x, i) => {
+      const gx = L.MX + i * 52; doc.setFillColor(...WARNA[x[0]]); doc.roundedRect(gx, L.y, 3.4, 3.4, 0.8, 0.8, 'F');
+      L.font(8, false); L.warna(WARNA.teks); doc.text(t(x[1]), gx + 5, L.y + 2.8);
+    });
+    L.y += 8;
+    L.teks('Tes: penguasaan = skor diperoleh / skor maksimal pada materi (kurang < 60%, cukup 60-79%, baik >= 80%). Survei: nilai dimensi 0-100 (perlu perhatian < 50, sedang 50-74, baik >= 75). Angka "x/y kurang" = jumlah siswa yang kurang dari seluruh siswa yang dianalisis pada kelas itu.', { size: 7.6, warna: WARNA.mute, gap: 3 });
+
+    let pertama = true;
+    const bagian = () => { if (!pertama) L.halamanBaru(); pertama = false; };
+    // ---- A. matriks kelas x materi ----
+    if (opsi.matriks && dk.length) {
+      js.forEach(k => {
+        const mx = AM().matriksKelas(dk, k); if (!mx.baris.length) return;
+        L.ruang(30);
+        L.judul('Perbandingan antar kelas - ' + NAMA_JN[k], mx.kelas.length + ' kelas');
+        matriksPdf(L, mx, dk, k);
+      });
+    }
+    // ---- B. ringkasan tiap kelas ----
+    if (opsi.kelas) {
+      dk.forEach((d, idx) => {
+        L.ruang(40);
+        if (idx === 0 && opsi.matriks) { /* lanjut di halaman yang sama bila muat */ }
+        L.judul('Kelas ' + d.kelas + ' - materi lemah & materi kuat', d.nSiswa + ' siswa');
+        js.filter(k => d.per[k]).forEach(k => {
+          const P = d.per[k], sat = adaSv(k) ? '' : '%';
+          const lemah = P.topik.filter(x => x.level === 'kurang'), kuat = P.topik.filter(x => x.level === 'baik').slice().reverse();
+          L.ruang(18);
+          L.teks(NAMA_JN[k] + '  -  rata-rata kelas ' + bulat(P.rata) + sat + ' (' + P.n + ' siswa)' + (P.cek ? '  -  ' + P.cek + ' siswa pengisian perlu dicek' : '') + (P.dilewati ? '  -  ' + P.dilewati + ' pengisian diabaikan' : ''), { size: 9.6, tebal: true, gap: 1.2 });
+          if (lemah.length) {
+            L.ruang(14); L.teks(adaSv(k) ? 'Dimensi yang perlu perhatian:' : 'Materi yang perlu diperkuat:', { size: 8.4, tebal: true, warna: WARNA.kurang, gap: 0.6 });
+            lemah.forEach(x => L.bullet(x.label + ' - rata-rata ' + bulat(x.rata) + sat + '; ' + x.kurang.length + ' dari ' + x.n + ' siswa kurang' + (x.kurang.length ? ': ' + x.kurang.slice(0, 12).map(z => z.nama + ' (' + bulat(z.persen) + sat + ')' + (z.cek ? '*' : '')).join(', ') + (x.kurang.length > 12 ? ', dan ' + (x.kurang.length - 12) + ' siswa lain' : '') : ''), { warna: WARNA.kurang, size: 8.2 }));
+          } else L.teks('Tidak ada ' + (adaSv(k) ? 'dimensi' : 'materi') + ' di bawah ambang pada kelas ini.', { size: 8.4, warna: WARNA.mute, gap: 0.6 });
+          if (lemah.some(x => x.kurang.some(z => z.cek))) L.teks('* pengisian survei siswa ini ditandai perlu dicek (ikut dihitung).', { size: 7.4, warna: WARNA.mute, x: L.MX + 5, lebar: L.CW - 5, gap: 0.8 });
+          const cukup = P.topik.filter(x => x.level === 'cukup');
+          if (cukup.length) {
+            L.ruang(14); L.teks(adaSv(k) ? 'Dimensi kategori sedang:' : 'Materi kategori cukup:', { size: 8.4, tebal: true, warna: WARNA.cukup, gap: 0.6 });
+            L.teks(cukup.map(x => x.label + ' (' + bulat(x.rata) + sat + ')').join('; '), { size: 8.2, x: L.MX + 5, lebar: L.CW - 5, gap: 1 });
+          }
+          if (kuat.length) {
+            L.ruang(14); L.teks(adaSv(k) ? 'Dimensi yang sudah baik:' : 'Materi yang sudah baik:', { size: 8.4, tebal: true, warna: WARNA.baik, gap: 0.6 });
+            L.teks(kuat.map(x => x.label + ' (' + bulat(x.rata) + sat + ')').join('; '), { size: 8.2, x: L.MX + 5, lebar: L.CW - 5, warna: WARNA.baik, gap: 1.6 });
+          }
+          L.y += 1.5;
+        });
+      });
+    }
+    // ---- C. rincian per siswa ----
+    if (opsi.siswa) {
+      dk.forEach(d => {
+        bagian();
+        L.judul('Rincian siswa - Kelas ' + d.kelas, d.nSiswa + ' siswa');
+        const sis = siswaAll.filter(sw => String(sw.kelas || '-').trim() === d.kelas && js.some(k => sw.jenis[k])).sort((a, b) => String(a.nama).localeCompare(String(b.nama), 'id'));
+        sis.forEach((sw, i) => {
+          const ada = js.filter(k => sw.jenis[k]);
+          let est = 7;
+          ada.forEach(k => { est += 5; });
+          L.ruang(Math.min(est + 4, 40));
+          L.teks((i + 1) + '. ' + sw.nama, { size: 9.4, tebal: true, gap: 0.5 });
+          ada.forEach(k => {
+            const J = sw.jenis[k], sat = adaSv(k) ? '' : '%';
+            const kurang = J.topik.filter(x => x.level === 'kurang').sort((a, b) => a.persen - b.persen);
+            const baik = J.topik.filter(x => x.level === 'baik').sort((a, b) => b.persen - a.persen);
+            L.teks(NAMA_JN[k] + ': ' + bulat(J.persen) + sat + (J.perluCek ? '  [pengisian perlu dicek]' : ''), { size: 8.2, tebal: true, x: L.MX + 3, lebar: L.CW - 3, warna: WARNA[AM().levelUntuk(k, J.persen)], gap: 0.3 });
+            if (kurang.length) L.teks('Perlu diperkuat: ' + kurang.map(x => x.label + ' ' + bulat(x.persen) + sat).join('; '), { size: 7.9, x: L.MX + 6, lebar: L.CW - 6, warna: WARNA.kurang, gap: 0.3 });
+            if (baik.length) L.teks('Sudah baik: ' + baik.map(x => x.label + ' ' + bulat(x.persen) + sat).join('; '), { size: 7.9, x: L.MX + 6, lebar: L.CW - 6, warna: WARNA.baik, gap: 0.3 });
+            if (!kurang.length && !baik.length) L.teks('Semua ' + (adaSv(k) ? 'dimensi' : 'materi') + ' pada kategori cukup/sedang.', { size: 7.9, x: L.MX + 6, lebar: L.CW - 6, warna: WARNA.mute, gap: 0.3 });
+          });
+          doc.setDrawColor(...WARNA.garis); doc.setLineWidth(0.15); doc.line(L.MX, L.y + 0.4, L.MX + L.CW, L.y + 0.4); L.y += 2.2;
+        });
+      });
+    }
+    L.selesai(ctx.namaSekolah, ctx.tanggal);
+  }
+
+  const R = { membuat: false };
+  function pastikanModalRekap() {
+    if ($('modal-rekap-pdf')) return;
+    const d = document.createElement('div');
+    d.id = 'modal-rekap-pdf'; d.className = 'modal-backdrop hidden am-scope';
+    d.setAttribute('onclick', 'if(event.target===this)LaporanPdf.tutupRekap()');
+    const cek = (id, teks, on) => `<label style="display:flex;gap:.5rem;align-items:center;font-size:.86rem;font-weight:500;margin:.15rem 0;cursor:pointer"><input type="checkbox" id="${id}" style="width:auto"${on ? ' checked' : ''}> ${teks}</label>`;
+    d.innerHTML = `<div class="modal" role="dialog" style="max-width:560px">
+      <h3 style="margin:0 0 .15rem"><i class="fa-solid fa-file-pdf" style="color:#d6455d"></i> PDF Rekap Topik per Kelas &amp; Siswa</h3>
+      <p class="subtitle" style="margin:0 0 .6rem">Kelas mana yang rendah di materi apa dan sudah baik di materi apa, serta siswa mana yang bermasalah di topik apa. Satu file PDF untuk guru, bukan untuk dibagikan ke siswa.</p>
+      <div style="max-height:62vh;overflow:auto;padding-right:.2rem">
+        <div class="am-label">Kelas</div><select id="rk-kelas" style="width:100%"></select>
+        <div class="am-label" style="margin-top:.7rem">Jenis</div>
+        ${cek('rk-j-literasi', 'Literasi', true)}${cek('rk-j-numerasi', 'Numerasi', true)}${cek('rk-j-karakter', 'Survei Karakter', true)}${cek('rk-j-sulingjar', 'Sulingjar', true)}<span id="rk-j-lain-wrap">${cek('rk-j-lainnya', 'Mapel lain', true)}</span>
+        <div class="am-label" style="margin-top:.7rem">Isi PDF</div>
+        ${cek('rk-i-matriks', 'Perbandingan antar kelas (matriks kelas x materi berwarna)', true)}${cek('rk-i-kelas', 'Ringkasan tiap kelas: materi lemah &amp; materi kuat, beserta nama siswa yang kurang', true)}${cek('rk-i-siswa', 'Rincian per siswa: materi yang kurang &amp; yang sudah baik', true)}
+        <div class="am-label" style="margin-top:.7rem">Survei Karakter &amp; Sulingjar</div>
+        ${cek('rk-abaikan', 'Abaikan pengisian yang ditandai &quot;perlu dicek&quot; (terlalu cepat / seragam / bertentangan)', false)}
+        <div class="lp-prog" id="rk-prog" style="height:8px;border-radius:99px;background:#dee2e6;overflow:hidden;margin:.7rem 0 .2rem;display:none"><i style="display:block;height:100%;width:0;background:#0d6efd"></i></div><div id="rk-status" style="font-size:.8rem;color:#6c757d;min-height:1.2em" aria-live="polite"></div>
+      </div>
+      <div class="toolbar-actions" style="justify-content:flex-end;margin-top:.8rem">
+        <button type="button" class="secondary" id="rk-tutup" onclick="LaporanPdf.tutupRekap()">Tutup</button>
+        <button type="button" id="rk-buat" onclick="LaporanPdf.buatRekap()"><i class="fa-solid fa-download"></i> Buat PDF</button>
+      </div></div>`;
+    document.body.appendChild(d);
+  }
+  async function bukaRekap() {
+    if (typeof state === 'undefined' || !state.user || state.user.role === 'siswa') return;
+    pastikanModalRekap();
+    let data = AM().dataLaporan();
+    if (!data.dimuat) { toast('Memuat data analisis...'); try { await AM().muatData(); } catch (e) { } data = AM().dataLaporan(); }
+    if (!data.siswa.length) { toast('Belum ada data siswa untuk direkap.', 'error'); return; }
+    const kls = kelasUnik(data);
+    $('rk-kelas').innerHTML = '<option value="">Semua kelas (' + kls.length + ' kelas)</option>' + kls.map(k => `<option value="${esc(k)}">Kelas ${esc(k)} (${data.siswa.filter(s => String(s.kelas || '-').trim() === k).length} siswa)</option>`).join('');
+    $('rk-kelas').value = data.kelas && kls.includes(data.kelas) ? data.kelas : '';
+    const aktif = AM().jenisAktif();
+    ['literasi', 'numerasi', 'karakter', 'sulingjar', 'lainnya'].forEach(k => { $('rk-j-' + k).checked = aktif.includes(k); });
+    $('rk-j-lain-wrap').style.display = data.siswa.some(s => s.jenis.lainnya) ? '' : 'none';
+    $('rk-abaikan').checked = !!AM().abaikanCek();
+    $('rk-prog').style.display = 'none'; $('rk-status').textContent = '';
+    $('modal-rekap-pdf').classList.remove('hidden');
+  }
+  function tutupRekap() { if (R.membuat) return; const m = $('modal-rekap-pdf'); if (m) m.classList.add('hidden'); }
+  async function buatRekap() {
+    if (R.membuat) return;
+    const js = ['literasi', 'numerasi', 'karakter', 'sulingjar', 'lainnya'].filter(k => $('rk-j-' + k).checked);
+    const opsi = { matriks: $('rk-i-matriks').checked, kelas: $('rk-i-kelas').checked, siswa: $('rk-i-siswa').checked };
+    if (!js.length) { toast('Pilih minimal satu jenis.', 'error'); return; }
+    if (!opsi.matriks && !opsi.kelas && !opsi.siswa) { toast('Pilih minimal satu isi PDF.', 'error'); return; }
+    const kelasPilih = $('rk-kelas').value;
+    const rd = AM().dataRekap(js, kelasPilih, $('rk-abaikan').checked), dk = rd.dk;
+    if (!dk.length) { toast('Tidak ada data untuk pilihan ini.', 'error'); return; }
+    R.membuat = true; $('rk-buat').disabled = true; $('rk-tutup').disabled = true;
+    const prog = $('rk-prog'), bar = prog.querySelector('i'), st = $('rk-status');
+    prog.style.display = 'block'; bar.style.width = '15%'; st.textContent = 'Menyiapkan pustaka PDF...';
+    try {
+      await muatPustaka_('jspdf');
+      const { namaSekolah } = Guru._identitasSekolah_();
+      const logo = await ambilLogo();
+      bar.style.width = '40%'; st.textContent = 'Menyusun PDF...'; await jeda();
+      const ctx = { namaSekolah, logo, tanggal: tglPanjang(), cekTeks: rd.cek.ditandai ? (rd.cek.abaikan ? 'Survei: ' + rd.cek.ditandai + ' dari ' + rd.cek.total + ' pengisian ditandai "perlu dicek" dan tidak diikutkan.' : 'Survei: ' + rd.cek.ditandai + ' dari ' + rd.cek.total + ' pengisian ditandai "perlu dicek" tetap diikutkan (tanda * / cek).') : '' };
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+      doc.setProperties({ title: 'Rekap Analisis Topik', author: namaSekolah, creator: namaSekolah });
+      tulisRekap(doc, dk, js, opsi, ctx, rd.siswa);
+      bar.style.width = '100%';
+      unduhBlob(doc.output('blob'), 'Rekap Analisis Topik - ' + (kelasPilih ? 'Kelas ' + namaBerkas(kelasPilih) : 'Semua Kelas') + '.pdf');
+      st.textContent = 'Selesai.'; toast('PDF rekap topik berhasil dibuat.', 'success');
+    } catch (e) {
+      st.textContent = 'Gagal: ' + ((e && e.message) || 'terjadi kesalahan.'); toast('Gagal membuat PDF: ' + ((e && e.message) || ''), 'error');
+    } finally { R.membuat = false; $('rk-buat').disabled = false; $('rk-tutup').disabled = false; }
+  }
+
+  return { buka, tutup, ubah, buat, bukaRekap, tutupRekap, buatRekap, _tulis: tulisLaporan, _t: t };
 })();

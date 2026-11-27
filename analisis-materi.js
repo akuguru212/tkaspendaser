@@ -75,6 +75,26 @@ const AnalisisMateri = (function () {
 .am-scope .am-tag.kurang { background: color-mix(in srgb, var(--am-bad) 14%, var(--am-surf)); color: var(--am-bad); }
 .am-scope .am-tag.cukup { background: color-mix(in srgb, var(--am-mid) 16%, var(--am-surf)); color: #a76705; }
 .am-scope .am-tag.baik { background: color-mix(in srgb, var(--am-good) 14%, var(--am-surf)); color: var(--am-good); }
+.am-scope .am-heat { border-collapse: separate; border-spacing: 2px; font-size: .8rem; }
+.am-scope .am-heat th { padding: .35rem .5rem; font-size: .72rem; text-align: center; color: var(--am-mute); font-weight: 700; }
+.am-scope .am-heat th.am-ht { text-align: left; min-width: 190px; }
+.am-scope .am-heat td { padding: .4rem .5rem; text-align: center; border-radius: 6px; font-weight: 700; min-width: 64px; }
+.am-scope .am-heat td.am-ht { text-align: left; font-weight: 600; background: none; }
+.am-scope .am-heat td.h-kurang { background: color-mix(in srgb, var(--am-bad) 20%, var(--am-surf)); color: #a8283d; }
+.am-scope .am-heat td.h-cukup { background: color-mix(in srgb, var(--am-mid) 22%, var(--am-surf)); color: #8a5a00; }
+.am-scope .am-heat td.h-baik { background: color-mix(in srgb, var(--am-good) 20%, var(--am-surf)); color: #14693d; }
+.am-scope .am-heat td.h-kosong { background: color-mix(in srgb, var(--am-mute) 8%, var(--am-surf)); color: var(--am-mute); font-weight: 400; }
+.am-scope .am-heat small { display: block; font-weight: 400; font-size: .66rem; opacity: .8; }
+.am-scope .am-cek { color: #a8283d; font-weight: 700; font-size: .72rem; cursor: help; }
+.am-scope .am-heat td .am-cek, .am-scope .am-jn .am-cek { font-weight: 600; }
+.am-scope .am-kelas-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: .8rem; margin: .6rem 0 1rem; }
+.am-scope .am-kelas-kartu { border: 1px solid var(--am-line); border-radius: 12px; padding: .8rem .95rem; background: var(--am-surf); }
+.am-scope .am-kelas-kartu h4 { margin: 0 0 .1rem; font-size: 1rem; }
+.am-scope .am-kelas-kartu .am-jn { font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--am-mute); margin: .6rem 0 .25rem; }
+.am-scope .am-kelas-kartu .am-tags { display: flex; flex-wrap: wrap; gap: .3rem; margin-bottom: .2rem; }
+.am-scope .am-kelas-kartu .am-tag { white-space: normal; font-weight: 600; }
+.am-scope .am-legenda { display: flex; flex-wrap: wrap; gap: .3rem .9rem; font-size: .76rem; color: var(--am-mute); margin: .2rem 0 .6rem; }
+.am-scope .am-legenda i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: .3rem; vertical-align: -1px; }
 .am-scope .am-h { margin: 1.05rem 0 .5rem; font-size: .95rem; font-weight: 700; color: var(--am-text); display: flex; align-items: center; gap: .5rem; }
 .am-scope .am-h small { font-weight: 500; color: var(--am-mute); font-size: .78rem; }
 .am-scope .am-prior { margin: 0 0 1rem; padding: .75rem 1rem; border-radius: 14px; border: 1px dashed color-mix(in srgb, var(--am-bad) 45%, var(--am-line)); background: color-mix(in srgb, var(--am-bad) 5%, var(--am-surf)); font-size: .85rem; line-height: 1.55; color: var(--am-text); }
@@ -325,6 +345,9 @@ const AnalisisMateri = (function () {
     if (sv && J.perluCek) {
       h += `<div class="am-info" style="margin-top:.8rem"><i class="fa-solid fa-triangle-exclamation"></i> ${J.perluCek} pengisian survei ditandai <b>perlu dicek</b> (terlalu cepat / seragam / bertentangan), sehingga hasilnya perlu ditafsirkan hati-hati.</div>`;
     }
+    if (sv && J.dilewati) {
+      h += `<div class="am-info" style="margin-top:.8rem"><i class="fa-solid fa-triangle-exclamation"></i> ${J.dilewati} pengisian survei yang ditandai <b>perlu dicek</b> tidak diikutkan dalam analisis ini.</div>`;
+    }
     return h;
   }
 
@@ -464,7 +487,7 @@ const AnalisisMateri = (function () {
   // ============================================================================================
   // PORTAL GURU
   // ============================================================================================
-  const G = { guruId: null, siswa: [], prog: new Map(), tesGlobal: [], surveiGalat: false, dimuat: false, memuat: false, waktu: 0, jenis: 'semua', kelas: '', tampil: 'siswa', detailId: null };
+  const G = { guruId: null, siswa: [], prog: new Map(), tesGlobal: [], surveiGalat: false, dimuat: false, memuat: false, waktu: 0, jenis: 'semua', kelas: '', tampil: 'siswa', detailId: null, abaikanCek: false };
 
   async function muat(tombol) {
     if (G.memuat) return false;
@@ -482,6 +505,7 @@ const AnalisisMateri = (function () {
       try { const pg = Perkembangan.olahGuru(res); G.prog = new Map(pg.siswa.map(x => [String(x.id), x])); G.tesGlobal = pg.tes; } catch (e) { G.prog = new Map(); G.tesGlobal = []; }
       G.surveiGalat = false;
       try { gabungSurvei(G.siswa, await muatSurvei()); } catch (e) { G.surveiGalat = true; }
+      terapkanCek();
       G.siswa.sort((a, b) => String(a.nama).localeCompare(String(b.nama), 'id'));
       G.dimuat = true; G.waktu = Date.now();
     } catch (e) {
@@ -520,6 +544,8 @@ const AnalisisMateri = (function () {
     if (gagal) throw new Error(gagal + ' survei gagal dimuat.');
     return hasil;
   }
+  // pengisian survei dianggap bermasalah bila kualitas.baik === false (terlalu cepat / seragam / bertentangan)
+  const baikIt = (it) => !(it.r.kualitas && it.r.kualitas.baik === false);
   function gabungSurvei(daftar, data) {
     const peta = new Map(daftar.map(s => [String(s.id), s]));
     const per = new Map();
@@ -530,8 +556,9 @@ const AnalisisMateri = (function () {
         const sid = String(r.siswaId || ('nm:' + norm(r.nama) + '|' + norm(r.kelas)));
         let v = per.get(sid); if (!v) { v = { nama: r.nama || '(tanpa nama)', kelas: r.kelas || '-', jenis: {} }; per.set(sid, v); }
         const slot = v.jenis[d.jenis] = v.jenis[d.jenis] || new Map();
-        const b = slot.get(d.u.id);
-        if (!b || h.total > b.h.total) slot.set(d.u.id, { h, r, d });
+        // beberapa pengisian untuk satu survei: utamakan yang kualitasnya baik, baru ambil nilai tertinggi
+        const b = slot.get(d.u.id), calon = { h, r, d };
+        if (!b || (baikIt(calon) && !baikIt(b)) || (baikIt(calon) === baikIt(b) && h.total > b.h.total)) slot.set(d.u.id, calon);
       });
     });
     const rataArr = (a) => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
@@ -540,33 +567,90 @@ const AnalisisMateri = (function () {
       if (!sw) { sw = { id: sid, nama: v.nama, kelas: v.kelas, jenis: {} }; peta.set(sid, sw); daftar.push(sw); }
       ['karakter', 'sulingjar'].forEach(jn => {
         const slot = v.jenis[jn]; if (!slot || !slot.size) return;
-        const items = [...slot.values()], dim = new Map();
-        items.forEach(it => {
-          const nama = {}; it.d.set.dim.forEach(x => { nama[x[0]] = x[1]; });
-          Object.keys(it.h.dim).forEach(k => {
-            const x = it.h.dim[k]; if (x.indeks == null) return;
-            let e = dim.get(k); if (!e) { e = { kode: k, label: nama[k] || x.nama || k, vals: [], rata: [], n: 0, hist: [] }; dim.set(k, e); }
-            e.vals.push(x.indeks); e.rata.push(x.rata); e.n += x.n;
-            e.hist.push({ judul: it.d.u.judul, waktu: Date.parse(it.r.waktu) || 0, persen: x.indeks });
+        const semua = [...slot.values()];
+        const bangunJ = (items) => {
+          const dim = new Map();
+          items.forEach(it => {
+            const nama = {}; it.d.set.dim.forEach(x => { nama[x[0]] = x[1]; });
+            Object.keys(it.h.dim).forEach(k => {
+              const x = it.h.dim[k]; if (x.indeks == null) return;
+              let e = dim.get(k); if (!e) { e = { kode: k, label: nama[k] || x.nama || k, vals: [], rata: [], n: 0, hist: [] }; dim.set(k, e); }
+              e.vals.push(x.indeks); e.rata.push(x.rata); e.n += x.n;
+              e.hist.push({ judul: it.d.u.judul, waktu: Date.parse(it.r.waktu) || 0, persen: x.indeks });
+            });
           });
-        });
-        const topik = [...dim.values()].map(e => {
-          const persen = rataArr(e.vals);
-          return { key: norm(e.kode + e.label), kode: e.kode, label: e.label, persen, level: levelSurvei(persen), rata: rataArr(e.rata), nButir: e.n, got: 0, max: 0, n: e.n, benar: 0, sebagian: 0, salah: 0, kosong: 0, refs: [], tanpaTopik: false, survei: true, hist: e.hist.sort((a, b) => a.waktu - b.waktu) };
-        }).sort((a, b) => a.persen - b.persen || a.label.localeCompare(b.label, 'id'));
-        if (!topik.length) return;
-        sw.jenis[jn] = {
-          key: jn, nama: NAMA_JENIS[jn], survei: true, topik, persen: rataArr(items.map(it => it.h.total)),
-          ujian: items.map(it => ({ id: it.d.u.id, judul: it.d.u.judul, nilai: it.h.total })),
-          perluCek: items.filter(it => it.r.kualitas && it.r.kualitas.baik === false).length,
-          nKurang: topik.filter(t => t.level === 'kurang').length, nCukup: topik.filter(t => t.level === 'cukup').length, nBaik: topik.filter(t => t.level === 'baik').length
+          const topik = [...dim.values()].map(e => {
+            const persen = rataArr(e.vals);
+            return { key: norm(e.kode + e.label), kode: e.kode, label: e.label, persen, level: levelSurvei(persen), rata: rataArr(e.rata), nButir: e.n, got: 0, max: 0, n: e.n, benar: 0, sebagian: 0, salah: 0, kosong: 0, refs: [], tanpaTopik: false, survei: true, hist: e.hist.sort((a, b) => a.waktu - b.waktu) };
+          }).sort((a, b) => a.persen - b.persen || a.label.localeCompare(b.label, 'id'));
+          if (!topik.length) return null;
+          return {
+            key: jn, nama: NAMA_JENIS[jn], survei: true, topik, persen: rataArr(items.map(it => it.h.total)),
+            ujian: items.map(it => ({ id: it.d.u.id, judul: it.d.u.judul, nilai: it.h.total })),
+            perluCek: items.filter(it => !baikIt(it)).length, nSurvei: items.length,
+            nKurang: topik.filter(t => t.level === 'kurang').length, nCukup: topik.filter(t => t.level === 'cukup').length, nBaik: topik.filter(t => t.level === 'baik').length
+          };
         };
+        const penuh = bangunJ(semua); if (!penuh) return;
+        if (penuh.perluCek) {
+          // versi "bersih": tanpa pengisian yang ditandai perlu dicek (null bila semua pengisian bermasalah)
+          const ok = semua.filter(baikIt), bersih = ok.length ? bangunJ(ok) : null;
+          if (bersih) bersih.dilewati = penuh.perluCek;
+          penuh.bersih = bersih;
+        }
+        sw.jenis[jn] = penuh;
+        (sw.penuh = sw.penuh || {})[jn] = penuh;
       });
     });
     return daftar;
   }
   // kolom jenis pada tabel / ekspor sesuai filter Jenis
   const kolomJenis = () => G.jenis === 'semua' ? ['literasi', 'numerasi', 'karakter', 'sulingjar'].concat(G.siswa.some(s => s.jenis.lainnya) ? ['lainnya'] : []) : [G.jenis];
+
+  // ---- pengisian survei "perlu dicek": diikutkan (bawaan, diberi tanda) atau diabaikan (pilihan guru) ----
+  // sw.penuh[jn] = versi lengkap; sw.jenis[jn] = versi yang dipakai analisis (lengkap atau bersih sesuai G.abaikanCek).
+  function terapkanCek(abaikan) {
+    const ab = abaikan === undefined ? G.abaikanCek : !!abaikan;
+    G.siswa.forEach(sw => {
+      if (!sw.penuh) return;
+      Object.keys(sw.penuh).forEach(jn => {
+        const J = sw.penuh[jn], e = (ab && J.perluCek) ? J.bersih : J;
+        if (e) sw.jenis[jn] = e; else delete sw.jenis[jn];
+      });
+    });
+  }
+  const cekSiswa = (sw, js) => (js || URUT_JENIS).reduce((n, k) => n + (adalahSurvei(k) && sw.penuh && sw.penuh[k] ? (sw.penuh[k].perluCek || 0) : 0), 0);
+  // total pengisian survei & yang ditandai perlu dicek pada filter jenis/kelas tertentu
+  function hitungCek(js, kelasPilih, abaikan) {
+    let total = 0, ditandai = 0;
+    G.siswa.forEach(sw => {
+      if (kelasPilih && String(sw.kelas || '-').trim() !== kelasPilih) return;
+      js.forEach(k => { const J = adalahSurvei(k) && sw.penuh && sw.penuh[k]; if (J) { total += J.nSurvei || 0; ditandai += J.perluCek || 0; } });
+    });
+    return { total, ditandai, abaikan: abaikan === undefined ? G.abaikanCek : !!abaikan };
+  }
+  function teksCek(c) {
+    if (!c.ditandai) return '';
+    return c.abaikan
+      ? `${c.ditandai} dari ${c.total} pengisian survei ditandai "perlu dicek" (terlalu cepat / seragam / bertentangan) dan TIDAK diikutkan dalam angka analisis.`
+      : `${c.ditandai} dari ${c.total} pengisian survei ditandai "perlu dicek" (terlalu cepat / seragam / bertentangan) tetapi tetap diikutkan; baca angkanya dengan hati-hati.`;
+  }
+  function htmlInfoCek() {
+    const c = hitungCek(jenisAktif().filter(adalahSurvei), G.kelas);
+    if (!c.ditandai) return '';
+    return `<div class="am-info" style="margin-top:.6rem"><i class="fa-solid fa-triangle-exclamation"></i> ${esc(teksCek(c))}${c.abaikan ? '' : ' Tanda <b>⚠</b> menunjukkan siswa / pengisian yang bermasalah. Centang <b>Abaikan pengisian perlu dicek</b> di atas untuk mengeluarkannya.'}</div>`;
+  }
+  function pilihAbaikanCek(v) { G.abaikanCek = !!v; terapkanCek(); render(); }
+  // data untuk PDF Rekap: dihitung dengan pilihan abaikan sendiri, lalu keadaan halaman dikembalikan
+  function dataRekap(js, kelasPilih, abaikan) {
+    const awal = G.abaikanCek;
+    try {
+      G.abaikanCek = !!abaikan; terapkanCek();
+      const dk = dataKelas(js, kelasPilih);
+      const siswa = G.siswa.map(sw => Object.assign({}, sw, { jenis: Object.assign({}, sw.jenis) }));
+      return { dk, siswa, cek: hitungCek(js.filter(adalahSurvei), kelasPilih, !!abaikan) };
+    } finally { G.abaikanCek = awal; terapkanCek(); }
+  }
 
   const jenisAktif = () => G.jenis === 'semua' ? URUT_JENIS : [G.jenis];
   const kelasList = () => [...new Set(G.siswa.map(s => String(s.kelas || '-').trim()))].sort((a, b) => a.localeCompare(b, 'id', { numeric: true }));
@@ -583,8 +667,11 @@ const AnalisisMateri = (function () {
       const kurang = [];
       ada.forEach(k => sw.jenis[k].topik.forEach(t => { if (t.level === 'kurang') kurang.push({ t, k }); }));
       kurang.sort((a, b) => a.t.persen - b.t.persen);
+      const baik = [];
+      ada.forEach(k => sw.jenis[k].topik.forEach(t => { if (t.level === 'baik') baik.push({ t, k }); }));
+      baik.sort((a, b) => b.t.persen - a.t.persen);
       if (hanyaKurang && !kurang.length) return;
-      rows.push({ sw, kurang });
+      rows.push({ sw, kurang, baik });
     });
     rows.sort((a, b) => b.kurang.length - a.kurang.length || String(a.sw.nama).localeCompare(String(b.sw.nama), 'id'));
     return rows;
@@ -600,7 +687,7 @@ const AnalisisMateri = (function () {
           const kk = k + '|' + t.key;
           let m = peta.get(kk);
           if (!m) { m = { key: kk, label: t.label, jenis: k, kode: t.kode, siswa: [] }; peta.set(kk, m); }
-          m.siswa.push({ nama: sw.nama, kelas: sw.kelas, persen: t.persen, level: t.level });
+          m.siswa.push({ nama: sw.nama, kelas: sw.kelas, persen: t.persen, level: t.level, cek: (J.perluCek || 0) > 0 });
         });
       });
     });
@@ -608,11 +695,84 @@ const AnalisisMateri = (function () {
       m.n = m.siswa.length;
       m.rata = m.siswa.reduce((a, s) => a + s.persen, 0) / m.n;
       m.kurang = m.siswa.filter(s => s.level === 'kurang').sort((a, b) => a.persen - b.persen);
+      m.cek = m.siswa.filter(s => s.cek).length;
       m.level = levelUntuk(m.jenis, m.rata);
       return m;
     }).filter(m => !q || norm(m.label).indexOf(q) >= 0);
     rows.sort((a, b) => a.rata - b.rata || a.label.localeCompare(b.label, 'id'));
     return rows;
+  }
+
+  // Analisis PER KELAS: tiap kelas x jenis -> rata-rata penguasaan per materi, serta siswa yang kurang / sudah baik.
+  // Dipakai tampilan "Per Kelas" dan PDF Rekap Topik (laporan-pdf.js).
+  function dataKelas(js, kelasPilih) {
+    const rata = (a) => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+    const daftarKelas = kelasPilih ? [kelasPilih] : kelasList();
+    const hasil = [];
+    daftarKelas.forEach(kl => {
+      const sis = G.siswa.filter(s => String(s.kelas || '-').trim() === kl);
+      const per = {};
+      js.forEach(k => {
+        const ada = sis.filter(s => s.jenis[k]); if (!ada.length) return;
+        const peta = new Map();
+        ada.forEach(s => s.jenis[k].topik.forEach(t => {
+          let m = peta.get(t.key); if (!m) { m = { key: t.key, label: t.label, kode: t.kode, vals: [], kurang: [], baik: [], cek: 0 }; peta.set(t.key, m); }
+          const cekS = (s.jenis[k].perluCek || 0) > 0;
+          m.vals.push(t.persen); if (cekS) m.cek++;
+          if (t.level === 'kurang') m.kurang.push({ nama: s.nama, persen: t.persen, cek: cekS });
+          if (t.level === 'baik') m.baik.push({ nama: s.nama, persen: t.persen, cek: cekS });
+        }));
+        const topik = [...peta.values()].map(m => { m.n = m.vals.length; m.rata = rata(m.vals); m.level = levelUntuk(k, m.rata); m.kurang.sort((a, b) => a.persen - b.persen); return m; })
+          .sort((a, b) => a.rata - b.rata || a.label.localeCompare(b.label, 'id'));
+        per[k] = { n: ada.length, rata: rata(ada.map(s => s.jenis[k].persen)), topik,
+          cek: ada.filter(s => (s.jenis[k].perluCek || 0) > 0).length,
+          dilewati: (adalahSurvei(k) && G.abaikanCek) ? sis.reduce((a, s) => a + ((s.penuh && s.penuh[k]) ? (s.penuh[k].perluCek || 0) : 0), 0) : 0 };
+      });
+      if (Object.keys(per).length) hasil.push({ kelas: kl, nSiswa: sis.length, per });
+    });
+    return hasil;
+  }
+  // matriks materi (baris) x kelas (kolom) untuk satu jenis
+  function matriksKelas(dk, k) {
+    const kelas = dk.filter(d => d.per[k]);
+    const peta = new Map();
+    kelas.forEach(d => d.per[k].topik.forEach(t => {
+      let m = peta.get(t.key); if (!m) { m = { key: t.key, label: t.label, sel: {}, vals: [] }; peta.set(t.key, m); }
+      m.sel[d.kelas] = t; m.vals.push(t.rata);
+    }));
+    const baris = [...peta.values()].map(m => { m.rata = m.vals.reduce((a, b) => a + b, 0) / m.vals.length; return m; }).sort((a, b) => a.rata - b.rata || a.label.localeCompare(b.label, 'id'));
+    return { kelas: kelas.map(d => d.kelas), baris };
+  }
+
+  function renderKelas() {
+    const js = jenisAktif();
+    const dk = dataKelas(js, G.kelas);
+    const q = norm(($('am-g-cari') || {}).value);
+    if (!dk.length) { $('am-g-tabel').innerHTML = '<p class="subtitle">Belum ada data untuk filter ini.</p>'; return; }
+    const satuan = (k) => adalahSurvei(k) ? '' : '%';
+    const lg = `<div class="am-legenda"><span><i style="background:#229a66"></i>Sudah baik</span><span><i style="background:#dc8f12"></i>Cukup / Sedang</span><span><i style="background:#d6455d"></i>Perlu diperkuat / perhatian</span></div>`;
+    let out = lg;
+    js.forEach(k => {
+      const mx = matriksKelas(dk, k); if (!mx.baris.length) return;
+      const baris = mx.baris.filter(b => !q || norm(b.label).indexOf(q) >= 0);
+      out += `<h3 style="margin:.9rem 0 .3rem">${esc(NAMA_JENIS[k])} — rata-rata per materi pada tiap kelas</h3>
+        <div class="am-scroll"><table class="am-heat"><thead><tr><th class="am-ht">${adalahSurvei(k) ? 'Dimensi' : 'Materi'}</th>${mx.kelas.map(kl => `<th>${esc(kl)}</th>`).join('')}</tr></thead><tbody>` +
+        baris.map(b => `<tr><td class="am-ht">${esc(b.label)}</td>${mx.kelas.map(kl => { const t = b.sel[kl]; return t ? `<td class="h-${t.level}" title="${esc(kl)}: ${t.kurang.length} dari ${t.n} siswa kurang${t.cek ? '; ' + t.cek + ' siswa dengan pengisian perlu dicek' : ''}">${bulat(t.rata)}${satuan(k)}<small>${t.kurang.length}/${t.n} kurang${t.cek ? ' · ⚠' + t.cek : ''}</small></td>` : '<td class="h-kosong">–</td>'; }).join('')}</tr>`).join('') +
+        `<tr><td class="am-ht"><b>Rata-rata kelas</b></td>${mx.kelas.map(kl => { const d = dk.find(x => x.kelas === kl).per[k]; const lv = levelUntuk(k, d.rata); return `<td class="h-${lv}">${bulat(d.rata)}${satuan(k)}<small>${d.n} siswa${d.cek ? ' · ⚠' + d.cek : ''}</small></td>`; }).join('')}</tr></tbody></table></div>`;
+    });
+    out += `<h3 style="margin:1.2rem 0 .2rem">Ringkasan tiap kelas: materi lemah &amp; materi kuat</h3><div class="am-kelas-grid">` +
+      dk.map(d => {
+        const blok = js.filter(k => d.per[k]).map(k => {
+          const P = d.per[k];
+          const lemah = P.topik.filter(t => t.level === 'kurang'), kuat = P.topik.filter(t => t.level === 'baik').slice().reverse();
+          const tag = (t, lv) => `<span class="am-tag ${lv}" title="${t.kurang.length} dari ${t.n} siswa kurang">${esc(t.label)} ${bulat(t.rata)}${satuan(k)}</span>`;
+          return `<div class="am-jn">${esc(NAMA_JENIS[k])} · rata-rata ${bulat(P.rata)}${satuan(k)}${P.cek ? ` · <span class="am-cek" title="Siswa dengan pengisian survei perlu dicek (ikut dihitung)">⚠ ${P.cek} perlu dicek</span>` : ''}${P.dilewati ? ` · <span class="am-cek" title="Pengisian survei perlu dicek yang tidak diikutkan">${P.dilewati} pengisian diabaikan</span>` : ''}</div>
+            <div class="am-tags">${lemah.length ? lemah.map(t => tag(t, 'kurang')).join('') : '<span class="am-muted" style="font-size:.78rem">Tidak ada materi di bawah ambang.</span>'}</div>
+            ${kuat.length ? `<div class="am-tags">${kuat.map(t => tag(t, 'baik')).join('')}</div>` : ''}`;
+        }).join('');
+        return `<div class="am-kelas-kartu"><h4>Kelas ${esc(d.kelas)}</h4><div class="am-muted" style="font-size:.78rem">${d.nSiswa} siswa</div>${blok}</div>`;
+      }).join('') + `</div><p class="subtitle">Merah = materi yang perlu diperkuat di kelas itu, hijau = materi yang sudah baik. Angka “x/y kurang” pada sel = jumlah siswa yang kurang dari seluruh siswa di kelas itu. Tanda ⚠n pada survei = n siswa yang pengisiannya ditandai perlu dicek. Untuk melihat nama siswanya, buka tampilan <b>Per Siswa</b> atau unduh <b>PDF Rekap Topik</b>.</p>`;
+    $('am-g-tabel').innerHTML = out;
   }
 
   function chips(wadah, daftar, aktif, fnName) {
@@ -630,7 +790,7 @@ const AnalisisMateri = (function () {
     const adaLain = G.siswa.some(s => s.jenis.lainnya);
     chips($('am-g-chips-jenis'), [['semua', 'Semua'], ['literasi', 'Literasi'], ['numerasi', 'Numerasi'], ['karakter', 'Survei Karakter'], ['sulingjar', 'Sulingjar']].concat(adaLain ? [['lainnya', 'Mapel Lain']] : []), G.jenis, 'pilihJenisGuru');
     chips($('am-g-chips-kelas'), [['', 'Semua Kelas']].concat(kelasList().map(k => [k, k])), G.kelas, 'pilihKelas');
-    chips($('am-g-chips-tampil'), [['siswa', 'Per Siswa'], ['materi', 'Per Materi']], G.tampil, 'pilihTampil');
+    chips($('am-g-chips-tampil'), [['siswa', 'Per Siswa'], ['materi', 'Per Materi'], ['kelas', 'Per Kelas']], G.tampil, 'pilihTampil');
 
     const rows = barisSiswa(), materi = barisMateri();
     const nAnalisis = rows.length, nKurang = rows.filter(r => r.kurang.length).length;
@@ -642,12 +802,14 @@ const AnalisisMateri = (function () {
       <div class="am-stat"><b>${cnt ? bulat(sumP / cnt) + '%' : '–'}</b><span>Rata-rata penguasaan</span></div>
       <div class="am-stat"><b>${nKurang}${nAnalisis ? ` <small style="font-size:.8rem;font-weight:600;color:var(--c-muted)">(${bulat(nKurang / nAnalisis * 100)}%)</small>` : ''}</b><span>Siswa dengan materi kurang</span></div>
       <div class="am-stat"><b style="font-size:1rem;line-height:1.35">${lemah ? esc(lemah.label) : '–'}</b><span>${lemah ? 'Materi paling lemah (' + bulat(lemah.rata) + '%)' : 'Materi paling lemah'}</span></div></div>`;
-    if ($('am-g-info')) $('am-g-info').textContent = G.tampil === 'siswa' ? rows.length + ' siswa' : materi.length + ' materi';
+    $('am-g-stats').innerHTML += htmlInfoCek();
+    if ($('am-g-info')) $('am-g-info').textContent = G.tampil === 'siswa' ? rows.length + ' siswa' : (G.tampil === 'kelas' ? (G.kelas ? '1 kelas' : kelasList().length + ' kelas') : materi.length + ' materi');
 
     if (!G.siswa.length) {
       $('am-g-tabel').innerHTML = `<div class="am-kosongan"><i class="fa-solid fa-chart-column"></i>Belum ada hasil tes atau survei siswa yang bisa dianalisis. Analisis tes muncul setelah siswa menyelesaikan ujian yang soal-soalnya sudah diberi <b>Topik</b>; Survei Karakter dan Sulingjar muncul setelah siswa mengisi survei.</div>`;
       return;
     }
+    if (G.tampil === 'kelas') { renderKelas(); return; }
     if (G.tampil === 'materi') {
       if (!materi.length) { $('am-g-tabel').innerHTML = '<p class="subtitle">Tidak ada materi yang cocok dengan filter ini.</p>'; return; }
       $('am-g-tabel').innerHTML = `<div class="am-scroll"><table class="am-table"><thead><tr><th>#</th><th>Materi</th><th>Jenis</th><th>Rata-rata</th><th>Siswa kurang</th><th>Tindak lanjut</th></tr></thead><tbody>` +
@@ -660,7 +822,7 @@ const AnalisisMateri = (function () {
             if (sr) tl += '<br><span class="am-muted">' + esc(sr) + '</span>';
           }
           return `<tr><td>${i + 1}</td><td class="am-nama">${esc(m.label)}</td><td>${esc(NAMA_JENIS[m.jenis])}</td>${sel(m.rata, m.jenis)}
-            <td>${m.kurang.length ? `<details class="am-sis"><summary>${m.kurang.length} dari ${m.n} siswa</summary><div>${m.kurang.map(s => `${esc(s.nama)} (${esc(s.kelas)}) — ${bulat(s.persen)}%`).join('<br>')}</div></details>` : `0 dari ${m.n} siswa`}</td>
+            <td>${m.kurang.length ? `<details class="am-sis"><summary>${m.kurang.length} dari ${m.n} siswa</summary><div>${m.kurang.map(s => `${esc(s.nama)} (${esc(s.kelas)}) — ${bulat(s.persen)}${adalahSurvei(m.jenis) ? '' : '%'}${s.cek ? ' ⚠' : ''}`).join('<br>')}</div></details>` : `0 dari ${m.n} siswa`}${m.cek ? `<br><small class="am-cek" title="Siswa dengan pengisian survei perlu dicek (ikut dihitung)">⚠ ${m.cek} perlu dicek</small>` : ''}</td>
             <td style="min-width:200px;font-size:.82rem">${tl}</td></tr>`;
         }).join('') + `</tbody></table></div>`;
       return;
@@ -668,14 +830,14 @@ const AnalisisMateri = (function () {
     if (!rows.length) { $('am-g-tabel').innerHTML = '<p class="subtitle">Tidak ada siswa yang cocok dengan filter ini.</p>'; return; }
     const kol = kolomJenis();
     const kep = (k) => G.jenis === 'semua' ? `<b>${HURUF_JENIS[k]}</b> ` : '';
-    $('am-g-tabel').innerHTML = `<div class="am-scroll"><table class="am-table"><thead><tr><th>#</th><th>Nama Siswa</th><th>Kelas</th>${kol.map(k => `<th>${esc(NAMA_JENIS[k])}</th>`).join('')}<th>Materi yang kurang</th><th></th></tr></thead><tbody>` +
+    $('am-g-tabel').innerHTML = `<div class="am-scroll"><table class="am-table"><thead><tr><th>#</th><th>Nama Siswa</th><th>Kelas</th>${kol.map(k => `<th>${esc(NAMA_JENIS[k])}</th>`).join('')}<th>Materi yang kurang</th><th>Materi yang sudah baik</th><th></th></tr></thead><tbody>` +
       rows.map((r, i) => {
         const J = r.sw.jenis;
         const sk = (k) => J[k] ? sel(J[k].persen, k) : '<td class="am-sk am-muted">–</td>';
         const chipKurang = r.kurang.length
           ? `<div class="am-kurang">` + r.kurang.slice(0, 4).map(x => `<span class="am-tag kurang" title="${esc(NAMA_JENIS[x.k])}: ${bulat(x.t.persen)}${adalahSurvei(x.k) ? '' : '%'}">${kep(x.k)}${esc(x.t.label)} ${bulat(x.t.persen)}${adalahSurvei(x.k) ? '' : '%'}</span>`).join('') + (r.kurang.length > 4 ? `<span class="am-tag cukup">+${r.kurang.length - 4} lagi</span>` : '') + `</div>`
           : '<span class="am-tag baik">Tidak ada</span>';
-        return `<tr><td>${i + 1}</td><td class="am-nama">${esc(r.sw.nama)}</td><td>${esc(r.sw.kelas)}</td>${kol.map(sk).join('')}<td>${chipKurang}</td>
+        return `<tr><td>${i + 1}</td><td class="am-nama">${esc(r.sw.nama)}${cekSiswa(r.sw, jenisAktif()) ? ` <span class="am-cek" title="${cekSiswa(r.sw, jenisAktif())} pengisian survei ditandai perlu dicek${G.abaikanCek ? ' (tidak diikutkan)' : ''}">⚠</span>` : ''}</td><td>${esc(r.sw.kelas)}</td>${kol.map(sk).join('')}<td>${chipKurang}</td><td>${r.baik.length ? `<div class="am-kurang">` + r.baik.slice(0, 3).map(x => `<span class="am-tag baik" title="${esc(NAMA_JENIS[x.k])}: ${bulat(x.t.persen)}${adalahSurvei(x.k) ? '' : '%'}">${kep(x.k)}${esc(x.t.label)} ${bulat(x.t.persen)}${adalahSurvei(x.k) ? '' : '%'}</span>`).join('') + (r.baik.length > 3 ? `<span class="am-tag cukup">+${r.baik.length - 3} lagi</span>` : '') + `</div>` : '<span class="am-muted">–</span>'}</td>
           <td style="white-space:nowrap"><button type="button" class="am-btn" data-id="${esc(r.sw.id)}" onclick="AnalisisMateri.detail(this.dataset.id)"><i class="fa-solid fa-magnifying-glass-chart"></i> Detail</button> <button type="button" class="am-btn" title="Unduh laporan PDF siswa ini" data-id="${esc(r.sw.id)}" onclick="LaporanPdf.buka(this.dataset.id)"><i class="fa-solid fa-file-pdf"></i> PDF</button></td></tr>`;
       }).join('') + `</tbody></table></div>${G.surveiGalat ? '<p class="subtitle" style="margin-top:.6rem">⚠ Sebagian data survei gagal dimuat; klik Segarkan untuk mencoba lagi.</p>' : ''}`;
   }
@@ -729,11 +891,15 @@ const AnalisisMateri = (function () {
     const lebar = (ws, arr) => { ws['!cols'] = arr.map(w => ({ wch: w })); return ws; };
     const nilai = (J) => J ? Math.round(J.persen * 10) / 10 : '';
     const ringkas = (r, k) => r.kurang.filter(x => x.k === k).map(x => `${x.t.label} (${bulat(x.t.persen)}${adalahSurvei(k) ? '' : '%'})`).join('; ');
-    const head1 = ['No', 'Nama Siswa', 'Kelas'].concat(kol.map(k => NAMA_JENIS[k] + (adalahSurvei(k) ? ' (nilai)' : ' (%)')), ['Jumlah Materi Kurang'], kol.map(k => 'Kurang - ' + NAMA_JENIS[k]));
-    const d1 = rows.map((r, i) => [i + 1, r.sw.nama, r.sw.kelas].concat(kol.map(k => nilai(r.sw.jenis[k])), [r.kurang.length], kol.map(k => ringkas(r, k))));
-    XLSX.utils.book_append_sheet(wb, lebar(XLSX.utils.aoa_to_sheet([head1, ...d1]), [5, 30, 9].concat(kol.map(() => 14), [14], kol.map(() => 50))), namaSheetUnik_('Per Siswa', terpakai));
-    const d2 = materi.map((m, i) => [i + 1, m.label, NAMA_JENIS[m.jenis], Math.round(m.rata * 10) / 10, m.n, m.kurang.length, m.kurang.map(s => `${s.nama} (${s.kelas}) ${bulat(s.persen)}${adalahSurvei(m.jenis) ? '' : '%'}`).join('; ')]);
-    XLSX.utils.book_append_sheet(wb, lebar(XLSX.utils.aoa_to_sheet([['No', 'Materi / Dimensi', 'Jenis', 'Rata-rata', 'Jumlah Siswa', 'Siswa Kurang', 'Daftar Siswa Kurang'], ...d2]), [5, 45, 16, 12, 13, 13, 90]), namaSheetUnik_('Per Materi', terpakai));
+    const head1 = ['No', 'Nama Siswa', 'Kelas'].concat(kol.map(k => NAMA_JENIS[k] + (adalahSurvei(k) ? ' (nilai)' : ' (%)')), ['Jumlah Materi Kurang'], kol.map(k => 'Kurang - ' + NAMA_JENIS[k]), ['Pengisian Survei Perlu Dicek']);
+    const d1 = rows.map((r, i) => [i + 1, r.sw.nama, r.sw.kelas].concat(kol.map(k => nilai(r.sw.jenis[k])), [r.kurang.length], kol.map(k => ringkas(r, k)), [kol.filter(adalahSurvei).filter(k => r.sw.penuh && r.sw.penuh[k] && r.sw.penuh[k].perluCek).map(k => NAMA_JENIS[k] + ': ' + r.sw.penuh[k].perluCek + (G.abaikanCek ? ' (diabaikan)' : ' (diikutkan)')).join('; ')]));
+    XLSX.utils.book_append_sheet(wb, lebar(XLSX.utils.aoa_to_sheet([head1, ...d1]), [5, 30, 9].concat(kol.map(() => 14), [14], kol.map(() => 50), [34])), namaSheetUnik_('Per Siswa', terpakai));
+    const d2 = materi.map((m, i) => [i + 1, m.label, NAMA_JENIS[m.jenis], Math.round(m.rata * 10) / 10, m.n, m.kurang.length, m.kurang.map(s => `${s.nama} (${s.kelas}) ${bulat(s.persen)}${adalahSurvei(m.jenis) ? '' : '%'}${s.cek ? ' *' : ''}`).join('; '), adalahSurvei(m.jenis) ? m.cek : '']);
+    XLSX.utils.book_append_sheet(wb, lebar(XLSX.utils.aoa_to_sheet([['No', 'Materi / Dimensi', 'Jenis', 'Rata-rata', 'Jumlah Siswa', 'Siswa Kurang', 'Daftar Siswa Kurang', 'Siswa Perlu Dicek'], ...d2]), [5, 45, 16, 12, 13, 13, 90, 18]), namaSheetUnik_('Per Materi', terpakai));
+    // sheet Per Kelas: rata-rata tiap materi pada tiap kelas + jumlah siswa kurang
+    const dk = dataKelas(jenisAktif(), G.kelas), d4 = [];
+    dk.forEach(d => jenisAktif().forEach(k => { const P = d.per[k]; if (!P) return; P.topik.forEach(t => d4.push([d.kelas, NAMA_JENIS[k], t.label, Math.round(t.rata * 10) / 10, labelTingkat(k, t.level), t.n, t.kurang.length, adalahSurvei(k) ? t.cek : '', t.kurang.map(x => `${x.nama} (${bulat(x.persen)}${adalahSurvei(k) ? '' : '%'})${x.cek ? ' *' : ''}`).join('; ')])); }));
+    XLSX.utils.book_append_sheet(wb, lebar(XLSX.utils.aoa_to_sheet([['Kelas', 'Jenis', 'Materi / Dimensi', 'Rata-rata Kelas', 'Tingkat', 'Jumlah Siswa', 'Siswa Kurang', 'Siswa Perlu Dicek', 'Daftar Siswa Kurang'], ...d4]), [9, 16, 45, 15, 16, 13, 13, 17, 90]), namaSheetUnik_('Per Kelas', terpakai));
     const d3 = [];
     rows.forEach(r => kol.forEach(k => { const J = r.sw.jenis[k]; if (!J) return; J.topik.forEach(t => d3.push([r.sw.nama, r.sw.kelas, NAMA_JENIS[k], t.label, adalahSurvei(k) ? '' : t.benar, adalahSurvei(k) ? '' : t.n, Math.round(t.persen * 10) / 10, labelTingkat(k, t.level)])); }));
     XLSX.utils.book_append_sheet(wb, lebar(XLSX.utils.aoa_to_sheet([['Nama Siswa', 'Kelas', 'Jenis', 'Materi / Dimensi', 'Soal Benar', 'Jumlah Soal', 'Penguasaan / Nilai', 'Tingkat'], ...d3]), [30, 9, 16, 45, 11, 12, 18, 16]), namaSheetUnik_('Detail Materi', terpakai));
@@ -760,7 +926,7 @@ const AnalisisMateri = (function () {
       <table class="am-print"><thead><tr><th style="width:5%">No</th><th style="width:20%">Nama Siswa</th><th style="width:7%">Kelas</th>${kol.map(k => `<th>${esc(NAMA_JENIS[k])}</th>`).join('')}<th>Materi yang kurang</th></tr></thead><tbody>${perSiswa}</tbody></table>
       <h3 style="margin:14px 0 4px">Rekap per Materi / Dimensi</h3>
       <table class="am-print"><thead><tr><th style="width:5%">No</th><th>Materi / Dimensi</th><th style="width:14%">Jenis</th><th style="width:11%">Rata-rata</th><th style="width:14%">Siswa kurang</th></tr></thead><tbody>${perMateri}</tbody></table>
-      <p class="am-catatan">Tes: penguasaan = skor diperoleh / skor maksimal soal pada materi (kurang &lt; ${TH_KURANG}%, cukup ${TH_KURANG}–${TH_BAIK - 1}%, baik ≥ ${TH_BAIK}%). Survei Karakter &amp; Sulingjar: nilai dimensi 0–100 (perlu perhatian &lt; 50, sedang 50–74, baik ≥ 75). Bila satu tes dikerjakan lebih dari sekali, dipakai percobaan terakhir.</p>
+      <p class="am-catatan">Tes: penguasaan = skor diperoleh / skor maksimal soal pada materi (kurang &lt; ${TH_KURANG}%, cukup ${TH_KURANG}–${TH_BAIK - 1}%, baik ≥ ${TH_BAIK}%). Survei Karakter &amp; Sulingjar: nilai dimensi 0–100 (perlu perhatian &lt; 50, sedang 50–74, baik ≥ 75). ${esc(teksCek(hitungCek(jenisAktif().filter(adalahSurvei), G.kelas)))} Bila satu tes dikerjakan lebih dari sekali, dipakai percobaan terakhir.</p>
       <footer class="cp-foot"><span>Dicetak dari ${esc(namaSekolah)}</span><span>${esc(waktu)}</span></footer>`;
     Guru._cetakArea_(html, ['Analisis Materi', G.jenis === 'semua' ? 'Semua' : NAMA_JENIS[G.jenis], G.kelas || 'Semua Kelas'].join(' - '));
   }
@@ -774,5 +940,5 @@ const AnalisisMateri = (function () {
     _gantiTab.call(UI, tabId);
     if (tabId === 'tab-analisis-materi') buka();
   };
-  return { bukaSiswa, pilihJenis, resetJenis, kembali, setDataSiswa, setRiwayatSiswa, renderSiswa, ringkasSiswa, jenisDari, htmlJenis, NAMA_JENIS, URUT_JENIS, LABEL_LEVEL, LABEL_LEVEL_SV, labelLevel, levelUntuk, adalahSurvei, kelasList, saranPlain, idDetail: () => G.detailId, dataLaporan: () => ({ siswa: G.siswa, prog: G.prog, tes: G.tesGlobal, kelas: G.kelas, jenis: G.jenis, dimuat: G.dimuat }), muatData: (t) => muat(t), buka, muat, render, pilihJenisGuru, pilihKelas, pilihTampil, detail, pilihDetailJenis, tutupDetail, unduh, cetak, _olah: olah, _saran: saranUntuk };
+  return { bukaSiswa, pilihJenis, resetJenis, kembali, setDataSiswa, setRiwayatSiswa, renderSiswa, ringkasSiswa, jenisDari, htmlJenis, NAMA_JENIS, URUT_JENIS, LABEL_LEVEL, LABEL_LEVEL_SV, labelLevel, levelUntuk, adalahSurvei, kelasList, saranPlain, idDetail: () => G.detailId, dataKelas, matriksKelas, dataRekap, abaikanCek: () => G.abaikanCek, pilihAbaikanCek, jenisAktif: () => jenisAktif(), filterKelas: () => G.kelas, dataLaporan: () => ({ siswa: G.siswa.map(sw => sw.penuh ? Object.assign({}, sw, { jenis: Object.assign({}, sw.jenis, sw.penuh) }) : sw), prog: G.prog, tes: G.tesGlobal, kelas: G.kelas, jenis: G.jenis, dimuat: G.dimuat }), muatData: (t) => muat(t), buka, muat, render, pilihJenisGuru, pilihKelas, pilihTampil, detail, pilihDetailJenis, tutupDetail, unduh, cetak, _olah: olah, _saran: saranUntuk };
 })();

@@ -1,3 +1,26 @@
+# v43z61 — Analisis Materi: pengisian survei "perlu dicek" kini ditandai & bisa diabaikan
+
+- **Masalah:** pengisian Survei Karakter / Sulingjar yang ditandai *perlu dicek* (terlalu cepat, jawaban seragam, atau bertentangan) ikut dihitung penuh di rata-rata kelas tanpa penanda apa pun, dan bila satu survei diisi berulang, yang dipilih adalah nilai tertinggi, bukan yang kualitasnya baik.
+- **Pemilihan pengisian (`analisis-materi.js` v6):** bila ada beberapa pengisian untuk satu survei, pengisian yang kualitasnya baik didahulukan, baru nilai tertinggi.
+- **Penanda:** tanda ⚠ pada nama siswa (Per Siswa), pada daftar siswa kurang (Per Materi), dan ⚠n pada sel serta ringkasan kelas (Per Kelas); ada pula catatan "x dari y pengisian ditandai perlu dicek" di atas tabel.
+- **Pilihan "Abaikan pengisian survei perlu dicek"** (filter Analisis Materi, bawaan MATI): mengeluarkan pengisian bermasalah dari semua tampilan, Excel, dan cetak. Jumlah yang diabaikan tetap ditampilkan.
+- **PDF Rekap Topik (`laporan-pdf.js` v3):** ada kotak centang sendiri "Abaikan pengisian perlu dicek" (mengikuti pilihan halaman sebagai nilai awal, tidak mengubah tampilan halaman); PDF memuat catatan jumlah pengisian bermasalah, tanda * pada nama siswa, dan "[pengisian perlu dicek]" pada rincian per siswa.
+- **Excel:** kolom baru *Pengisian Survei Perlu Dicek* (Per Siswa) dan *Siswa Perlu Dicek* (Per Materi, Per Kelas).
+- **Laporan PDF per siswa tidak berubah:** selalu memakai data lengkap siswa itu, apa pun pilihan abaikan.
+- `Code.gs` TIDAK berubah. Unggah `analisis-materi.js` (v6), `laporan-pdf.js` (v3), `index.html`, `sw.js` (`hp58`), `README.md`.
+
+---
+
+# v43z60 — Analisis Materi: tampilan PER KELAS, kolom "materi yang sudah baik", dan PDF Rekap Topik
+
+- **Tampilan "Per Kelas"** (Analisis Materi): untuk tiap jenis (Literasi, Numerasi, Survei Karakter, Sulingjar) ada matriks materi x kelas berwarna (merah = perlu diperkuat, kuning = cukup/sedang, hijau = baik) berikut jumlah siswa yang kurang, plus kartu ringkasan tiap kelas: materi lemah dan materi kuat.
+- **Per Siswa:** kolom baru **Materi yang sudah baik** di samping Materi yang kurang.
+- **PDF Rekap Topik** (tombol baru di Analisis Materi, `laporan-pdf.js` v2): pilih kelas dan jenis, lalu isi PDF = perbandingan antar kelas, ringkasan tiap kelas (materi lemah + nama siswa yang kurang, materi kuat), dan rincian per siswa (kurang & baik per materi). PDF vektor, ukuran kecil, untuk guru.
+- **Excel:** ditambah sheet **Per Kelas**.
+- `Code.gs` TIDAK berubah. Unggah `analisis-materi.js` (v5), `laporan-pdf.js` (v2), `index.html`, `sw.js` (`hp57`), `README.md`.
+
+---
+
 # v43z59 — Perbaikan detail survei: bisa di-scroll + tombol aksi terlihat, daftar "pengalaman tidak aman" benar, warna Hijau/Kuning/Merah
 
 - **Jendela detail survei** kini punya area isi yang bisa di-scroll; tombol Sebelumnya/Berikutnya, Cetak/PDF, dan Tutup selalu terlihat di bawah (`style.css` v66).
