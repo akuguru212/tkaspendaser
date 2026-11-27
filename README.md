@@ -1,3 +1,46 @@
+# v43z56 — KEAMANAN: aksi guru di server kini wajib token (kunci jawaban & password siswa tidak lagi bisa diambil tanpa login guru)
+
+- **Masalah:** server (`Code.gs`) menjalankan aksi guru hanya dengan `guruId` tanpa bukti bahwa pemanggilnya guru. Karena URL Web App ada di `config.js` (terbaca browser siapa pun), siswa yang tahu cara mengirim permintaan bisa memanggil `getBankSoal` (memuat `kunci_json` = kunci jawaban), `getDaftarSiswa` (username + password semua siswa), `getDaftarUjian` (token ujian), serta `hapusSiswa`, `hapusKelas`, `hapusNilaiSiswa`, dst.
+- **Perbaikan:**
+  1. Login guru mengembalikan **token acak 64 karakter** (`tokenGuru`), disimpan di CacheService, berlaku 6 jam dan **diperpanjang setiap dipakai**.
+  2. 45 aksi guru (daftar `AKSI_GURU_` di `Code.gs`) ditolak bila tanpa token yang sah. `getAnalisisMateri` dan `getDetailJawaban` dijaga hanya bila dipanggil sebagai guru (tanpa `siswaId`), jadi fitur siswa tidak berubah.
+  3. `guruId` yang dikirim harus sama dengan pemilik token (tidak bisa menyamar sebagai guru lain).
+  4. `app.js`: fungsi `api()` menyertakan `tokenGuru` otomatis. Bila server menjawab `authExpired`, aplikasi menampilkan "Sesi guru berakhir" lalu kembali ke layar login.
+- **LANGKAH WAJIB SETELAH UNGGAH (urutan penting):**
+  1. Salin isi `Code.gs` baru ke editor Apps Script, lalu **Deploy → Kelola deployment → Edit (ikon pensil) → Versi: Versi baru → Deploy**. URL tetap sama. Tanpa langkah ini perbaikan tidak aktif.
+  2. Unggah berkas klien (`app.js`, `index.html`, `sw.js`, dan lainnya).
+  3. **Semua guru login ulang** (sesi lama tidak punya token; aplikasi akan meminta login ulang otomatis).
+- **Yang TIDAK berubah:** alur siswa (login, ujian, simpan jawaban, portal, survei, foto profil). Mode Lokal (tanpa server) tidak terpengaruh.
+- **Diuji (simulasi, bukan server asli):** 45 aksi guru ditolak tanpa token; token palsu, salah format, dan kedaluwarsa ditolak; guruId palsu ditolak; 12 aksi siswa/publik tetap terbuka; token sah diteruskan ke handler.
+- **Belum ditangani (saran berikutnya):** password masih tersimpan polos di Sheets; `getAnalisisMateri` dengan `siswaId` belum memeriksa kepemilikan; tidak ada pembatasan percobaan login.
+- File berubah: `Code.gs`, `app.js` (v86), `index.html`, `sw.js` (cache `hp49`), `README.md`.
+
+---
+
+# v43z55 — Tombol Kembali HP: penutup "Ketuk layar" + layar tak dikenal kembali ke Beranda
+
+- **Celah yang ditutup:** setelah sesi siswa dipulihkan dan belum ada sentuhan sama sekali, penjaga riwayat belum terpasang sehingga Kembali pertama masih bisa keluar aplikasi.
+- **Perbaikan (`tombol-kembali.js` v3):**
+  1. Di layar sentuh, selama belum ada sentuhan muncul penutup **"Ketuk layar untuk melanjutkan"**. Satu ketukan memasang penjaga lalu penutup hilang. Tidak muncul di laptop/PC, halaman ujian, dan survei.
+  2. Pada layar yang tidak dikenali modul ini, Kembali sekarang mengarah ke Beranda (sebelumnya tidak melakukan apa-apa).
+- Aturan lain tidak berubah.
+- File berubah: `tombol-kembali.js` (v3), `index.html`, `sw.js` (cache `hp48`), `README.md`.
+
+---
+
+# v43z54 — Tombol Kembali HP: penjaga riwayat diperkuat (Kembali di Beranda tidak lagi langsung keluar)
+
+- **Masalah:** di HP, menekan Kembali saat di Beranda kadang langsung keluar tanpa pop up "Yakin Anda akan keluar?".
+- **Penyebab yang dicakup:** Chrome HP melewati entri riwayat yang dibuat oleh halaman yang belum pernah disentuh pengguna. Bila sesi siswa dipulihkan (aplikasi dibuka ulang / tab dipulihkan) penjaga dibuat tanpa sentuhan, sehingga entri awal dilewati dan Kembali pertama langsung keluar.
+- **Perbaikan (`tombol-kembali.js` v2):**
+  1. Penjaga baru dipasang setelah **sentuhan/ketukan pertama** (bila belum ada sentuhan, ditunda otomatis).
+  2. Bila halaman dimuat tepat di entri dasar dengan sesi siswa masih ada (aplikasi dipulihkan browser setelah Kembali), pop up "Yakin Anda akan keluar?" langsung ditampilkan.
+- Aturan lain tidak berubah (Kembali sekali = halaman sebelumnya; ujian, survei, unggah bukti tetap dikecualikan).
+- Diuji di Chromium (tampilan HP): login normal lalu Kembali di Beranda, sesi dipulihkan tanpa sentuhan lalu ketuk lalu Kembali, dimuat di entri dasar, ujian/survei, Ya Keluar.
+- File berubah: `tombol-kembali.js` (v2), `index.html`, `sw.js` (cache `hp47`), `README.md`.
+
+---
+
 # v43z53 — Warna tombol navigasi layar ujian (HP) sama dengan TKA asli
 
 - **Masalah:** di HP tombol bawah layar ujian memakai gradasi (merah agak pucat, kuning krem pucat).

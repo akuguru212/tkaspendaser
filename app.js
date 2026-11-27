@@ -2580,8 +2580,17 @@ function ptSusunRiwayat_(sesiSemua, ujianMap, siswaMap, sayaId) {
 }
 
 
+// Server mewajibkan token pada aksi guru (lihat Code.gs "OTORISASI GURU"). Token dikirim otomatis oleh api().
+function sesiGuruBerakhir_(hasil) {
+  if (!hasil || hasil.authExpired !== true || sesiGuruBerakhir_.sudah) return;
+  sesiGuruBerakhir_.sudah = true;
+  try { toast('Sesi guru berakhir. Silakan login ulang.', 'error'); } catch (e) { /* abaikan */ }
+  setTimeout(() => { try { sessionStorage.removeItem('cbt_user'); } catch (e) { /* abaikan */ } location.reload(); }, 1500);
+}
+
 async function api(action, payload) {
   const body = Object.assign({ action }, payload || {});
+  try { if (!body.tokenGuru && state && state.user && state.user.role === 'guru' && state.user.tokenGuru) body.tokenGuru = state.user.tokenGuru; } catch (e) { /* abaikan */ }
   mulaiLoading();
   try {
     if (!modeServerAktif()) {
@@ -2600,7 +2609,9 @@ async function api(action, payload) {
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify(body)
         });
-        return await res.json();
+        const hasilJson = await res.json();
+        sesiGuruBerakhir_(hasilJson);
+        return hasilJson;
       } catch (err) {
         errTerakhir = err;
         if (percobaan < MAKS_PERCOBAAN_API) {

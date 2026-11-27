@@ -1,5 +1,5 @@
 /* ============================================================================
-   TOMBOL KEMBALI HP / BROWSER — Portal Siswa (v43z52)
+   TOMBOL KEMBALI HP / BROWSER — Portal Siswa (v43z55)
    Aturan (hanya untuk akun siswa di luar halaman ujian & survei):
      1) Tekan Kembali SEKALI  -> pindah ke halaman sebelumnya di dalam aplikasi (bukan keluar aplikasi).
      2) Bila sudah tidak ada halaman sebelumnya (sudah di Beranda) dan Kembali ditekan lagi
@@ -33,11 +33,45 @@ const TombolKembali = (function () {
   const stateSkrg = () => { try { return history.state || null; } catch (e) { return null; } };
   const dorong = (tanda) => { try { history.pushState({ [tanda]: 1 }, '', location.href); } catch (e) { /* abaikan */ } };
 
+  // Chrome (HP) MELEWATI entri riwayat yang dibuat oleh halaman yang belum pernah disentuh pengguna. Jadi
+  // penjaga baru dipasang setelah ada sentuhan/ketukan pertama (sesi yang dipulihkan setelah aplikasi dibuka
+  // ulang belum punya sentuhan, dan tanpa penantian ini tombol Kembali pertama langsung keluar aplikasi).
+  const sudahDisentuh = () => { try { return !navigator.userActivation || navigator.userActivation.hasBeenActive; } catch (e) { return true; } };
+  let menunggu = false;
+  const PEMICU = ['click', 'touchend', 'keyup'];
+  // Di HP, selama belum ada sentuhan, tampilkan penutup "Ketuk layar untuk melanjutkan" supaya siswa pasti
+  // mengetuk dulu (penjaga riwayat jadi terpasang) sebelum sempat menekan Kembali. Hanya layar sentuh.
+  const layarSentuh = () => { try { return !!(window.matchMedia && matchMedia('(pointer: coarse)').matches); } catch (e) { return false; } };
+  function tampilkanKetukLayar() {
+    if (!layarSentuh() || $('kb-ketuk')) return;
+    const o = document.createElement('div');
+    o.id = 'kb-ketuk';
+    o.setAttribute('role', 'button');
+    o.style.cssText = 'position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;' +
+      'background:rgba(15,23,42,.55);color:#fff;font:600 16px/1.4 system-ui,sans-serif;text-align:center;padding:24px;';
+    o.innerHTML = '<div style="background:rgba(15,23,42,.85);border-radius:14px;padding:18px 22px;max-width:300px;">' +
+      'Ketuk layar untuk melanjutkan</div>';
+    document.body.appendChild(o);
+  }
+  function hilangkanKetukLayar() { const o = $('kb-ketuk'); if (o && o.parentNode) o.parentNode.removeChild(o); }
+  function tungguSentuhan() {
+    if (menunggu) return; menunggu = true;
+    tampilkanKetukLayar();
+    const cek = () => {
+      if (!sudahDisentuh()) return;
+      menunggu = false; PEMICU.forEach(t => document.removeEventListener(t, cek, true));
+      hilangkanKetukLayar();
+      pasang();
+    };
+    PEMICU.forEach(t => document.addEventListener(t, cek, true));
+  }
+
   // Pastikan riwayat = [DASAR][PENJAGA] dan kita berdiri di PENJAGA. Aman dipanggil berulang.
   function pasang() {
-    if (!adaSiswa() || keluar || wilayahUjian()) return;
+    if (!adaSiswa() || keluar || wilayahUjian()) { hilangkanKetukLayar(); return; }
     const s = stateSkrg();
     if (s && s[T_JAGA]) return;
+    if (!sudahDisentuh()) { tungguSentuhan(); return; }
     if (s && s[T_DASAR]) { dorong(T_JAGA); return; }
     try { history.replaceState({ [T_DASAR]: 1 }, '', location.href); } catch (e) { /* abaikan */ }
     dorong(T_JAGA);
@@ -63,7 +97,9 @@ const TombolKembali = (function () {
     if (tampak('tes-konfirmasi-screen')) { Anbk.kembaliKeKonfirmasiData(); return true; }    // konfirmasi tes -> layar token
     if (tampak('detail-screen')) { ExamEngine.tutupDetailJawaban(); return true; }           // detail jawaban -> hasil / riwayat
     if (tampak('hasil-screen')) { UI.kembaliKeBerandaSiswa(); return true; }                 // hasil -> Beranda
-    return true;                                                                              // layar lain: tidak ada tindakan
+    // layar lain yang tidak dikenal: arahkan ke Beranda (bukan diam), supaya tombol tidak terasa rusak
+    try { PortalSiswa.kembaliBeranda(); } catch (e) { /* abaikan */ }
+    return true;
   }
 
   let popupTampil = false;
@@ -120,10 +156,11 @@ const TombolKembali = (function () {
     if (['sw-screen', 'siswa-portal', 'tes-konfirmasi-screen', 'hasil-screen', 'detail-screen'].indexOf(id) >= 0) pasang();
     return r;
   };
-  // Sesi dipulihkan setelah muat ulang (belum ada klik): pasang lagi pada interaksi pertama.
-  const pertama = () => { pasang(); };
-  document.addEventListener('pointerdown', pertama, { once: true, capture: true });
-  document.addEventListener('keydown', pertama, { once: true, capture: true });
+  // Halaman dimuat TEPAT di entri DASAR dengan sesi siswa masih ada = siswa menekan Kembali dari penjaga
+  // setelah aplikasi dipulihkan browser (entri lama dimuat ulang, bukan peristiwa popstate biasa).
+  // Tanyakan "Yakin keluar?" alih-alih membiarkan aplikasi seolah memuat ulang / keluar.
+  const mendarat = (() => { try { const s = history.state; return !!(s && s[T_DASAR] && sessionStorage.getItem('cbt_user')); } catch (e) { return false; } })();
+  if (mendarat) setTimeout(() => { if (adaSiswa() && !wilayahUjian() && !keluar && !(stateSkrg() || {})[T_JAGA]) tanyaKeluar(); }, 800);
 
   return { pasang, selesaiLogout, KONFIRMASI_KELUAR: true };
 })();
