@@ -535,6 +535,7 @@
         <div class="filter-bar">
           <input type="search" id="cari-survei" placeholder="🔍 Cari nama siswa..." oninput="Survei.guruRender()" autocomplete="off">
           <select id="kelas-survei" onchange="Survei.guruRender()" title="Filter per kelas"><option value="">Semua Kelas</option></select>
+          <select id="saring-survei" onchange="Survei.guruRender()" title="Saring siswa yang perlu perhatian guru BK"><option value="">Semua siswa</option><option value="perhatian">⚠ Perlu perhatian BK</option></select>
         </div>
         <div id="ringkas-survei"></div>
         <div id="tabel-survei">Pilih ujian terlebih dahulu.</div>
@@ -766,7 +767,8 @@
             <button class="danger small" onclick="Guru.hapusKelas()" title="Hapus semua siswa di kelas yang sedang dipilih pada Filter Kelas">🗑 Hapus Kelas Ini</button>
           </div>
         </div>
-        <div class="filter-bar"><input type="search" id="cari-siswa" placeholder="🔍 Cari nama / username..." oninput="Guru.renderTabelSiswa()" autocomplete="off"><label class="filter-cek" id="lbl-blokir-siswa" title="Tampilkan hanya yang diblokir"><input type="checkbox" id="blokir-siswa" onchange="Guru.renderTabelSiswa()"> 🚫 Akun diblokir saja <span id="blokir-siswa-jml"></span></label><span class="filter-info" id="cari-siswa-info"></span></div>
+        <div class="filter-bar"><input type="search" id="cari-siswa" placeholder="🔍 Cari nama / username..." oninput="Guru.renderTabelSiswa()" autocomplete="off"><select id="filter-login-siswa" onchange="Guru.renderTabelSiswa()" title="Saring siswa berdasarkan status login" style="width:auto"><option value="">Semua Status Login</option><option value="aktif">🟢 Sedang login (aktif)</option><option value="idle">🟡 Login, tidak aktif &gt; 15 menit</option><option value="login">🔒 Semua yang login (aktif + tidak aktif)</option><option value="belum">⚪ Belum login / sudah keluar</option></select><select id="kelompok-siswa" onchange="Guru.renderTabelSiswa()" title="Kelompokkan daftar siswa" style="width:auto"><option value="">Tanpa pengelompokan</option><option value="login">Kelompokkan: Status login</option><option value="kelas">Kelompokkan: Kelas</option><option value="kelas-login">Kelompokkan: Kelas &gt; Status login</option></select><label class="filter-cek" id="lbl-blokir-siswa" title="Tampilkan hanya yang diblokir"><input type="checkbox" id="blokir-siswa" onchange="Guru.renderTabelSiswa()"> 🚫 Akun diblokir saja <span id="blokir-siswa-jml"></span></label><span class="filter-info" id="cari-siswa-info"></span></div>
+        <div id="ringkas-login-siswa" class="sv-info" style="margin:.2rem 0 .6rem"></div>
         <div id="daftar-siswa">Memuat...</div>
       </div>
     </section>
@@ -1203,6 +1205,27 @@
       <button type="button" class="secondary" id="dsw-next" onclick="Guru.pindahDetailSiswa(1)">Berikutnya <i class="fa-solid fa-arrow-right"></i></button>
       <button type="button" class="secondary" onclick="Guru.cetakDetailSiswa()" title="Cetak atau simpan sebagai PDF untuk diberikan ke siswa"><i class="fa-solid fa-print"></i> Cetak / PDF</button>
       <button type="button" onclick="Guru.tutupDetailSiswa()">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= MODAL: DETAIL JAWABAN SURVEI PER SISWA (guru / BK) ======================= -->
+<div id="modal-detail-survei" class="modal-backdrop hidden" onclick="if(event.target===this)Survei.tutupDetail()">
+  <div class="modal modal-wide dsw-modal">
+    <div class="dsw-head">
+      <div>
+        <p class="dsw-eyebrow">Detail Jawaban Survei Siswa</p>
+        <h3 id="dsv-nama" style="margin:0">-</h3>
+        <p class="subtitle" id="dsv-meta" style="margin:.2rem 0 0"></p>
+      </div>
+    </div>
+    <div id="dsv-isi"></div>
+    <div class="modal-close-row dsw-aksi">
+      <button type="button" class="secondary" id="dsv-prev" onclick="Survei.pindahDetail(-1)"><i class="fa-solid fa-arrow-left"></i> Sebelumnya</button>
+      <span class="dsw-posisi" id="dsv-posisi"></span>
+      <button type="button" class="secondary" id="dsv-next" onclick="Survei.pindahDetail(1)">Berikutnya <i class="fa-solid fa-arrow-right"></i></button>
+      <button type="button" class="secondary" onclick="Survei.cetakDetail()" title="Cetak atau simpan PDF untuk berkas guru BK (bersifat rahasia)"><i class="fa-solid fa-print"></i> Cetak / PDF</button>
+      <button type="button" onclick="Survei.tutupDetail()">Tutup</button>
     </div>
   </div>
 </div>
@@ -1671,10 +1694,10 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=86"></script>
+<script src="app.js?v=87"></script>
 <script src="anbk.js?v=67"></script>
 <script src="peringatan-cepat.js?v=4"></script>
-<script src="survei.js?v=25"></script>
+<script src="survei.js?v=26"></script>
 <script src="kunci-ujian.js?v=12"></script>
 <script src="leaderboard.js?v=1"></script>
 <script src="leaderboard-survei.js?v=1"></script>

@@ -6945,23 +6945,25 @@ const Guru = {
     });
   },
 
-  renderTabelSiswa() {
-    const cont = document.getElementById('daftar-siswa');
-    const filterKelas = document.getElementById('filter-kelas-siswa')?.value || '';
-    const semua = state.guru.daftarSiswa || [];
-    const jmlBlokir = semua.filter(s => s.blokir).length;
-    const saringBlokir = hanyaBlokir_('blokir-siswa', jmlBlokir);
-    const data = semua.filter(s => cocokFilterSiswa_(s, 'filter-kelas-siswa', 'cari-siswa') && (!saringBlokir || s.blokir));
-    tampilkanInfoFilter_('cari-siswa-info', data.length, semua.length, saringBlokir ? 'hanya akun diblokir' : '');
-    if (semua.length === 0) { cont.innerHTML = '<p class="subtitle">Belum ada data siswa.</p>'; return; }
-    if (saringBlokir && data.length === 0) { cont.innerHTML = '<p class="subtitle">Tidak ada akun siswa yang diblokir' + (filterKelas ? ` di kelas "${escapeHtml_(filterKelas)}"` : '') + '.</p>'; return; }
-    if (data.length === 0) { cont.innerHTML = `<p class="subtitle">Tidak ada siswa yang cocok${filterKelas ? ` di kelas "${escapeHtml_(filterKelas)}"` : ''} dengan pencarian ini.</p>`; return; }
-    cont.innerHTML = (jmlBlokir ? `<p class="subtitle" style="margin-bottom:.6rem">🚫 <strong>${jmlBlokir}</strong> akun siswa sedang diblokir (tidak bisa mengikuti kuis).</p>` : '') +
-      `<table class="ledger"><thead><tr><th>Foto</th><th>Username</th><th>Password</th><th>Nama</th><th>NISN</th><th>Kelas</th><th>Status</th><th></th></tr></thead><tbody>` +
-      data.map(s => `<tr>
+  // Status login siswa (dibaca dari device_id & last_ping di sheet Siswa):
+  //  'aktif' = ada perangkat tercatat & ping terakhir < 15 menit (sedang login)
+  //  'idle'  = ada perangkat tercatat tetapi sudah > 15 menit tidak ping (tab ditutup tanpa Keluar)
+  //  'belum' = tidak ada perangkat tercatat (belum login atau sudah Keluar)
+  statusLoginSiswa_(s) {
+    if (!s || !s.online) return 'belum';
+    const t = s.lastPing ? new Date(s.lastPing).getTime() : NaN;
+    if (isNaN(t)) return 'aktif';
+    return (Date.now() - t) < 15 * 60 * 1000 ? 'aktif' : 'idle';
+  },
+
+  _barisSiswaHtml_(s) {
+    const st = Guru.statusLoginSiswa_(s);
+    const labelLogin = st === 'aktif' ? '🟢 Sedang login' : (st === 'idle' ? '🟡 Login, tidak aktif' : '⚪ Belum login');
+    const kelasBadge = st === 'belum' ? 'no' : 'ok';
+    return `<tr>
         <td>${typeof FotoProfil !== 'undefined' ? FotoProfil.miniGuru(s) : ''}</td>
         <td style="white-space:nowrap">${escapeHtml_(s.username)} <button type="button" class="btn-salin-token" title="Salin username" aria-label="Salin username ${escapeHtml_(s.nama)}" data-salin="${escapeHtml_(s.username)}" onclick="salinNilai(this, 'Username')">📋</button></td><td style="white-space:nowrap">${escapeHtml_(s.password)} <button type="button" class="btn-salin-token" title="Salin password" aria-label="Salin password ${escapeHtml_(s.nama)}" data-salin="${escapeHtml_(s.password)}" onclick="salinNilai(this, 'Password')">📋</button></td><td>${escapeHtml_(s.nama)}</td><td>${escapeHtml_(s.nisn || '')}</td><td>${escapeHtml_(s.kelas)}</td>
-        <td><span class="badge ${s.online ? 'ok' : 'no'}">${s.online ? 'Ada sesi aktif' : 'Tidak ada sesi'}</span>
+        <td><span class="badge ${kelasBadge}" title="${s.lastPing ? 'Aktif terakhir: ' + escapeHtml_(formatSudahBerapaLama(s.lastPing)) : 'Belum ada aktivitas tercatat'}">${labelLogin}</span>${s.online && s.lastPing ? `<div style="font-size:.76rem;color:var(--c-muted);margin-top:.15rem">${escapeHtml_(formatSudahBerapaLama(s.lastPing))}</div>` : ''}
           ${s.blokir ? `<br><span class="badge no" title="${escapeHtml_(s.blokirAlasan || 'Tanpa alasan')}">🚫 Diblokir</span>${s.blokirAlasan ? `<div style="font-size:.78rem;color:var(--c-muted);margin-top:.2rem">${escapeHtml_(s.blokirAlasan)}</div>` : ''}` : ''}</td>
         <td class="aksi">
           ${s.blokir
@@ -6971,7 +6973,76 @@ const Guru = {
           <button class="secondary small" onclick="Guru.bukaEditSiswa('${s.id}')">Ubah</button>
           <button class="danger small" onclick="Guru.hapusSiswa('${s.id}')">Hapus</button>
         </td>
-      </tr>`).join('') + `</tbody></table>`;
+      </tr>`;
+  },
+
+  renderTabelSiswa() {
+    const cont = document.getElementById('daftar-siswa');
+    const filterKelas = document.getElementById('filter-kelas-siswa')?.value || '';
+    const filterLogin = document.getElementById('filter-login-siswa')?.value || '';
+    const kelompok = document.getElementById('kelompok-siswa')?.value || '';
+    const semua = state.guru.daftarSiswa || [];
+    const jmlBlokir = semua.filter(s => s.blokir).length;
+    const saringBlokir = hanyaBlokir_('blokir-siswa', jmlBlokir);
+
+    // Ringkasan jumlah per status login (menghitung siswa yang lolos Filter Kelas + pencarian, sebelum filter login)
+    const dasar = semua.filter(s => cocokFilterSiswa_(s, 'filter-kelas-siswa', 'cari-siswa') && (!saringBlokir || s.blokir));
+    const hit = { aktif: 0, idle: 0, belum: 0 };
+    dasar.forEach(s => { hit[Guru.statusLoginSiswa_(s)]++; });
+    const ring = document.getElementById('ringkas-login-siswa');
+    if (ring) ring.innerHTML = semua.length
+      ? `<span><b>${hit.aktif}</b> 🟢 sedang login</span><span><b>${hit.idle}</b> 🟡 login, tidak aktif</span><span><b>${hit.belum}</b> ⚪ belum login</span><span>dari <b>${dasar.length}</b> siswa</span>`
+      : '';
+
+    const lolosLogin = (s) => {
+      const st = Guru.statusLoginSiswa_(s);
+      if (!filterLogin) return true;
+      if (filterLogin === 'login') return st !== 'belum';
+      return st === filterLogin;
+    };
+    const data = dasar.filter(lolosLogin);
+    const ketFilter = [saringBlokir ? 'hanya akun diblokir' : '', { aktif: 'sedang login', idle: 'login tidak aktif', login: 'sudah login', belum: 'belum login' }[filterLogin] || ''].filter(Boolean).join(', ');
+    tampilkanInfoFilter_('cari-siswa-info', data.length, semua.length, ketFilter);
+    if (semua.length === 0) { cont.innerHTML = '<p class="subtitle">Belum ada data siswa.</p>'; return; }
+    if (saringBlokir && data.length === 0 && !filterLogin) { cont.innerHTML = '<p class="subtitle">Tidak ada akun siswa yang diblokir' + (filterKelas ? ` di kelas "${escapeHtml_(filterKelas)}"` : '') + '.</p>'; return; }
+    if (data.length === 0) { cont.innerHTML = `<p class="subtitle">Tidak ada siswa yang cocok${filterKelas ? ` di kelas "${escapeHtml_(filterKelas)}"` : ''}${filterLogin ? ' dengan status login yang dipilih' : ' dengan pencarian ini'}.</p>`; return; }
+
+    const urutNama = (a, b) => String(a.nama || '').localeCompare(String(b.nama || ''), 'id', { sensitivity: 'base' });
+    const urutKelas = (a, b) => String(a || '').localeCompare(String(b || ''), 'id', { numeric: true });
+    const LABEL = { aktif: '🟢 Sedang login', idle: '🟡 Login, tidak aktif', belum: '⚪ Belum login / sudah keluar' };
+    const urutStatus = ['aktif', 'idle', 'belum'];
+    const NKOL = 8;
+    const barisGrup = (teks, jml, tingkat) => `<tr class="grup-siswa"><td colspan="${NKOL}" style="background:${tingkat === 1 ? 'rgba(13,110,253,.10)' : 'rgba(128,128,128,.12)'};font-weight:700;padding:.45rem .7rem">${teks} <span style="font-weight:500;color:var(--c-muted)">(${jml} siswa)</span></td></tr>`;
+
+    let isi = '';
+    if (kelompok === 'login') {
+      urutStatus.forEach(st => {
+        const g = data.filter(s => Guru.statusLoginSiswa_(s) === st).sort(urutNama);
+        if (g.length) isi += barisGrup(LABEL[st], g.length, 1) + g.map(Guru._barisSiswaHtml_).join('');
+      });
+    } else if (kelompok === 'kelas' || kelompok === 'kelas-login') {
+      const kelasList = [...new Set(data.map(s => String(s.kelas || '').trim()))].sort(urutKelas);
+      kelasList.forEach(k => {
+        const g = data.filter(s => String(s.kelas || '').trim() === k);
+        const h = { aktif: 0, idle: 0 }; g.forEach(s => { const st = Guru.statusLoginSiswa_(s); if (st !== 'belum') h[st]++; });
+        const ket = `Kelas ${escapeHtml_(k || '(tanpa kelas)')} — 🟢 ${h.aktif} aktif · 🟡 ${h.idle} tidak aktif`;
+        isi += barisGrup(ket, g.length, 1);
+        if (kelompok === 'kelas-login') {
+          urutStatus.forEach(st => {
+            const gg = g.filter(s => Guru.statusLoginSiswa_(s) === st).sort(urutNama);
+            if (gg.length) isi += barisGrup('&nbsp;&nbsp;' + LABEL[st], gg.length, 2) + gg.map(Guru._barisSiswaHtml_).join('');
+          });
+        } else {
+          isi += g.slice().sort(urutNama).map(Guru._barisSiswaHtml_).join('');
+        }
+      });
+    } else {
+      isi = data.map(Guru._barisSiswaHtml_).join('');
+    }
+
+    cont.innerHTML = (jmlBlokir ? `<p class="subtitle" style="margin-bottom:.6rem">🚫 <strong>${jmlBlokir}</strong> akun siswa sedang diblokir (tidak bisa mengikuti kuis).</p>` : '') +
+      `<table class="ledger"><thead><tr><th>Foto</th><th>Username</th><th>Password</th><th>Nama</th><th>NISN</th><th>Kelas</th><th>Status Login</th><th></th></tr></thead><tbody>` +
+      isi + `</tbody></table>`;
   },
 
   bukaEditSiswa(id) {
