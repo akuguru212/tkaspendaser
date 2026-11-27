@@ -2584,13 +2584,14 @@ function ptSusunRiwayat_(sesiSemua, ujianMap, siswaMap, sayaId) {
 function sesiGuruBerakhir_(hasil) {
   if (!hasil || hasil.authExpired !== true || sesiGuruBerakhir_.sudah) return;
   sesiGuruBerakhir_.sudah = true;
-  try { toast('Sesi guru berakhir. Silakan login ulang.', 'error'); } catch (e) { /* abaikan */ }
+  try { toast((state && state.user && state.user.role === 'siswa') ? 'Sesi Anda berakhir. Silakan login ulang.' : 'Sesi guru berakhir. Silakan login ulang.', 'error'); } catch (e) { /* abaikan */ }
   setTimeout(() => { try { sessionStorage.removeItem('cbt_user'); } catch (e) { /* abaikan */ } location.reload(); }, 1500);
 }
 
 async function api(action, payload) {
   const body = Object.assign({ action }, payload || {});
   try { if (!body.tokenGuru && state && state.user && state.user.role === 'guru' && state.user.tokenGuru) body.tokenGuru = state.user.tokenGuru; } catch (e) { /* abaikan */ }
+  try { if (!body.tokenSiswa && state && state.user && state.user.role === 'siswa' && state.user.tokenSiswa) body.tokenSiswa = state.user.tokenSiswa; } catch (e) { /* abaikan */ }
   mulaiLoading();
   try {
     if (!modeServerAktif()) {
@@ -3627,6 +3628,20 @@ const LocalBackend = (function () {
         const tampilPembahasan = !(ujian && String(ujian.tampil_pembahasan).toLowerCase() === 'false');
         if (!tampilPembahasan && data.siswaId) items.forEach(it => { it.pembahasan = ''; });
         return { ok: true, judulUjian: ujian ? ujian.judul : '-', nilai: sesi.nilai, lulus: sesi.lulus, items, tampilPembahasan };
+      }
+      case 'getDetailJawabanBanyak': {
+        let ids = []; try { ids = JSON.parse(data.sesiIds || '[]'); } catch (e) { ids = []; }
+        if (!Array.isArray(ids) || !ids.length) return { ok: false, error: 'Daftar sesi kosong.' };
+        if (ids.length > 25) return { ok: false, error: 'Maksimal 25 sesi per permintaan.' };
+        const hasil = ids.map(id => {
+          const sesi = D.sesi.find(s => s.id === String(id));
+          if (!sesi) return { sesiId: String(id), ok: false, error: 'Sesi tidak ditemukan.' };
+          if (sesi.status === 'berlangsung') return { sesiId: String(id), ok: false, error: 'Ujian belum selesai.' };
+          const ujian = D.ujian.find(u => u.id === sesi.ujian_id);
+          const tampilPembahasan = !(ujian && String(ujian.tampil_pembahasan).toLowerCase() === 'false');
+          return { sesiId: String(id), ok: true, judulUjian: ujian ? ujian.judul : '-', nilai: sesi.nilai, lulus: sesi.lulus, items: bangunDetailJawaban_(D, sesi), tampilPembahasan };
+        });
+        return { ok: true, hasil };
       }
       case 'getPaketSurvei': {
         let l = clone(D.paketSurvei || []);
@@ -6123,7 +6138,7 @@ const Guru = {
     const kartu = (tampil.length && !semuaBenar)
       ? tampil.map(x => ExamEngine.htmlItemDetail_(x.it, x.no, { guru: true })).join('')
       : '<p class="cp-kosong">Semua jawaban siswa ini benar. Tidak ada soal yang perlu dievaluasi.</p>';
-    const status = `<span class="cp-status ${lulus ? 'cp-lulus' : 'cp-remedial'}">${lulus ? 'Lulus' : 'Remedial'}</span> <span class="cp-status cp-kat-${kategoriNilai_(r.nilai).kode}">${labelKategori_(r.nilai)}</span>`;
+    const status = `<span class="cp-status ${lulus ? 'cp-lulus' : 'cp-remedial'}">${lulus ? 'Lulus' : 'Remedial'}</span> <span class="cp-status cp-kat-${kategoriNilai_(rekap.nilai).kode}">${labelKategori_(rekap.nilai)}</span>`;
     const ringkas = `<div class="cp-ringkas"><span class="cp-chip"><strong>${items.length}</strong> soal</span>${chip(hitung('benar'), 'benar')}${chip(hitung('sebagian'), 'sebagian benar')}${chip(hitung('salah'), 'salah')}${chip(hitung('kosong'), 'tidak dijawab')}${chip(hitung('manual'), 'perlu dikoreksi')}</div>
       <p class="cp-evaluasi">${nomorBelum.length ? `<strong>Perlu dievaluasi (nomor pada lembar siswa ini):</strong> ${nomorBelum.join(', ')}.` : '<strong>Semua jawaban benar.</strong>'}</p>
       ${semuaBenar ? '' : `<h3 class="cp-sub">${filter === 'semua' ? 'Seluruh Soal' : 'Soal yang Perlu Dievaluasi'} (${tampil.length})</h3>`}

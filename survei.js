@@ -89,6 +89,51 @@ const Survei = (function () {
 .sv-bk-ok { background: #e3f6ec; color: #1b7f4b; border-radius: 8px; padding: 8px 12px; margin-top: 8px; }
 .sv-bk-rahasia { font-size: .76rem; color: #6c757d; margin-top: 8px; }
 .sv-bk-chip { display: inline-block; margin: 2px 6px 2px 0; }
+
+/* ---- Tata letak detail jawaban survei (guru BK) — v29b ---- */
+.sv-bk { padding: 16px 18px; border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.05); font-size: .86rem; line-height: 1.45; }
+.sv-bk-h { font-size: 1rem; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 2px solid rgba(13,110,253,.25); letter-spacing: .01em; }
+.sv-legenda { gap: 8px; margin: 0 0 12px; } .sv-legenda span { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 99px; background: #f3f5f7; font-size: .74rem; color: #495057; }
+.sv-bk-sec { margin-top: 16px; }
+.sv-bk-sec > b { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin: 0 0 8px; padding-bottom: 5px; border-bottom: 1px solid rgba(128,128,128,.22); font-size: .88rem; color: #212529; }
+.sv-hit { font-size: .7rem; font-weight: 600; padding: 1px 8px; border-radius: 99px; background: #e9ecef; color: #495057; }
+.sv-bk-chip { padding: 4px 12px !important; margin: 3px 6px 3px 0 !important; font-size: .78rem !important; }
+.sv-bk-alarm { margin-top: 12px; padding: 12px 14px; border: 1px solid #f1b0b0; border-left: 5px solid #d93025; background: #fdf0f0; color: #7a1b1b; border-radius: 10px; }
+.sv-bk-at { font-weight: 700; font-size: .92rem; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; } .sv-bk-at .sv-hit { background: #f7caca; color: #8f1d1d; }
+.sv-bk-an { font-size: .78rem; margin: 2px 0 6px; color: #8f3a3a; }
+.sv-rows { list-style: none !important; margin: 4px 0 0 !important; padding: 0 !important; display: flex; flex-direction: column; gap: 6px; }
+.sv-rows li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; align-items: center; margin: 0 !important; padding: 9px 12px; border-radius: 8px; border-left: 4px solid #adb5bd; background: #f6f7f9; color: #212529; break-inside: avoid; }
+.sv-rows li.sv-l3, .sv-rows li.sv-l4 { border-left-color: #2e9e63; background: rgba(46,158,99,.08); }
+.sv-rows li.sv-l2 { border-left-color: #e0a100; background: rgba(255,193,7,.16); }
+.sv-rows li.sv-l1 { border-left-color: #d93025; background: rgba(217,48,37,.09); }
+.sv-bk-alarm .sv-rows li { background: #fff; }
+.sv-r-t { font-size: .86rem; line-height: 1.4; overflow-wrap: anywhere; }
+.sv-r-d { display: block; margin-top: 2px; font-size: .72rem; color: #6c757d; }
+.sv-r-j { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: .78rem; font-weight: 700; text-align: right; max-width: 150px; }
+.sv-rows li.sv-l1 .sv-r-j > span:first-child { color: #b3261e; } .sv-rows li.sv-l2 .sv-r-j > span:first-child { color: #8a5a00; } .sv-rows li.sv-l3 .sv-r-j > span:first-child, .sv-rows li.sv-l4 .sv-r-j > span:first-child { color: #14693d; }
+.sv-bk-rahasia { margin-top: 14px; padding: 8px 12px; border-radius: 8px; background: #f3f5f7; font-size: .75rem; color: #6c757d; }
+.sv-bk-ok, .sv-pb-kualitas { border-radius: 8px; }
+.sv-pb { margin-top: 4px; }
+.sv-pb-top { padding: 12px 14px; border: 1px solid rgba(128,128,128,.25); border-radius: 12px; background: #f8fafc; margin: 0 0 12px; }
+.sv-pb-dim { padding: 10px 14px; border-radius: 12px; margin-bottom: 10px; }
+.sv-pb-dim > summary { padding-bottom: 4px; }
+.sv-pb-tafsir { color: #495057; margin: 2px 0 8px; }
+.sv-pb-list li { grid-template-columns: minmax(0, 1fr) auto; padding: 9px 10px; margin-bottom: 4px; border-top: 0; border-radius: 8px; align-items: center; }
+.sv-pb-list li.sv-l4, .sv-pb-list li.sv-l3, .sv-pb-list li.sv-l2, .sv-pb-list li.sv-l1 { padding-left: 10px; }
+.sv-pb-t { font-size: .85rem; line-height: 1.4; overflow-wrap: anywhere; } .sv-pb-j { font-size: .78rem; }
+.sv-pb-saran { border-left: 4px solid #0d6efd; border-radius: 0 8px 8px 0; margin-top: 10px; }
+.sv-no { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 22px; padding: 0 6px; margin-right: 8px; border-radius: 6px; background: #1f4e79; color: #fff; font-weight: 700; font-size: .72rem; vertical-align: 1px; font-variant-numeric: tabular-nums; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.sv-r-ind { margin-left: 32px; } .sv-neg { color: #8a94a0; font-size: .72rem; font-style: normal; }
+.sv-pb-dn .sv-hit { margin-left: 6px; vertical-align: 1px; }
+.sv-sub { margin: 4px 0 10px; padding: 8px 12px; border-radius: 10px; background: #f6f8fb; border: 1px solid rgba(128,128,128,.2); }
+.sv-sub-h { font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #6c757d; margin-bottom: 4px; }
+.sv-sub-r { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(60px, 1fr) auto; gap: 10px; align-items: center; padding: 4px 0; font-size: .82rem; }
+.sv-sub-n small { display: block; font-size: .68rem; color: #8a94a0; }
+.sv-sub-b { height: 8px; border-radius: 6px; background: #e3e7ec; overflow: hidden; } .sv-sub-b i { display: block; height: 100%; border-radius: 6px; }
+.sv-sub-ket { margin: 4px 0 6px; font-size: .78rem; color: #6c757d; } .sv-sub-dimrow td { border-top: 2px solid rgba(128,128,128,.25); }
+@media print { .sv-sub-r { break-inside: avoid; } .sv-sub-b { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+@media (max-width: 560px) { .sv-rows li, .sv-pb-list li { grid-template-columns: 1fr; } .sv-r-j { flex-direction: row; align-items: center; justify-content: space-between; max-width: none; text-align: left; } .sv-pb-list li .sv-skor { grid-column: 1; grid-row: auto; justify-self: start; } }
+@media print { .sv-bk, .sv-pb-dim, .sv-bk-alarm { break-inside: auto; } .sv-pb-list li, .sv-rows li { break-inside: avoid; } .sv-pb-top { break-after: avoid; } .sv-bk-sec > b { break-after: avoid; } }
 .sv-aksi-btn { white-space: nowrap; }
 
 /* ---- tabel hasil survei (guru): rapi, bisa digeser di dalam kotaknya, kolom No & Nama menempel, jadi kartu di HP ---- */
@@ -303,6 +348,37 @@ const Survei = (function () {
       pasangan: []
     }
   };
+  // ---------------- SUB-INDIKATOR per butir (set bawaan) ----------------
+  // Nama sub-indikator dipakai hanya bila butir pada set yang dipakai masih sama dengan butir bawaan (id DAN teks sama).
+  // Untuk set khusus hasil impor Word, sub-indikator diambil dari kolom kode butir (bila diisi).
+  const SUBIND = {
+    K01: 'Ibadah dan keyakinan', K02: 'Akhlak terhadap sesama', K03: 'Kejujuran', K04: 'Kejujuran', K05: 'Peduli lingkungan', K06: 'Kejujuran',
+    K07: 'Pertemanan lintas budaya', K08: 'Toleransi', K09: 'Keterbukaan terhadap budaya lain', K10: 'Keterbukaan terhadap budaya lain', K11: 'Toleransi', K12: 'Pertemanan lintas budaya',
+    K13: 'Kerja bakti dan piket', K14: 'Kepedulian dan berbagi', K15: 'Kerja sama kelompok', K16: 'Musyawarah', K17: 'Kepedulian dan berbagi', K18: 'Kerja sama kelompok',
+    K19: 'Tanggung jawab tugas', K20: 'Ketekunan', K21: 'Ketekunan', K22: 'Pengaturan diri', K23: 'Keberanian bertanya', K24: 'Pengaturan diri',
+    K25: 'Menggali informasi', K26: 'Menalar dan meminta bukti', K27: 'Menalar dan meminta bukti', K28: 'Mengambil keputusan', K29: 'Literasi digital', K30: 'Literasi digital',
+    K31: 'Mencari cara baru', K32: 'Berkarya', K33: 'Mencari cara baru', K34: 'Percaya diri menyampaikan ide', K35: 'Mengembangkan ide', K36: 'Mengembangkan ide',
+    S01: 'Kejelasan tujuan pembelajaran', S02: 'Keterkaitan materi dengan kehidupan', S03: 'Partisipasi siswa', S04: 'Umpan balik', S05: 'Keadilan guru', S06: 'Semangat belajar', S07: 'Sikap guru terhadap kesalahan siswa', S08: 'Diskusi dan kerja sama', S09: 'Pemeriksaan pemahaman', S10: 'Umpan balik',
+    S11: 'Perundungan', S12: 'Perundungan', S13: 'Kekerasan fisik', S14: 'Perundungan', S15: 'Perundungan', S16: 'Hukuman oleh guru', S17: 'Hukuman oleh guru', S18: 'Kekerasan seksual', S19: 'Rasa aman dan pelaporan', S20: 'Rasa aman dan pelaporan', S21: 'Rokok dan zat terlarang', S22: 'Rasa aman dan pelaporan',
+    S23: 'Perlakuan adil', S24: 'Penghormatan perbedaan', S25: 'Penghormatan perbedaan', S26: 'Rasa dihargai', S27: 'Kerja sama lintas latar belakang', S28: 'Penghormatan perbedaan',
+    S29: 'Dukungan bagi disabilitas', S30: 'Aksesibilitas sarana', S31: 'Dukungan belajar', S32: 'Dukungan bagi disabilitas', S33: 'Pengembangan bakat',
+    S34: 'Kesempatan berpendapat', S35: 'Kesempatan memimpin', S36: 'Stereotip gender'
+  };
+  const TEKS_BAWAAN = {}; Object.keys(JENIS).forEach(k => JENIS[k].butir.forEach(b => { TEKS_BAWAAN[b[0]] = b[4]; }));
+  const subDari = (b) => (SUBIND[b[0]] && TEKS_BAWAAN[b[0]] === b[4]) ? SUBIND[b[0]] : (b[6] || '');
+  // daftar sub-indikator suatu set: [{ dim, dimNama, nama, ids }] (urut dimensi, lalu kemunculan pertama)
+  function subList(set) {
+    const out = [], peta = {};
+    set.dim.forEach(d => set.butir.filter(b => b[1] === d[0]).forEach(b => {
+      const nm = subDari(b); if (!nm) return;
+      const k = d[0] + '|' + nm; let x = peta[k];
+      if (!x) { x = peta[k] = { dim: d[0], dimNama: d[1], nama: nm, ids: [] }; out.push(x); }
+      x.ids.push(b[0]);
+    }));
+    return out;
+  }
+  // indeks 0-100 satu sub-indikator dari kumpulan skor butir (1-4)
+  const indeksSub = (vals) => vals.length ? bulat2(((vals.reduce((a, c) => a + c, 0) / vals.length) - 1) / 3 * 100) : null;
   // butir keamanan yang dijawab "Beberapa kali" / "Sering" -> ditandai agar guru bisa menindaklanjuti dengan rahasia
   const BUTIR_PERHATIAN = ['S11', 'S12', 'S13', 'S14', 'S15', 'S16', 'S17', 'S18'];
   // Daftar butir "pengalaman tidak aman" diambil dari SET yang dipakai (skala Pengalaman + arah negatif),
@@ -852,6 +928,26 @@ const Survei = (function () {
     return G.data.filter(r => (!kls || r.kelas === kls) && (!q || String(r.nama).toLowerCase().indexOf(q) >= 0) && (sar !== 'perhatian' || analisisBK(hitungBaris(r)).perlu));
   }
 
+  // Opsi "Abaikan pengisian perlu dicek" (Hasil Survei): rata-rata kelas/dimensi/sub-indikator tidak ikut menghitung pengisian yang
+  // ditandai terlalu cepat/seragam/bertentangan. Daftar siswa tetap menampilkan semuanya (dengan tanda), dan halaman detail tidak berubah.
+  const abaikanDicek = () => !!(($('abaikan-dicek-survei') || {}).checked);
+  function untukRata(rows) {
+    if (!abaikanDicek()) return { rows, diabaikan: 0, semua: false };
+    const baik = rows.filter(r => r._q && r._q.baik);
+    if (!baik.length) return { rows, diabaikan: 0, semua: rows.length > 0 };
+    return { rows: baik, diabaikan: rows.length - baik.length, semua: false };
+  }
+  const catatRata = (rt, total) => rt.diabaikan ? `Rata-rata dihitung dari ${rt.rows.length} dari ${total} pengisian (${rt.diabaikan} pengisian perlu dicek diabaikan).` : (rt.semua ? 'Semua pengisian ditandai perlu dicek, sehingga rata-rata tetap memakai seluruh pengisian.' : '');
+
+  // Konfirmasi kerahasiaan sebelum dokumen/ekspor berisi jawaban survei per siswa dibuat.
+  async function konfirmasiRahasia(apa) {
+    return await Dialog.konfirmasi({
+      judul: 'Dokumen Rahasia', tipe: 'warning', ikon: 'fa-user-shield',
+      pesan: apa + ' berisi jawaban survei **per siswa**, termasuk laporan pengalaman tidak aman (mis. perundungan atau kekerasan).\n\nDokumen ini **RAHASIA dan hanya untuk guru BK / wali kelas**. Jangan dibagikan ke grup WhatsApp atau ke siswa lain, dan simpan di tempat yang aman.',
+      teksYa: 'Saya Mengerti, Lanjutkan', teksBatal: 'Batal'
+    });
+  }
+
   // Analisis cepat satu siswa untuk guru BK: dimensi rendah, butir dengan skor rendah, dan (Sulingjar) pengalaman tidak aman.
   function analisisBK(r) {
     const J = G.set; const h = r._h;
@@ -882,16 +978,17 @@ const Survei = (function () {
     const J = G.set; const cont = $('tabel-survei'); const ring = $('ringkas-survei');
     if (!J) { cont.innerHTML = ''; ring.innerHTML = ''; return; }
     const rows = guruSaring().map(hitungBaris);
+    const rt = untukRata(rows), rr = rt.rows;
     if (!rows.length) { ring.innerHTML = ''; cont.innerHTML = '<p class="subtitle">Belum ada siswa yang mengisi survei' + (G.belum ? ' (' + G.belum + ' siswa selesai tes tetapi belum mengisi survei)' : '') + '.</p>'; return; }
     // rata-rata per dimensi
-    const rata = {}; J.dim.forEach(d => { const v = rows.map(r => r._h.dim[d[0]].indeks).filter(x => x !== null); rata[d[0]] = v.length ? bulat2(v.reduce((a, b) => a + b, 0) / v.length) : null; });
-    const totalKelas = bulat2(rows.map(r => r._h.total).reduce((a, b) => a + b, 0) / rows.length);
+    const rata = {}; J.dim.forEach(d => { const v = rr.map(r => r._h.dim[d[0]].indeks).filter(x => x !== null); rata[d[0]] = v.length ? bulat2(v.reduce((a, b) => a + b, 0) / v.length) : null; });
+    const totalKelas = bulat2(rr.map(r => r._h.total).reduce((a, b) => a + b, 0) / rr.length);
     const kartu = J.dim.map(d => { const k = kategoriIndeks(rata[d[0]]); return `<div class="sv-kartu"><div class="sv-kartu-t">${esc(d[1])}</div><div class="sv-kartu-n" style="color:${k.warna}">${fmt(rata[d[0]])}</div><div class="sv-bar-b"><i style="width:${rata[d[0]] || 0}%;background:${k.warna}"></i></div><span class="sv-lencana" style="background:${k.latar};color:${k.warna}">${k.label}</span></div>`; }).join('');
     // butir terendah (rata-rata skor 1-4 -> indeks)
-    const butir = J.butir.map(b => { const v = rows.map(r => r._h.butir[b[0]]).filter(x => x !== undefined); return { b, m: v.length ? bulat2(((v.reduce((a, c) => a + c, 0) / v.length) - 1) / 3 * 100) : null }; }).filter(x => x.m !== null).sort((a, c) => a.m - c.m).slice(0, 5);
+    const butir = J.butir.map(b => { const v = rr.map(r => r._h.butir[b[0]]).filter(x => x !== undefined); return { b, m: v.length ? bulat2(((v.reduce((a, c) => a + c, 0) / v.length) - 1) / 3 * 100) : null }; }).filter(x => x.m !== null).sort((a, c) => a.m - c.m).slice(0, 5);
     const lemah = `<div class="sv-lemah"><b>5 butir dengan nilai terendah (bahan perbaikan)</b><ol>${butir.map(x => `<li><span>${esc(x.b[4])}</span> <em>${esc(J.dimNama[x.b[1]])}</em> <b style="color:${kategoriIndeks(x.m).warna}">${fmt(x.m)}</b></li>`).join('')}</ol></div>`;
     const perhatian = G.jenis === 'sulingjar' ? rows.filter(r => dijawabPerhatian(r, J).length).length : 0;
-    ring.innerHTML = `<div class="sv-info"><span><b>${rows.length}</b> siswa mengisi</span>${G.belum ? `<span><b>${G.belum}</b> belum mengisi</span>` : ''}<span><b>${rows.filter(r => !r._q.baik).length}</b> pengisian perlu dicek</span><span title="Siswa yang keluar layar penuh/pindah tab/aplikasi/screenshot saat mengisi survei"><b>${rows.filter(r => r._lg.pelanggaran > 0).length}</b> siswa ada pelanggaran survei</span>${(() => { const v = rows.map(r => r.kualitas && r.kualitas.nilai).filter(x => x !== undefined && x !== null); return v.length ? `<span>Rata-rata Nilai Kesungguhan <b>${fmt(bulat2(v.reduce((a, c) => a + c, 0) / v.length))}</b></span>` : ''; })()}<span>Rata-rata nilai survei <b>${fmt(totalKelas)}</b></span>${perhatian ? `<span class="sv-warn"><i class="fa-solid fa-circle-exclamation"></i> <b>${perhatian}</b> siswa melaporkan pengalaman tidak aman (beberapa kali/sering)</span>` : ''}</div><div class="sv-kartu-wrap">${kartu}</div>${htmlEvaluasi(rows, J, rata)}${htmlPerKelas(rows, J)}${lemah}<p class="subtitle" style="margin:.4rem 0">Nilai survei skala 0–100 (makin tinggi makin baik; jawaban terbaik = skor 4). Kategori Baik ≥ 75, Sedang 50–74,99, Perlu perhatian &lt; 50 hanyalah acuan latihan.</p>`;
+    ring.innerHTML = `<div class="sv-info"><span><b>${rows.length}</b> siswa mengisi</span>${G.belum ? `<span><b>${G.belum}</b> belum mengisi</span>` : ''}<span><b>${rows.filter(r => !r._q.baik).length}</b> pengisian perlu dicek</span><span title="Siswa yang keluar layar penuh/pindah tab/aplikasi/screenshot saat mengisi survei"><b>${rows.filter(r => r._lg.pelanggaran > 0).length}</b> siswa ada pelanggaran survei</span>${(() => { const v = rows.map(r => r.kualitas && r.kualitas.nilai).filter(x => x !== undefined && x !== null); return v.length ? `<span>Rata-rata Nilai Kesungguhan <b>${fmt(bulat2(v.reduce((a, c) => a + c, 0) / v.length))}</b></span>` : ''; })()}<span>Rata-rata nilai survei <b>${fmt(totalKelas)}</b></span>${catatRata(rt, rows.length) ? `<span class="sv-warn" title="Opsi Abaikan pengisian perlu dicek"><i class="fa-solid fa-filter"></i> ${esc(catatRata(rt, rows.length))}</span>` : ''}${perhatian ? `<span class="sv-warn"><i class="fa-solid fa-circle-exclamation"></i> <b>${perhatian}</b> siswa melaporkan pengalaman tidak aman (beberapa kali/sering)</span>` : ''}</div><div class="sv-kartu-wrap">${kartu}</div>${htmlEvaluasi(rr, J, rata)}${htmlPerKelas(rr, J)}${htmlSubKelas(rr, J)}${lemah}<p class="subtitle" style="margin:.4rem 0">Nilai survei skala 0–100 (makin tinggi makin baik; jawaban terbaik = skor 4). Kategori Baik ≥ 75, Sedang 50–74,99, Perlu perhatian &lt; 50 hanyalah acuan latihan.</p>`;
     const th = J.dim.map(d => `<th title="${esc(d[1])}">${esc(d[1])}</th>`).join('');
     cont.innerHTML = `<div class="table-wrap dt-wrap"><table class="data-table dt-kartu"><thead><tr><th>No</th><th>Nama</th><th>Kelas</th>${th}<th>${G.jenis === 'karakter' ? 'Nilai Survei Karakter' : 'Nilai Sulingjar'}</th><th>Waktu</th><th>Nilai Kesungguhan</th><th>Kualitas Pengisian</th><th title="Kejadian anti-nyontek saat survei (tidak menambah pelanggaran ujian)">Pelanggaran Survei</th>${G.jenis === 'sulingjar' ? '<th>Catatan</th>' : ''}<th title="Lihat jawaban siswa ini per dimensi dan per butir">Detail Jawaban</th></tr></thead><tbody>${rows.map((r, i) => {
       const sel = J.dim.map(d => { const x = r._h.dim[d[0]].indeks; const k = kategoriIndeks(x); return `<td><span class="sv-lencana" style="background:${k.latar};color:${k.warna}">${fmt(x)}</span></td>`; }).join('');
@@ -945,22 +1042,35 @@ const Survei = (function () {
   // =====================================================================================
   const DT = { rows: [], idx: -1 };
 
+  // nomor urut butir pada set (1..n), dan keterangan sub: kode butir, dimensi, indikator (kolom kode bila diisi)
+  const noButir = (set, id) => set.butir.findIndex(x => x[0] === id) + 1;
+  const subButir = (set, b) => esc(b[0]) + ' · ' + esc(set.dimNama[b[1]]) + (subDari(b) ? ' · ' + esc(subDari(b)) : '');
+  // rata-rata per sub-indikator pada satu siswa (h = hasil hitung siswa)
+  const subSiswa = (set, h) => subList(set).map(x => Object.assign({}, x, { indeks: indeksSub(x.ids.map(id => h.butir[id]).filter(v => v !== undefined)) })).filter(x => x.indeks !== null);
+  const nomorSub = (set, x) => x.ids.map(id => noButir(set, id)).join(', ');
+  // rata-rata per sub-indikator untuk sekumpulan siswa (bobot sama per butir)
+  const subKumpulan = (set, rows) => subList(set).map(x => { const v = []; rows.forEach(r => x.ids.forEach(id => { const q = r._h.butir[id]; if (q !== undefined) v.push(q); })); return Object.assign({}, x, { indeks: indeksSub(v) }); });
   function htmlRingkasBK(r) {
     const J = G.set; const h = r._h; const bk = analisisBK(r);
     const jw = (b) => { const p = Number(r.jawaban[b[0]]); return p >= 1 && p <= 4 ? SKALA[b[2]][p - 1] : '-'; };
     let out = '<div class="sv-bk"><div class="sv-bk-h">Ringkasan untuk Guru BK</div><div class="sv-legenda"><span><i style="background:#2e9e63"></i>Baik (skor 3–4)</span><span><i style="background:#e0a100"></i>Perlu perhatian (skor 2)</span><span><i style="background:#d93025"></i>Sangat perlu perhatian (skor 1)</span></div>';
+    const baris = (b, ket) => { const sk = h.butir[b[0]]; return `<li class="sv-l${sk || 0}"><div class="sv-r-t"><span class="sv-no">${noButir(J, b[0])}</span>${esc(b[4])}<span class="sv-r-d sv-r-ind">${subButir(J, b)}</span></div><div class="sv-r-j"><span>${esc(jw(b))}</span><span class="sv-skor sv-s${sk || 0}">Skor ${sk || '-'}/4</span></div></li>`; };
     if (bk.aman.length) {
-      out += `<div class="sv-bk-alarm"><b>⚠ Pengalaman tidak aman yang dilaporkan siswa (${bk.aman.length} butir)</b> — tindak lanjuti secara rahasia.<ul>${bk.aman.map(id => { const b = J.map[id]; const row = J.butir.filter(x => x[0] === id)[0]; return `<li>${esc(row ? row[4] : id)} — <b>${esc(row ? jw(row) : '-')}</b></li>`; }).join('')}</ul></div>`;
+      out += `<div class="sv-bk-alarm"><div class="sv-bk-at"><i class="fa-solid fa-triangle-exclamation"></i> Pengalaman tidak aman yang dilaporkan siswa <span class="sv-hit">${bk.aman.length} butir</span></div><div class="sv-bk-an">Tindak lanjuti secara rahasia dan hati-hati.</div><ul class="sv-rows">${bk.aman.map(id => { const row = J.butir.filter(x => x[0] === id)[0]; return row ? baris(row) : ''; }).join('')}</ul></div>`;
     }
     if (bk.dimKurang.length) {
-      out += `<div class="sv-bk-sec"><b>Dimensi yang perlu perhatian (nilai &lt; 50)</b>${bk.dimKurang.map(d => { const k = kategoriIndeks(h.dim[d[0]].indeks); return `<span class="sv-lencana sv-bk-chip" style="background:${k.latar};color:${k.warna}">${esc(d[1])}: ${fmt(h.dim[d[0]].indeks)}</span>`; }).join('')}</div>`;
+      out += `<div class="sv-bk-sec"><b>Dimensi yang perlu perhatian (nilai &lt; 50)<span class="sv-hit">${bk.dimKurang.length} dimensi</span></b>${bk.dimKurang.map(d => { const k = kategoriIndeks(h.dim[d[0]].indeks); return `<span class="sv-lencana sv-bk-chip" style="background:${k.latar};color:${k.warna}">${esc(d[1])}: ${fmt(h.dim[d[0]].indeks)}</span>`; }).join('')}</div>`;
     }
     if (bk.dimSedang.length) {
-      out += `<div class="sv-bk-sec"><b>Dimensi kategori sedang (50–74,99)</b>${bk.dimSedang.map(d => { const k = kategoriIndeks(h.dim[d[0]].indeks); return `<span class="sv-lencana sv-bk-chip" style="background:${k.latar};color:${k.warna}">${esc(d[1])}: ${fmt(h.dim[d[0]].indeks)}</span>`; }).join('')}</div>`;
+      out += `<div class="sv-bk-sec"><b>Dimensi kategori sedang (50–74,99)<span class="sv-hit">${bk.dimSedang.length} dimensi</span></b>${bk.dimSedang.map(d => { const k = kategoriIndeks(h.dim[d[0]].indeks); return `<span class="sv-lencana sv-bk-chip" style="background:${k.latar};color:${k.warna}">${esc(d[1])}: ${fmt(h.dim[d[0]].indeks)}</span>`; }).join('')}</div>`;
+    }
+    const subRendah = subSiswa(J, h).filter(x => x.indeks < 75).sort((a, c) => a.indeks - c.indeks);
+    if (subRendah.length) {
+      out += `<div class="sv-bk-sec"><b>Sub-indikator yang perlu ditingkatkan (nilai &lt; 75)<span class="sv-hit">${subRendah.length} sub-indikator</span></b>${subRendah.map(x => { const k = kategoriIndeks(x.indeks); return `<span class="sv-lencana sv-bk-chip" style="background:${k.latar};color:${k.warna}" title="${esc(x.dimNama)} · No. ${esc(nomorSub(J, x))}">${esc(x.nama)}: ${fmt(x.indeks)}</span>`; }).join('')}</div>`;
     }
     if (bk.butirRendah.length) {
       const tampil = bk.butirRendah.slice(0, 12);
-      out += `<div class="sv-bk-sec"><b>Butir dengan skor rendah (skor 1–2 dari 4)${bk.butirRendah.length > tampil.length ? ` — ${tampil.length} terendah dari ${bk.butirRendah.length}` : ''}</b><ul style="list-style:none;padding-left:0">${tampil.map(b => `<li class="sv-l${h.butir[b[0]]}" style="padding:4px 8px;margin-bottom:4px;list-style-position:inside">${esc(b[4])} <em style="color:#6c757d">(${esc(J.dimNama[b[1]])})</em> — jawaban <b>${esc(jw(b))}</b> · <span class="sv-skor sv-s${h.butir[b[0]]}" style="display:inline-block">Skor ${h.butir[b[0]]}/4</span></li>`).join('')}</ul></div>`;
+      out += `<div class="sv-bk-sec"><b>Butir dengan skor rendah (skor 1–2 dari 4)<span class="sv-hit">${bk.butirRendah.length > tampil.length ? tampil.length + ' terendah dari ' + bk.butirRendah.length : bk.butirRendah.length + ' butir'}</span></b><ul class="sv-rows">${tampil.map(b => baris(b)).join('')}</ul></div>`;
     }
     if (!bk.aman.length && !bk.dimKurang.length && !bk.dimSedang.length && !bk.butirRendah.length) {
       out += '<div class="sv-bk-ok">Tidak ada indikator yang menonjol pada jawaban siswa ini.</div>';
@@ -994,8 +1104,9 @@ const Survei = (function () {
   }
   function tutupDetail() { $('modal-detail-survei').classList.add('hidden'); }
   function pindahDetail(arah) { const n = DT.idx + arah; if (n < 0 || n >= DT.rows.length) return; DT.idx = n; isiDetail(); }
-  function cetakDetail() {
+  async function cetakDetail() {
     const r = DT.rows[DT.idx]; if (!r) return;
+    if (!(await konfirmasiRahasia('PDF ini'))) return;
     const { namaSekolah } = Guru._identitasSekolah_();
     const waktu = new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' });
     const html = `<div class="cp-wrap"><h2 style="margin:0">Detail Jawaban Survei — ${esc(r.nama)}</h2><p style="margin:.2rem 0 .8rem">${esc($('dsv-meta').textContent)}</p>` +
@@ -1004,17 +1115,80 @@ const Survei = (function () {
     Guru._cetakArea_(html, ['Survei', r.nama, r.kelas].filter(Boolean).join(' - '));
   }
 
+  // ---------------------------------------------------------------------------------------------
+  //  PDF DETAIL SURVEI BANYAK SISWA (per kelas / seluruh siswa) — untuk wali kelas & guru BK
+  //  mode 'kelas' = kelas yang dipilih pada filter Kelas; mode 'semua' = seluruh siswa yang sudah mengisi.
+  //  Mengabaikan kotak cari dan filter "Perlu perhatian BK" supaya hasilnya lengkap.
+  //  Isi: halaman 1 daftar nama + nilai + penanda BK + rata-rata dimensi; lalu tiap siswa mulai di halaman baru
+  //  (ringkasan guru BK + jawaban per dimensi & butir). Dibuat lewat dialog Cetak -> "Simpan sebagai PDF".
+  // ---------------------------------------------------------------------------------------------
+  let sedangCetakBanyak = false;
+  async function cetakDetailBanyak(mode) {
+    const J = G.set;
+    if (!J || !G.data.length) { toast('Pilih ujian survei dan tunggu datanya tampil dulu.', 'error'); return; }
+    let rows = G.data.slice(); let labelKelas = 'Seluruh Kelas';
+    if (mode === 'kelas') {
+      const kl = $('kelas-survei').value;
+      if (!kl) { toast('Pilih dulu kelasnya pada filter kelas di atas (bukan "Semua Kelas").', 'error'); return; }
+      rows = rows.filter(r => r.kelas === kl); labelKelas = 'Kelas ' + kl;
+    }
+    if (!rows.length) { toast('Belum ada siswa yang mengisi survei pada pilihan ini.', 'error'); return; }
+    if (sedangCetakBanyak) return;
+    if (!(await konfirmasiRahasia('PDF detail survei ' + (mode === 'kelas' ? labelKelas : 'seluruh siswa') + ' (' + rows.length + ' siswa)'))) return;
+    sedangCetakBanyak = true;
+    try {
+      rows = rows.map(hitungBaris).sort((a, b) => String(a.kelas || '').localeCompare(String(b.kelas || ''), 'id', { numeric: true }) || String(a.nama || '').localeCompare(String(b.nama || ''), 'id', { sensitivity: 'base' }));
+      if (rows.length > 60) toast('Menyiapkan ' + rows.length + ' lembar survei... mohon tunggu sebentar.');
+      await new Promise(r => setTimeout(r, 30));
+      const sel = $('pilih-ujian-survei'); const judulUjian = ((sel.options[sel.selectedIndex] || {}).text || '').split(' — ')[0];
+      const namaJenis = G.jenis === 'karakter' ? 'Survei Karakter' : 'Survei Lingkungan Belajar (Sulingjar)';
+      const { namaSekolah, kop } = Guru._identitasSekolah_();
+      const waktu = new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' });
+      const mnt = (d) => d ? Math.floor(d / 60) + ' mnt ' + (d % 60) + ' dtk' : '-';
+      const baris = rows.map((r, i) => {
+        const k = kategoriIndeks(r._h.total); const bk = analisisBK(r);
+        return `<tr><td class="cp-c">${i + 1}</td><td>${esc(r.nama)}</td><td class="cp-c">${esc(r.kelas)}</td><td class="cp-c"><b>${fmt(r._h.total)}</b></td><td class="cp-c">${esc(k.label)}</td><td class="cp-c">${r._q.baik ? 'Baik' : 'Perlu dicek'}</td><td class="cp-c">${bk.aman.length ? 'Tidak aman ⚠' : (bk.dimKurang.length ? bk.dimKurang.length + ' dimensi &lt; 50' : '-')}</td></tr>`;
+      }).join('');
+      const rtP = untukRata(rows), rowsR = rtP.rows;
+      const catatP = catatRata(rtP, rows.length);
+      const kelasUrut = Array.from(new Set(rows.map(r => r.kelas)));
+      const thDim = J.dim.map(d => `<th class="cp-c">${esc(d[1])}</th>`).join('');
+      const barisKelas = kelasUrut.concat(kelasUrut.length > 1 ? ['__semua'] : []).map(kl => {
+        const sub = kl === '__semua' ? rowsR : rowsR.filter(r => r.kelas === kl); const m = rataDim(sub, J);
+        return `<tr><td>${kl === '__semua' ? '<b>Semua kelas</b>' : esc(kl)}</td><td class="cp-c">${sub.length}</td>${J.dim.map(d => `<td class="cp-c">${fmt(m[d[0]])}</td>`).join('')}<td class="cp-c"><b>${fmt(m._total)}</b></td></tr>`;
+      }).join('');
+      const cover = `<section class="cp-cover">${kop}
+        <h2 class="cp-judul">Detail Jawaban ${esc(namaJenis)} — ${esc(labelKelas)}</h2>
+        <p class="cp-cover-ujian">${esc(judulUjian)}</p>
+        <p class="cp-cover-petunjuk">Daftar berurutan sama dengan urutan halaman. Setiap siswa mulai di halaman baru berisi ringkasan untuk guru BK dan jawaban per dimensi serta per butir (hijau = baik, kuning = perlu perhatian, merah = sangat perlu perhatian). <b>Dokumen ini RAHASIA</b> — hanya untuk wali kelas / guru BK.</p>
+        <table class="cp-daftar"><thead><tr><th class="cp-c">No</th><th>Nama</th><th class="cp-c">Kelas</th><th class="cp-c">Nilai</th><th class="cp-c">Kategori</th><th class="cp-c">Kualitas</th><th class="cp-c">Catatan BK</th></tr></thead><tbody>${baris}</tbody></table>
+        <h3 style="margin:10px 0 4px;font-size:10.5pt">Rata-rata per kelas</h3>${catatP ? `<p class="cp-evaluasi">${esc(catatP)}</p>` : ''}
+        <table class="cp-daftar"><thead><tr><th>Kelas</th><th class="cp-c">Siswa</th>${thDim}<th class="cp-c">Nilai</th></tr></thead><tbody>${barisKelas}</tbody></table>
+        ${(() => { const sk = subKumpulan(J, rowsR).filter(x => x.indeks !== null); if (!sk.length) return ''; const pk = kelasUrut.length > 1 ? kelasUrut.map(kl => subKumpulan(J, rowsR.filter(r => r.kelas === kl))) : []; return `<h3 style="margin:10px 0 4px;font-size:10.5pt">Rata-rata per sub-indikator</h3><table class="cp-daftar"><thead><tr><th>Dimensi</th><th>Sub-indikator</th><th class="cp-c">No. butir</th><th class="cp-c">Semua</th>${pk.length ? kelasUrut.map(kl => `<th class="cp-c">${esc(kl)}</th>`).join('') : ''}</tr></thead><tbody>${sk.map(x => { const ix = subList(J).findIndex(y => y.dim === x.dim && y.nama === x.nama); return `<tr><td>${esc(x.dimNama)}</td><td>${esc(x.nama)}</td><td class="cp-c">${esc(nomorSub(J, x))}</td><td class="cp-c"><b>${fmt(x.indeks)}</b></td>${pk.map(a => `<td class="cp-c">${a[ix] && a[ix].indeks !== null ? fmt(a[ix].indeks) : '-'}</td>`).join('')}</tr>`; }).join('')}</tbody></table>`; })()}
+        <div class="cp-foot"><span>Dicetak dari ${esc(namaSekolah)} · RAHASIA (untuk guru BK)</span><span>${esc(waktu)}</span></div></section>`;
+      const bagian = rows.map(r => {
+        const k = kategoriIndeks(r._h.total);
+        const isi = (htmlRingkasBK(r) + htmlPembahasan(G.set, G.jenis, r.jawaban, r.kualitas, { guru: true })).replace(/<details class="sv-pb-dim"/g, '<details open class="sv-pb-dim"');
+        return `<article class="cp-siswa"><div class="cp-banner"><div><div class="cp-banner-nama">${esc(r.nama)}</div><div class="cp-banner-sub">Kelas ${esc(r.kelas || '-')} · ${esc(namaJenis)} · durasi ${esc(mnt(r.durasi))}</div></div><div class="cp-banner-nilai"><strong class="cp-nilai">${fmt(r._h.total)}</strong> <span class="cp-status">${esc(k.label)}</span></div></div>${isi}</article>`;
+      }).join('');
+      await Guru._cetakArea_(cover + bagian, ['Detail Survei', labelKelas, judulUjian].filter(Boolean).join(' - '));
+    } finally { sedangCetakBanyak = false; }
+  }
+
   async function guruUnduh() {
     const J = G.set; if (!J) { toast('Pilih ujian dulu.', 'error'); return; }
     const rows = guruSaring().map(hitungBaris); if (!rows.length) { toast('Belum ada data untuk diunduh.', 'error'); return; }
-    const head = ['No', 'Nama', 'Kelas'].concat(J.dim.map(d => 'Nilai ' + d[1])).concat(G.jenis === 'karakter' ? ['Nilai Survei Karakter'] : ['Nilai Sulingjar (rata-rata)']).concat(['Durasi (detik)', 'Nilai Kesungguhan', 'Kualitas Pengisian', 'Keterangan', 'Pelanggaran Survei', 'Percobaan Diblokir (Survei)', 'Gangguan Singkat (Survei)']).concat(J.butir.map(b => b[0]));
-    const data = rows.map((r, i) => [i + 1, r.nama, r.kelas].concat(J.dim.map(d => r._h.dim[d[0]].indeks)).concat([r._h.total]).concat([r.durasi || '', (r.kualitas && r.kualitas.nilai !== undefined) ? r.kualitas.nilai : '', r._q.baik ? 'Baik' : 'Perlu dicek', r._q.alasan.join('; '), r._lg.pelanggaran, r._lg.percobaan, r._lg.gangguan]).concat(J.butir.map(b => r.jawaban[b[0]] || '')));
+    if (G.jenis === 'sulingjar' && !(await konfirmasiRahasia('File Excel ini'))) return;
+    const rt = untukRata(rows);
+    const SL = subList(J);
+    const head = ['No', 'Nama', 'Kelas'].concat(J.dim.map(d => 'Nilai ' + d[1])).concat(G.jenis === 'karakter' ? ['Nilai Survei Karakter'] : ['Nilai Sulingjar (rata-rata)']).concat(['Durasi (detik)', 'Nilai Kesungguhan', 'Kualitas Pengisian', 'Keterangan', 'Pelanggaran Survei', 'Percobaan Diblokir (Survei)', 'Gangguan Singkat (Survei)']).concat(J.butir.map(b => b[0])).concat(SL.map(x => 'Sub: ' + x.dimNama + ' - ' + x.nama));
+    const data = rows.map((r, i) => [i + 1, r.nama, r.kelas].concat(J.dim.map(d => r._h.dim[d[0]].indeks)).concat([r._h.total]).concat([r.durasi || '', (r.kualitas && r.kualitas.nilai !== undefined) ? r.kualitas.nilai : '', r._q.baik ? 'Baik' : 'Perlu dicek', r._q.alasan.join('; '), r._lg.pelanggaran, r._lg.percobaan, r._lg.gangguan]).concat(J.butir.map(b => r.jawaban[b[0]] || '')).concat(SL.map(x => indeksSub(x.ids.map(id => r._h.butir[id]).filter(v => v !== undefined)))));
     // baris rata-rata (semua & per kelas) di bagian bawah lembar
     const kolKosong = (n) => new Array(Math.max(0, n)).fill('');
-    const barisRata = (label, sub) => { const m = rataDim(sub, J); return ['', label, ''].concat(J.dim.map(d => m[d[0]])).concat([m._total]).concat(kolKosong(head.length - 3 - J.dim.length - 1)); };
+    const barisRata = (label, sub) => { const m = rataDim(sub, J); const sk = subKumpulan(J, sub); const baris = ['', label, ''].concat(J.dim.map(d => m[d[0]])).concat([m._total]).concat(kolKosong(head.length - 3 - J.dim.length - 1)); sk.forEach((x, i) => { baris[head.length - SL.length + i] = x.indeks; }); return baris; };
     data.push(kolKosong(head.length));
-    data.push(barisRata('RATA-RATA SEMUA SISWA (' + rows.length + ')', rows));
-    Array.from(new Set(rows.map(r => r.kelas))).sort().forEach(kl => data.push(barisRata('Rata-rata kelas ' + kl, rows.filter(r => r.kelas === kl))));
+    data.push(barisRata('RATA-RATA SEMUA SISWA (' + rt.rows.length + (rt.diabaikan ? ' dari ' + rows.length + '; pengisian perlu dicek diabaikan' : '') + ')', rt.rows));
+    Array.from(new Set(rows.map(r => r.kelas))).sort().forEach(kl => data.push(barisRata('Rata-rata kelas ' + kl, rt.rows.filter(r => r.kelas === kl))));
     const sel = $('pilih-ujian-survei'); const nama = (sel.options[sel.selectedIndex] || {}).text || 'survei';
     await unduhXlsxRapi_('Hasil ' + (G.jenis === 'karakter' ? 'Survei Karakter' : 'Sulingjar') + ' - ' + nama.split(' — ')[0].slice(0, 40) + '.xlsx', 'Hasil Survei', head, data, head.map((h, i) => i === 1 ? 28 : (i < 3 ? 10 : 14)));
   }
@@ -1041,6 +1215,24 @@ const Survei = (function () {
   }
   function headlineSurvei(jenis, h) { return { label: jenis === 'karakter' ? 'Nilai Survei Karakter' : 'Nilai Sulingjar', nilai: h.total }; }
 
+  // tabel kecil: rata-rata tiap sub-indikator pada satu dimensi (satu siswa)
+  function htmlSubDim(set, h, dimKode) {
+    const subs = subSiswa(set, h).filter(x => x.dim === dimKode); if (!subs.length) return '';
+    return `<div class="sv-sub"><div class="sv-sub-h">Nilai per sub-indikator</div>${subs.map(x => { const k = kategoriIndeks(x.indeks); return `<div class="sv-sub-r"><span class="sv-sub-n">${esc(x.nama)}<small>No. ${esc(nomorSub(set, x))}</small></span><span class="sv-sub-b"><i style="width:${x.indeks}%;background:${k.warna}"></i></span><span class="sv-lencana" style="background:${k.latar};color:${k.warna}">${fmt(x.indeks)}</span></div>`; }).join('')}</div>`;
+  }
+  // panel kelas: rata-rata per sub-indikator (semua siswa yang tampil + tiap kelas)
+  function htmlSubKelas(rows, J) {
+    const kelas = Array.from(new Set(rows.map(r => r.kelas))).sort();
+    const semua = subKumpulan(J, rows).filter(x => x.indeks !== null); if (!semua.length) return '';
+    const perKelas = kelas.length > 1 ? kelas.map(kl => subKumpulan(J, rows.filter(r => r.kelas === kl))) : [];
+    const thK = kelas.length > 1 ? kelas.map(kl => `<th>${esc(kl)}</th>`).join('') : '';
+    const sel = (v) => { const k = kategoriIndeks(v); return v === null ? '<td>-</td>' : `<td><span class="sv-lencana" style="background:${k.latar};color:${k.warna}">${fmt(v)}</span></td>`; };
+    let dimLast = '';
+    const baris = semua.map((x, i) => { const baru = x.dim !== dimLast; dimLast = x.dim; const k = kategoriIndeks(x.indeks); const idx = subList(J).findIndex(y => y.dim === x.dim && y.nama === x.nama);
+      return `<tr${baru ? ' class="sv-sub-dimrow"' : ''}><td>${baru ? esc(x.dimNama) : ''}</td><td><b>${esc(x.nama)}</b></td><td>${esc(nomorSub(J, x))}</td>${sel(x.indeks)}<td>${esc(k.label)}</td>${perKelas.map(pk => sel(pk[idx] ? pk[idx].indeks : null)).join('')}</tr>`; }).join('');
+    const rendah = semua.filter(x => x.indeks < 75).sort((a, c) => a.indeks - c.indeks).slice(0, 5);
+    return `<div class="sv-kelas"><b>Rata-rata per sub-indikator</b>${rendah.length ? `<p class="sv-sub-ket">Terendah: ${rendah.map(x => `${esc(x.nama)} (${fmt(x.indeks)})`).join('; ')}</p>` : ''}<div class="table-wrap"><table class="data-table"><thead><tr><th>Dimensi</th><th>Sub-indikator</th><th>No. butir</th><th>Semua siswa</th><th>Kategori</th>${thK}</tr></thead><tbody>${baris}</tbody></table></div></div>`;
+  }
   function htmlPembahasan(set, jenis, jawaban, kualitas, opsi) {
     const guru = !!(opsi && opsi.guru);
     if (!set || !jawaban) return '<div class="dj-kosong"><p>' + (guru ? 'Siswa ini belum mengisi survei.' : 'Hasil survei belum tersedia.') + '</p></div>';
@@ -1060,13 +1252,14 @@ const Survei = (function () {
         if (SARAN[d[0]] && JENIS[jenis].dim.some(dd => dd[0] === d[0]) && (jenis === 'karakter' || guru)) saran = `<p class="sv-pb-saran"><b>${guru ? 'Saran tindak lanjut' : 'Saran untuk Anda'}:</b> ${esc(SARAN[d[0]])}</p>`;
         else if (!guru && d[0] === 'ik') saran = '<p class="sv-pb-saran"><b>Catatan:</b> Jika Anda pernah mengalami atau melihat hal yang tidak nyaman, ceritakan kepada guru BK, wali kelas, atau orang dewasa yang Anda percaya.</p>';
       }
-      out += `<details class="sv-pb-dim" ${k.kode !== 'baik' ? 'open' : ''}><summary><span class="sv-pb-dn">${esc(d[1])}</span><span class="sv-lencana" style="background:${k.latar};color:${k.warna}">${fmt(x.indeks)} · ${k.label}</span></summary>
+      out += `<details class="sv-pb-dim" ${k.kode !== 'baik' ? 'open' : ''}><summary><span class="sv-pb-dn">${esc(d[1])} <span class="sv-hit">${(() => { const n = butir.map(b => noButir(set, b[0])); return butir.length ? 'No. ' + Math.min.apply(null, n) + (butir.length > 1 ? '–' + Math.max.apply(null, n) : '') + ' · ' + butir.length + ' butir' : ''; })()}</span></span><span class="sv-lencana" style="background:${k.latar};color:${k.warna}">${fmt(x.indeks)} · ${k.label}</span></summary>
         <div class="sv-bar-b"><i style="width:${x.indeks}%;background:${k.warna}"></i></div>
+        ${htmlSubDim(set, h, d[0])}
         <p class="sv-pb-tafsir">Nilai ${esc(d[1])} ${subjek} <b>${fmt(x.indeks)}</b> (rata-rata skor ${fmt(x.rata)} dari 4) — ${TAFSIR[k.kode]}</p>
         <ul class="sv-pb-list">${butir.map(b => {
           const sk = h.butir[b[0]]; const p = jawaban[b[0]];
           const jw = p ? SKALA[b[2]][p - 1] : '-';
-          return `<li class="sv-l${sk || 0}"><span class="sv-pb-t">${esc(b[4])}${b[3] < 0 ? ' <em>(negatif)</em>' : ''}</span><span class="sv-pb-j">Jawaban: <b>${esc(jw)}</b></span><span class="sv-skor sv-s${sk || 0}">Skor ${sk || '-'}/4</span></li>`;
+          return `<li class="sv-l${sk || 0}"><span class="sv-pb-t"><span class="sv-no">${noButir(set, b[0])}</span>${esc(b[4])}${b[3] < 0 ? ' <em class="sv-neg">(pernyataan negatif)</em>' : ''}<em class="sv-r-d sv-r-ind">${subButir(set, b)}</em></span><span class="sv-pb-j">Jawaban: <b>${esc(jw)}</b></span><span class="sv-skor sv-s${sk || 0}">Skor ${sk || '-'}/4</span></li>`;
         }).join('')}</ul>${saran}</details>`;
     });
     return out + '</div>';
@@ -1443,7 +1636,7 @@ const Survei = (function () {
   ExamEngine.bukaDetailJawaban = async function () { await _bukaDetailSiswa.call(ExamEngine); try { await siapkanDetailSiswa(); } catch (e) { } };
 
   return { saranDim, toggleRagu, jenisUntukUjian, setUntukUjian, cariPaket, muatPaket, badgePaket, renderKartuKategori, bukaKategoriKelola, imporKeKategori, hapusPaket, bukaEditor, tutupEditor, edTambah, edHapus, edGeser, edAturHalaman, edBawaan, edSimpan, mulai, skala, pilih, pilihId, geser, lompat, lompatButir, kirim, jenisUntukUjian, bangunSet, hitung, periksaKualitas, kategoriIndeks, kategoriKesungguhan, JENIS, guruMuat, guruRender, guruUnduh,
-    modeDetail, gabungKeRekap, selRekap, ringkasSurvei, setDraft, draftJson, statusForm, pakaiBawaan, unduhTemplate, htmlPembahasan, bukaDetail, tutupDetail, pindahDetail, cetakDetail };
+    modeDetail, gabungKeRekap, selRekap, ringkasSurvei, setDraft, draftJson, statusForm, pakaiBawaan, unduhTemplate, htmlPembahasan, bukaDetail, tutupDetail, pindahDetail, cetakDetail, cetakDetailBanyak };
 })();
 
 // v43s: berkas ini adalah versi dengan paket survei (muatPaket, badgePaket, editor butir).

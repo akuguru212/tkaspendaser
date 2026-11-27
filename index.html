@@ -161,6 +161,7 @@
       <button class="nav-tab" data-tab="tab-lb-survei" onclick="UI.gantiTabGuru('tab-lb-survei')"><i class="fa-solid fa-ranking-star nav-ico"></i><span>Leaderboard Survei</span></button>
       <button class="nav-tab" data-tab="tab-survei" onclick="UI.gantiTabGuru('tab-survei')"><i class="fa-solid fa-square-poll-vertical nav-ico"></i><span>Hasil Survei</span></button>
       <button class="nav-tab" data-tab="tab-analisis" onclick="UI.gantiTabGuru('tab-analisis')"><i class="fa-solid fa-chart-pie nav-ico"></i><span>Analisis Soal</span></button>
+      <button class="nav-tab" data-tab="tab-hasil-tes" onclick="UI.gantiTabGuru('tab-hasil-tes')"><i class="fa-solid fa-file-circle-check nav-ico"></i><span>Hasil Literasi &amp; Numerasi</span></button>
     <button class="nav-tab" data-tab="tab-analisis-materi" onclick="UI.gantiTabGuru('tab-analisis-materi')"><i class="fa-solid fa-magnifying-glass-chart nav-ico"></i><span>Analisis Materi</span></button>
     <button class="nav-tab" data-tab="tab-perkembangan" onclick="UI.gantiTabGuru('tab-perkembangan')"><i class="fa-solid fa-arrow-trend-up nav-ico"></i><span>Perkembangan Siswa</span></button>
       <button class="nav-tab" data-tab="tab-pelanggaran" onclick="UI.gantiTabGuru('tab-pelanggaran')"><i class="fa-solid fa-triangle-exclamation nav-ico"></i><span>Log Pelanggaran</span></button>
@@ -531,14 +532,44 @@
           <select id="pilih-ujian-survei" onchange="Survei.guruMuat()" style="max-width:360px"></select>
           <button type="button" class="secondary btn-segarkan" onclick="Survei.guruMuat()"><i class="fa-solid fa-rotate"></i> Segarkan</button>
           <button class="secondary" onclick="Survei.guruUnduh()" title="Unduh Excel: indeks per dimensi, kualitas pengisian, dan jawaban per butir (sesuai filter)">⬇ Unduh (sesuai filter)</button>
+          <button class="secondary" onclick="Survei.cetakDetailBanyak('kelas')" title="PDF detail jawaban survei SEMUA siswa pada kelas yang dipilih di filter kelas (ringkasan guru BK + jawaban per dimensi &amp; butir)"><i class="fa-solid fa-file-pdf"></i> PDF Detail Survei (per kelas)</button>
+          <button class="secondary" onclick="Survei.cetakDetailBanyak('semua')" title="PDF detail jawaban survei seluruh siswa dari semua kelas"><i class="fa-solid fa-file-pdf"></i> PDF Detail Survei (semua siswa)</button>
         </div>
         <div class="filter-bar">
           <input type="search" id="cari-survei" placeholder="🔍 Cari nama siswa..." oninput="Survei.guruRender()" autocomplete="off">
           <select id="kelas-survei" onchange="Survei.guruRender()" title="Filter per kelas"><option value="">Semua Kelas</option></select>
           <select id="saring-survei" onchange="Survei.guruRender()" title="Saring siswa yang perlu perhatian guru BK"><option value="">Semua siswa</option><option value="perhatian">⚠ Perlu perhatian BK</option></select>
+          <label class="filter-info" style="display:inline-flex;align-items:center;gap:.35rem;cursor:pointer" title="Rata-rata kelas, dimensi, dan sub-indikator tidak menghitung pengisian yang ditandai perlu dicek (terlalu cepat, seragam, atau bertentangan). Daftar siswa tetap menampilkan semuanya."><input type="checkbox" id="abaikan-dicek-survei" onchange="Survei.guruRender()"> Abaikan pengisian &ldquo;perlu dicek&rdquo; pada rata-rata</label>
         </div>
         <div id="ringkas-survei"></div>
         <div id="tabel-survei">Pilih ujian terlebih dahulu.</div>
+      </div>
+    </section>
+
+    <!-- ---------- TAB: HASIL LITERASI & NUMERASI (per siswa, per materi, detail jawaban) ---------- -->
+    <section id="tab-hasil-tes" class="hidden am-scope">
+      <h2>Hasil Literasi &amp; Numerasi</h2>
+      <p class="subtitle">Seperti Hasil Survei, tetapi untuk tes: nilai tiap siswa, <strong>materi (Topik) yang kurang</strong> dan <strong>yang sudah baik</strong>, serta <strong>detail jawaban per soal</strong>. Klik nama siswa untuk melihat detail. PDF bisa per siswa, per kelas, atau seluruh siswa; <em>ZIP per siswa</em> membuat satu PDF untuk tiap siswa; <em>Kelompok Remedial</em> menyusun daftar remedial &amp; kelompok belajar. Isi kolom <em>Topik</em> pada soal di Bank Soal agar materinya rinci.</p>
+      <div class="panel">
+        <div class="toolbar">
+          <select id="ht-ujian" onchange="HasilTes.muat()" style="max-width:360px"></select>
+          <button type="button" class="secondary btn-segarkan" onclick="HasilTes.muat()"><i class="fa-solid fa-rotate"></i> Segarkan</button>
+          <button type="button" class="secondary" onclick="HasilTes.unduhExcel()" title="Unduh Excel sesuai filter">⬇ Unduh Excel</button>
+          <button type="button" class="secondary" onclick="HasilTes.cetakBanyak('kelas')" title="PDF detail semua siswa pada kelas yang dipilih di filter kelas"><i class="fa-solid fa-file-pdf"></i> PDF Detail (per kelas)</button>
+          <button type="button" class="secondary" onclick="HasilTes.cetakBanyak('semua')" title="PDF detail seluruh siswa dari semua kelas"><i class="fa-solid fa-file-pdf"></i> PDF Detail (semua siswa)</button>
+          <button type="button" class="secondary" onclick="HasilTes.unduhZip('kelas')" title="ZIP berisi satu PDF per siswa untuk kelas yang dipilih (mudah dibagikan lewat WhatsApp)"><i class="fa-solid fa-file-zipper"></i> ZIP per siswa (kelas)</button>
+          <button type="button" class="secondary" onclick="HasilTes.unduhZip('semua')" title="ZIP berisi satu PDF per siswa untuk seluruh siswa"><i class="fa-solid fa-file-zipper"></i> ZIP per siswa (semua)</button>
+          <button type="button" class="secondary" onclick="HasilTes.kelompokRemedial()" title="Daftar siswa remedial per materi + kelompok belajar yang bisa dicetak"><i class="fa-solid fa-people-group"></i> Kelompok Remedial</button>
+        </div>
+        <div class="filter-bar">
+          <input type="search" id="ht-cari" placeholder="🔍 Cari nama siswa..." oninput="HasilTes.render()" autocomplete="off">
+          <select id="ht-kelas" onchange="HasilTes.render()" title="Filter per kelas"><option value="">Semua Kelas</option></select>
+          <select id="ht-saring" onchange="HasilTes.render()"><option value="">Semua siswa</option><option value="kurang">Ada materi kurang</option></select>
+          <select id="ht-isi" title="Isi PDF detail"><option value="salah">PDF: soal yang belum benar saja</option><option value="semua">PDF: semua soal</option></select>
+          <span class="filter-info" id="ht-progres"></span>
+        </div>
+        <div id="ht-ringkas"></div>
+        <div id="ht-tabel">Pilih ujian terlebih dahulu.</div>
       </div>
     </section>
 
@@ -1696,15 +1727,16 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=87"></script>
+<script src="app.js?v=88"></script>
 <script src="anbk.js?v=67"></script>
 <script src="peringatan-cepat.js?v=4"></script>
-<script src="survei.js?v=28"></script>
+<script src="survei.js?v=33"></script>
 <script src="kunci-ujian.js?v=12"></script>
 <script src="leaderboard.js?v=2"></script>
 <script src="leaderboard-survei.js?v=1"></script>
 <script src="analisis-materi.js?v=7"></script>
 <script src="perkembangan.js?v=3"></script>
+<script src="hasil-tes.js?v=3"></script>
 <script src="rekap-ikut.js?v=1"></script>
 <script src="laporan-pdf.js?v=3"></script>
 <script src="portal-siswa.js?v=8"></script>
