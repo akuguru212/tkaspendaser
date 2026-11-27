@@ -1708,6 +1708,8 @@ details.tm-det > summary { cursor: pointer; font-weight: 700; font-size: .88rem;
 #modal-detail-siswa { align-items: center; padding: 1rem; }
 .dsw-modal { display: flex; flex-direction: column; max-height: 100%; overflow: hidden; }
 .dsw-modal > * { flex: none; }
+#modal-detail-survei { align-items: center; padding: 1rem; }
+#dsv-isi { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: .3rem; margin-bottom: .6rem; overscroll-behavior: contain; }
 #dsw-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: .3rem; overscroll-behavior: contain; }
 .dsw-modal .dj-card:last-child { margin-bottom: .2rem; }
 .dj-pembahasan > :last-child, .dj-card .pertanyaan > :last-child { margin-bottom: 0; }

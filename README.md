@@ -1,3 +1,21 @@
+# v43z59 — Perbaikan detail survei: bisa di-scroll + tombol aksi terlihat, daftar "pengalaman tidak aman" benar, warna Hijau/Kuning/Merah
+
+- **Jendela detail survei** kini punya area isi yang bisa di-scroll; tombol Sebelumnya/Berikutnya, Cetak/PDF, dan Tutup selalu terlihat di bawah (`style.css` v66).
+- **Bug:** daftar "pengalaman tidak aman" memakai nomor butir tetap S11–S18, padahal set khusus hasil impor Word bernomor lain, sehingga butir biasa ikut terdaftar (juga memengaruhi badge "Perlu tindak lanjut"). Kini butir diambil dari set yang dipakai (skala Pengalaman + arah negatif).
+- **Warna jawaban per butir:** hijau = baik (skor 3–4), kuning = perlu perhatian (skor 2), merah = sangat perlu perhatian (skor 1), lengkap dengan legenda.
+- File berubah: `survei.js` (v27), `style.css` (v66), `index.html`, `sw.js` (`hp56`), `README.md`. `Code.gs` tidak berubah.
+
+---
+
+# v43z58 — Data Siswa: filter & pengelompokan status login · Hasil Survei: detail jawaban per siswa untuk guru BK
+
+- **Data Siswa (`app.js` v87, `index.html`):** status login kini 3 tingkat — 🟢 Sedang login (ping < 15 menit), 🟡 Login tidak aktif (perangkat tercatat tapi > 15 menit tanpa aktivitas), ⚪ Belum login / sudah keluar. Ada **filter Status Login**, pilihan **Kelompokkan** (status login / kelas / kelas lalu status), dan ringkasan jumlah di atas tabel. Berjalan bersama Filter Kelas, pencarian, dan filter diblokir.
+- **Hasil Survei (`survei.js` v26):** kolom **Detail Jawaban** + nama siswa bisa diklik → jendela detail berisi *Ringkasan untuk Guru BK* (pengalaman tidak aman Sulingjar, dimensi < 50 dan sedang, butir skor 1–2), lalu jawaban lengkap **per dimensi dan per butir**. Ada tombol Sebelumnya/Berikutnya, Cetak/PDF (berlabel rahasia), dan filter **⚠ Perlu perhatian BK**.
+- **`Code.gs` TIDAK berubah** (memakai `getDaftarSiswa` & `getRekapSurvei` yang sudah ada) → tidak perlu deploy ulang Apps Script. Cukup unggah `app.js`, `survei.js`, `index.html`, `sw.js`.
+- File berubah: `app.js` (v87), `survei.js` (v26), `index.html`, `sw.js` (cache `hp55`), `README.md`.
+
+---
+
 # v43z57 — Nama "Guru Pengajar" tampil lagi di layar ujian HP + pop up "Mengirim ..." saat kirim Survei Karakter / Sulingjar
 
 - **Masalah 1:** di HP, tulisan *Guru Pengajar · nama guru* tidak terlihat. **Penyebab:** sejak v43z51 tulisan itu ditaruh di belakang bilah tombol navigasi bawah (z-index 1) padahal bilah punya latar putih 97% (z-index 70), jadi seluruh tulisan tertutup.
