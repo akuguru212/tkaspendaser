@@ -78,12 +78,13 @@ const HasilTes = (function () {
   async function muatDaftar() {
     const sel = $('ht-ujian'); if (!sel) return;
     const lama = sel.value;
-    try { if (typeof Survei !== 'undefined') await Survei.muatPaket(false); } catch (e) { }
     const res = await api('getDaftarUjian', { guruId: state.user.id });
     if (!res || !res.ok) return;
-    const paket = (state.guru && state.guru.paketSurvei) || [];
     const urut = { literasi: 0, numerasi: 1, lainnya: 2 };
-    G.daftar = (res.data || []).filter(u => { let j = ''; try { j = Survei.jenisUntukUjian(u, paket); } catch (e) { } return !(j === 'karakter' || j === 'sulingjar'); })
+    // PERBAIKAN: ujian yang memakai "Survei Setelah Ujian" (Otomatis/Karakter/Sulingjar) TETAP ditampilkan di sini.
+    // Dulu ujian berjudul "Numerasi ..."/"Literasi ..." dengan survei Otomatis dianggap survei lalu disaring keluar,
+    // padahal nilai tes & materinya tetap perlu dilihat. Hasil surveinya tetap ada di menu Hasil Survei.
+    G.daftar = (res.data || [])
       .map(u => Object.assign({}, u, { _j: jenisDari(u) }))
       .sort((a, b) => urut[a._j] - urut[b._j] || String(a.judul).localeCompare(String(b.judul), 'id', { numeric: true }));
     sel.innerHTML = '<option value="">Pilih ujian Literasi / Numerasi...</option>' + G.daftar.map(u => `<option value="${esc(u.id)}">${esc(u.judul)} — ${esc(NAMA[u._j])}</option>`).join('');
