@@ -1,3 +1,13 @@
+# v43z57 — Nama "Guru Pengajar" tampil lagi di layar ujian HP + pop up "Mengirim ..." saat kirim Survei Karakter / Sulingjar
+
+- **Masalah 1:** di HP, tulisan *Guru Pengajar · nama guru* tidak terlihat. **Penyebab:** sejak v43z51 tulisan itu ditaruh di belakang bilah tombol navigasi bawah (z-index 1) padahal bilah punya latar putih 97% (z-index 70), jadi seluruh tulisan tertutup.
+- **Perbaikan 1 (`mobile.css` v15, layar ≤ 640px):** tulisan dipindah ke pita kosong TEPAT DI ATAS bilah tombol (`bottom: 74px + area aman`, z-index 60), tidak menimpa tombol maupun soal. Tulisan hilang hanya jika `window.CBT_WATERMARK = ''` di `config.js` Anda.
+- **Masalah 2:** saat siswa menekan SELESAI SURVEI (Survei Karakter / Sulingjar), hanya tulisan tombol yang berubah menjadi "Mengirim..." tanpa pop up seperti pengiriman jawaban ujian. Di laptop jeda pengiriman terasa seperti aplikasi macet.
+- **Perbaikan 2 (`survei.js` v25):** layar pop up yang sama dengan pengiriman ujian (`#overlay-kirim`) kini tampil: **"Mengirim Survei Karakter..." / "Mengirim Sulingjar..."**, berubah menjadi "Koneksi bermasalah ... mencoba mengirim ulang" bila gagal sementara, lalu "Terkirim" sebentar sebelum halaman berikutnya. Bila semua percobaan gagal, pop up ditutup dan pesan galat + tombol SELESAI SURVEI muncul lagi seperti sebelumnya. Logika kirim (4 percobaan) tidak diubah.
+- File berubah: `mobile.css` (v15), `survei.js` (v25), `index.html`, `sw.js` (cache `hp50`), `README.md`.
+
+---
+
 # v43z56 — KEAMANAN: aksi guru di server kini wajib token (kunci jawaban & password siswa tidak lagi bisa diambil tanpa login guru)
 
 - **Masalah:** server (`Code.gs`) menjalankan aksi guru hanya dengan `guruId` tanpa bukti bahwa pemanggilnya guru. Karena URL Web App ada di `config.js` (terbaca browser siapa pun), siswa yang tahu cara mengirim permintaan bisa memanggil `getBankSoal` (memuat `kunci_json` = kunci jawaban), `getDaftarSiswa` (username + password semua siswa), `getDaftarUjian` (token ujian), serta `hapusSiswa`, `hapusKelas`, `hapusNilaiSiswa`, dst.

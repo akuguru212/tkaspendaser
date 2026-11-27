@@ -8,7 +8,7 @@
      supaya soal, nilai, dan jawaban ujian selalu langsung dari server.
    Setelah mengganti file aplikasi, naikkan angka VERSI di bawah ini.
    ============================================================================ */
-const VERSI = 'spendaser-v2-hp52';
+const VERSI = 'spendaser-v2-hp54';
 const CACHE_APP = VERSI + '-app';
 const CACHE_CDN = VERSI + '-cdn';
 
@@ -45,7 +45,8 @@ const CDN_OK = ['cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.c
 async function jaringanDulu(req, namaCache) {
   const cache = await caches.open(namaCache);
   try {
-    const res = await fetch(req);
+    // cache:'no-cache' = selalu cek ke server (ETag) -- tanpa ini cache HTTP GitHub Pages (~10 menit) bisa menyajikan berkas LAMA.
+    const res = await fetch(req, req.url.indexOf(self.location.origin) === 0 ? { cache: 'no-cache' } : undefined);
     if (res && res.ok) cache.put(req, res.clone());
     return res;
   } catch (err) {

@@ -20,6 +20,8 @@
      di dalam peristiwa popstate) sebagai entri yang boleh DILEWATI, sehingga tekanan Kembali berikutnya
      langsung keluar aplikasi. Perbaikan: penjaga ditumpuk sampai MAKS_JAGA lapis, tiap lapis dipasang saat
      siswa MENGETUK layar (jadi sah, tidak dilewati). Beberapa tekanan Kembali beruntun tetap tertahan.
+     (v43z60: satu ketukan hanya menambah SATU lapis -- pointerup/touchend saja, tanpa click -- karena dorongan kedua
+     pada ketukan yang sama juga bisa dianggap tanpa sentuhan; maksimal 6 lapis.)
      Selain itu, Kembali saat pop up keluar masih tampil = menutup pop up dan kembali ke Beranda.
    ============================================================================ */
 'use strict';
@@ -38,12 +40,16 @@ const TombolKembali = (function () {
       !!(typeof AntiCheat !== 'undefined' && AntiCheat.modeSurvei);
   }
   const stateSkrg = () => { try { return history.state || null; } catch (e) { return null; } };
-  const MAKS_JAGA = 4;   // jumlah lapis penjaga yang disiapkan (penyangga untuk tekanan Kembali beruntun)
-  const dorong = (tanda, n) => { try { history.pushState({ [tanda]: n || 1 }, '', location.href); } catch (e) { /* abaikan */ } };
+  const VERSI_KODE = 'v43z61';
+  const MAKS_JAGA = 6;   // jumlah lapis penjaga yang disiapkan (penyangga untuk tekanan Kembali beruntun)
+  let tDorong = 0;      // waktu dorongan riwayat terakhir (Chrome: SATU entri sah per ketukan, dorongan kedua pada ketukan yang sama bisa dilewati)
+  const dorong = (tanda, n) => { tDorong = Date.now(); try { history.pushState({ [tanda]: n || 1 }, '', location.href); } catch (e) { /* abaikan */ } };
   const kedalaman = () => { const s = stateSkrg(); return (s && Number(s[T_JAGA])) || 0; };
   // Tambah satu lapis penjaga (hanya dipanggil dari ketukan/sentuhan siswa agar tidak dilewati Chrome).
   function tambahJaga() {
     if (!adaSiswa() || keluar || wilayahUjian() || !sudahDisentuh()) return;
+    if (Date.now() - tDorong < 700) return;                                   // satu ketukan = satu entri
+    try { if (navigator.userActivation && !navigator.userActivation.isActive) return; } catch (e) { /* abaikan */ }
     const s = stateSkrg(); if (!s) return;
     if (s[T_DASAR]) { dorong(T_JAGA, 1); return; }
     if (s[T_JAGA] && kedalaman() < MAKS_JAGA) dorong(T_JAGA, kedalaman() + 1);
@@ -127,7 +133,8 @@ const TombolKembali = (function () {
     try {
       ya = await Dialog.konfirmasi({
         judul: 'Yakin Anda akan keluar?', tipe: 'warning', ikon: 'fa-right-from-bracket',
-        pesan: 'Anda akan **keluar dari akun** dan kembali ke halaman login.\nJawaban dan nilai yang sudah tersimpan tidak hilang.',
+        pesan: 'Anda akan **keluar dari akun** dan kembali ke halaman login.\nJawaban dan nilai yang sudah tersimpan tidak hilang.' +
+          (TombolKembali.DIAGNOSTIK ? '\n\n[Diagnostik ' + VERSI_KODE + ' · lapis ' + kedalaman() + '/' + MAKS_JAGA + ' · riwayat ' + status().panjangRiwayat + ']' : ''),
         teksYa: 'Ya, Keluar', teksBatal: 'Tetap di Aplikasi'
       });
     } finally { popupTampil = false; }
@@ -170,7 +177,7 @@ const TombolKembali = (function () {
   // ---- pemasangan ----
   window.addEventListener('popstate', onPop);
   // Setiap ketukan siswa mengisi ulang penyangga penjaga (sampai MAKS_JAGA lapis).
-  ['touchend', 'click'].forEach(t => document.addEventListener(t, () => { try { tambahJaga(); } catch (e) { /* abaikan */ } }, true));
+  ['pointerup', 'touchend'].forEach(t => document.addEventListener(t, () => { try { tambahJaga(); } catch (e) { /* abaikan */ } }, true));
   // Setiap kali layar siswa (non-ujian) tampil, penjaga dipastikan ada. Jalan lewat klik siswa, jadi
   // browser menerima entri riwayat tersebut (Chrome mengabaikan entri yang dibuat tanpa interaksi).
   const _tampilkan = UI.tampilkan;
@@ -185,5 +192,10 @@ const TombolKembali = (function () {
   const mendarat = (() => { try { const s = history.state; return !!(s && s[T_DASAR] && sessionStorage.getItem('cbt_user')); } catch (e) { return false; } })();
   if (mendarat) setTimeout(() => { if (adaSiswa() && !wilayahUjian() && !keluar && !(stateSkrg() || {})[T_JAGA]) tanyaKeluar(); }, 800);
 
-  return { pasang, selesaiLogout, KONFIRMASI_KELUAR: true };
+  // Cek lewat console: TombolKembali.status() -> kedalaman = jumlah lapis penjaga di atas entri dasar (makin besar makin aman).
+  const status = () => ({ kedalaman: kedalaman(), maksimal: MAKS_JAGA, state: stateSkrg(), panjangRiwayat: (() => { try { return history.length; } catch (e) { return -1; } })() });
+
+  // DIAGNOSTIK = true menampilkan baris kecil "[Diagnostik v43z61 · lapis N/6 · riwayat M]" di pop up keluar, untuk memastikan
+  // versi kode yang berjalan dan jumlah lapis penjaga. Setel false (atau hapus) bila sudah tidak diperlukan.
+  return { pasang, selesaiLogout, status, KONFIRMASI_KELUAR: true, DIAGNOSTIK: true };
 })();
