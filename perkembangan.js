@@ -22,8 +22,8 @@ const Perkembangan = (function () {
   const norm = (t) => String(t == null ? '' : t).trim().toLowerCase().replace(/\s+/g, ' ');
   const bulat = (n) => Math.round(Number(n) || 0);
   const r1 = (n) => Math.round(Number(n) * 100) / 100;
-  const fmt = (n) => (n == null || isNaN(n)) ? '–' : r1(n).toLocaleString('id-ID', { maximumFractionDigits: 2 });
-  const fmtD = (n) => (n > 0 ? '+' : (n < 0 ? '−' : '')) + Math.abs(r1(n)).toLocaleString('id-ID', { maximumFractionDigits: 2 });
+  const fmt = (n) => (n == null || isNaN(n)) ? '–' : r1(n).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtD = (n) => (n > 0 ? '+' : (n < 0 ? '−' : '')) + Math.abs(r1(n)).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const AMBANG_TREN = 3;
   const SERI = {
     literasi: { nama: 'Literasi', warna: '#2563eb', marker: 'circle' },
@@ -452,7 +452,7 @@ const Perkembangan = (function () {
       b.push(s.tren.arah === 'baru' ? '' : r1(s.tren.delta), s.tren.arah === 'baru' ? '' : r1(s.tren.total), { naik: 'Naik', turun: 'Turun', stabil: 'Stabil', baru: 'Data awal' }[s.tren.arah]);
       return b;
     });
-    const ws = XLSX.utils.aoa_to_sheet([head, ...data]);
+    const ws = zNilai_(XLSX.utils.aoa_to_sheet([head, ...data]));
     ws['!cols'] = [5, 30, 9].concat(P.tes.flatMap(() => [14, 14, 14]), [16, 15, 11]).map(w => ({ wch: w }));
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Perkembangan');
     const bersih = (t) => String(t).replace(/[\\/:*?"<>|]+/g, '-').trim().slice(0, 50);

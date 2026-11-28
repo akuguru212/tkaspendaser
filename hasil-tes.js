@@ -221,7 +221,7 @@ const HasilTes = (function () {
     return G.rows.filter(r => (!kls || r.kelas === kls) && (!q || String(r.nama).toLowerCase().indexOf(q) >= 0) && (sr !== 'kurang' || r.kurang.length));
   }
   const rata = (a) => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
-  const f1 = (n) => n == null ? '-' : (Math.round(n * 100) / 100).toLocaleString('id-ID', { maximumFractionDigits: 2 });
+  const f1 = (n) => n == null ? '-' : (Math.round(n * 100) / 100).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const chipM = (T) => T ? `<span class="ht-chip ${T.level}" title="${esc(T.label)}: ${bulat(T.persen)}% (${T.benar}/${T.n} benar)">${bulat(T.persen)}%</span>` : '<span class="ht-chip na">–</span>';
 
   // ---------------- rata-rata per SUB MATERI ----------------

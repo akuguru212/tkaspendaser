@@ -20,7 +20,7 @@ const Leaderboard = (function () {
   const esc = (s) => escapeHtml_(String(s == null ? '' : s));
   const norm = (t) => String(t == null ? '' : t).trim().toLowerCase().replace(/\s+/g, ' ');
   const r2 = (n) => Math.round(Number(n) * 100) / 100;
-  const fmt = (n) => (n == null || isNaN(n)) ? '–' : r2(n).toLocaleString('id-ID', { maximumFractionDigits: 2 });
+  const fmt = (n) => (n == null || isNaN(n)) ? '–' : r2(n).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const inisial = (nama) => String(nama || '?').trim().split(/\s+/).slice(0, 2).map(w => w.charAt(0)).join('').toUpperCase() || '?';
   const rata = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
   const KEY_ATUR = 'cbt_leaderboard_atur_v1';
@@ -588,7 +588,7 @@ const Leaderboard = (function () {
         if (h.semuaMode) { baris.push(r.jml); tesList.forEach(t => { const x = r.skor[t.key] || {}; baris.push(nilai(x.literasi), nilai(x.numerasi)); }); }
         return baris;
       });
-      const ws = XLSX.utils.aoa_to_sheet([head, ...data]);
+      const ws = zNilai_(XLSX.utils.aoa_to_sheet([head, ...data]));
       ws['!cols'] = [10, 32, 10, 14, 14, 12, 12, 15].concat(denganRankKelas ? [15] : [], h.semuaMode ? [12].concat(tesList.flatMap(() => [16, 16])) : []).map(w => ({ wch: w }));
       ws['!freeze'] = { xSplit: 0, ySplit: 1 };
       ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(data.length, 1), c: head.length - 1 } }) };

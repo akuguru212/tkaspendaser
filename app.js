@@ -164,7 +164,7 @@ function tampilkanBadgeMode() {
 // ada filter, dan nama file/sheet disesuaikan. Dipakai unduhan analisis.
 async function unduhXlsxRapi_(namaFile, namaSheet, headers, rows, lebarKolom) {
   try { await muatPustaka_('xlsx'); } catch (e) { toast(e.message, 'error'); return false; }
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  const ws = zNilai_(XLSX.utils.aoa_to_sheet([headers, ...rows]));
   ws['!cols'] = headers.map((_, i) => ({ wch: (lebarKolom && lebarKolom[i]) || 14 }));
   ws['!freeze'] = { xSplit: 0, ySplit: 1 };
   ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: headers.length - 1 } }) };
@@ -805,7 +805,7 @@ function unduhTeks(teks, filename) {
 // kadang bermasalah di beberapa pengaturan region (koma vs titik koma).
 async function unduhXlsx(filename, headers, rows) {
   try { await muatPustaka_('xlsx'); } catch (e) { toast(e.message, 'error'); return; }
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  const ws = zNilai_(XLSX.utils.aoa_to_sheet([headers, ...rows]));
   ws['!cols'] = headers.map(() => ({ wch: 22 }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Template');
@@ -2244,7 +2244,9 @@ function badgeKategori_(nilai) {
   return `<span class="badge kat-badge" style="background:${k.latar};color:${k.warna};border:1px solid ${k.warna}">${k.label.charAt(0) + k.label.slice(1).toLowerCase()}</span>`;
 }
 // Format nilai gaya Indonesia: maks. 2 desimal, koma sebagai pemisah (83.33 -> 83,33; 80 -> 80)
-function fmtNilai_(n) { if (n === '' || n == null || isNaN(Number(n))) return '-'; return (Math.round(Number(n) * 100) / 100).toLocaleString('id-ID', { maximumFractionDigits: 2 }); }
+function fmtNilai_(n) { if (n === '' || n == null || isNaN(Number(n))) return '-'; return (Math.round(Number(n) * 100) / 100).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+// Excel: sel angka pada kolom bernama nilai/rata-rata/akhir/literasi/numerasi diberi format 0.00 (tampil 2 desimal)
+function zNilai_(ws) { try { if (!ws || !ws['!ref'] || typeof XLSX === 'undefined') return ws; const rg = XLSX.utils.decode_range(ws['!ref']); for (let c = rg.s.c; c <= rg.e.c; c++) { const h = ws[XLSX.utils.encode_cell({ r: rg.s.r, c })]; if (!h || !/nilai|rata|akhir|literasi|numerasi/i.test(String(h.v))) continue; for (let r = rg.s.r + 1; r <= rg.e.r; r++) { const sel = ws[XLSX.utils.encode_cell({ r, c })]; if (sel && sel.t === 'n') sel.z = '0.00'; } } } catch (e) { /* abaikan */ } return ws; }
 function labelKategori_(nilai) { const l = kategoriNilai_(nilai).label; return l.charAt(0) + l.slice(1).toLowerCase(); }
 function pesanUntukNilai_(nilai, pesanNilaiRaw) {
   const n = Math.round(Number(nilai) || 0);
@@ -5988,7 +5990,7 @@ const Guru = {
     const jmlLulus = data.filter(r => String(r.lulus) === 'true').length;
     const hitungKat = { istimewa: 0, baik: 0, memadai: 0, kurang: 0 };
     data.forEach(r => { hitungKat[kategoriNilai_(r.nilai).kode]++; });
-    tampilkanInfoFilter_('kelas-rekap-info', data.length, semua.length, (rata === null ? '' : 'rata-rata nilai ' + (Math.round(rata * 10) / 10) + ' • ') + jmlLulus + ' lulus, ' + (data.length - jmlLulus) + ' remedial • Istimewa ' + hitungKat.istimewa + ', Baik ' + hitungKat.baik + ', Memadai ' + hitungKat.memadai + ', Kurang ' + hitungKat.kurang);
+    tampilkanInfoFilter_('kelas-rekap-info', data.length, semua.length, (rata === null ? '' : 'rata-rata nilai ' + fmtNilai_(rata) + ' • ') + jmlLulus + ' lulus, ' + (data.length - jmlLulus) + ' remedial • Istimewa ' + hitungKat.istimewa + ', Baik ' + hitungKat.baik + ', Memadai ' + hitungKat.memadai + ', Kurang ' + hitungKat.kurang);
     if (data.length === 0) { cont.innerHTML = '<p class="subtitle">Tidak ada siswa yang cocok dengan kelas/pencarian ini.</p>'; return; }
     const adaSurvei = !!state.guru._rekapSurveiJenis;
     const adaKolomBukti = !!state.guru._rekapBuktiMode || semua.some(r => Array.isArray(r.bukti) && r.bukti.length);
@@ -6149,7 +6151,7 @@ const Guru = {
       return `${Guru._identitasSekolah_().kop}
       <h2 class="cp-judul">Laporan Evaluasi Jawaban Siswa</h2>
       <table class="cp-info"><tbody>
-        <tr><th>Nama</th><td>: ${esc(rekap.nama || '-')}</td><th>Nilai</th><td>: <strong class="cp-nilai">${esc(String(rekap.nilai))}</strong> ${status}</td></tr>
+        <tr><th>Nama</th><td>: ${esc(rekap.nama || '-')}</td><th>Nilai</th><td>: <strong class="cp-nilai">${fmtNilai_(rekap.nilai)}</strong> ${status}</td></tr>
         <tr><th>Kelas</th><td>: ${esc(rekap.kelas || '-')}</td><th>Selesai</th><td>: ${rekap.selesai ? esc(formatTanggal(rekap.selesai)) : '-'}</td></tr>
         <tr><th>Ujian</th><td colspan="3">: ${esc(judulUjian || '-')}</td></tr>
       </tbody></table>${ringkas}`;
@@ -6157,7 +6159,7 @@ const Guru = {
     const kartuBernama = ringkas.split('<span class="dj-skor">').join(`<span class="cp-pemilik">${esc(rekap.nama || '')}</span><span class="dj-skor">`);
     return `<article class="cp-siswa">
       <div class="cp-banner"><div><div class="cp-banner-nama">${esc(rekap.nama || '-')}</div><div class="cp-banner-sub">Kelas ${esc(rekap.kelas || '-')} • ${esc(judulUjian || '')}</div></div>
-      <div class="cp-banner-nilai"><strong class="cp-nilai">${esc(String(rekap.nilai))}</strong> ${status}</div></div>${kartuBernama}</article>`;
+      <div class="cp-banner-nilai"><strong class="cp-nilai">${fmtNilai_(rekap.nilai)}</strong> ${status}</div></div>${kartuBernama}</article>`;
   },
 
   // Pasang #cetak-area, render rumus, tunggu gambar/font, lalu window.print().
@@ -6357,7 +6359,7 @@ const Guru = {
     if (!ringkasan.length) { toast('Gagal mengambil detail jawaban. Coba lagi.', 'error'); return; }
 
     const wb = XLSX.utils.book_new();
-    const wsR = XLSX.utils.aoa_to_sheet([['No', 'Nama', 'Kelas', 'Nilai', 'Keterangan', 'Kategori', 'Jumlah Soal', 'Benar', 'Sebagian Benar', 'Salah', 'Tidak Dijawab', 'Perlu Dikoreksi', 'Nomor Soal yang Perlu Dievaluasi (urutan di lembar siswa)'], ...ringkasan]);
+    const wsR = zNilai_(XLSX.utils.aoa_to_sheet([['No', 'Nama', 'Kelas', 'Nilai', 'Keterangan', 'Kategori', 'Jumlah Soal', 'Benar', 'Sebagian Benar', 'Salah', 'Tidak Dijawab', 'Perlu Dikoreksi', 'Nomor Soal yang Perlu Dievaluasi (urutan di lembar siswa)'], ...ringkasan]));
     wsR['!cols'] = [5, 30, 10, 8, 12, 12, 12, 8, 14, 8, 14, 15, 40].map(w => ({ wch: w }));
     wsR['!freeze'] = { xSplit: 0, ySplit: 1 };
     XLSX.utils.book_append_sheet(wb, wsR, 'Ringkasan');
@@ -6478,7 +6480,7 @@ const Guru = {
           return svSet.dim.map(d => x.h.dim[d[0]].indeks).concat([x.nilai, x.kat.label, x.kes === null ? '' : x.kes, x.baik ? 'Baik' : 'Perlu dicek']);
         })() : []);
       });
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const ws = zNilai_(XLSX.utils.aoa_to_sheet([headers, ...rows]));
       ws['!cols'] = (denganUjian ? [5, 28] : [5]).concat([30, 10, 8, 12, 12, 12, 18, 18, 20, 14, 14, 30, 14], adaSv ? svSet.dim.map(() => 16).concat([16, 16, 20, 18]) : []).map(w => ({ wch: w }));
       ws['!freeze'] = { xSplit: 0, ySplit: 1 };
       ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(rows.length, 1), c: headers.length - 1 } }) };
@@ -8845,7 +8847,7 @@ const BuktiGaleri = {
     wrap.innerHTML = `<div class="bg-panel" role="dialog" aria-modal="true" aria-label="Bukti orak-orik">
       <div class="bg-head">
         <div><div class="bg-judul">Bukti Orak-Orik — ${escapeHtml_(r.nama)}</div>
-        <div class="bg-sub">${escapeHtml_(r.kelas)} • Nilai ${escapeHtml_(r.nilai)} • ${foto.length} foto</div></div>
+        <div class="bg-sub">${escapeHtml_(r.kelas)} • Nilai ${fmtNilai_(r.nilai)} • ${foto.length} foto</div></div>
         <button type="button" class="bg-tutup" data-aksi="tutup" aria-label="Tutup"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <div class="bg-viewer">

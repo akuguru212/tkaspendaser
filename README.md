@@ -1,3 +1,9 @@
+# v43z87 — Semua nilai tampil tepat 2 desimal berkoma (83,00 / 83,33)
+
+- Format nilai kini selalu 2 digit di belakang koma (80 -> 80,00) di layar hasil siswa, Rekap Nilai, Pemantauan, Leaderboard, Hasil Literasi & Numerasi, Perkembangan Siswa, Portal Siswa, kartu cetak, dan PDF.
+- Ekspor Excel: kolom Nilai/Rata-rata/Akhir/Literasi/Numerasi diberi format sel 0.00.
+- Tidak diubah: persentase penguasaan materi (%), skor/kesungguhan survei, dan jumlah (kartu dashboard).
+
 # v43z86 — Nilai tampil 2 desimal berkoma (83,33)
 
 - Perhitungan nilai tidak berubah (sudah 2 desimal: 25 benar dari 30 = 83,33). Yang diperbaiki adalah **tampilan**: layar hasil siswa, Rekap Nilai, Pemantauan, Hasil Literasi & Numerasi, Analisis Materi, Perkembangan Siswa, dan PDF kini menampilkan maksimal 2 desimal dengan koma (sebelumnya titik "83.33" atau dibulatkan "83,3"). Nilai bulat tetap tanpa koma (80).
