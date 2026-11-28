@@ -405,15 +405,37 @@ const Anbk = (function () {
   }
 
   // ---------------- Kartu Login ----------------
+  // Guru dapat memilih siswa (1, 10, atau sebanyak yang dibutuhkan) lewat daftar centang; kartu yang
+  // dicetak/disimpan PDF hanya milik siswa yang tercentang. Pilihan disimpan per indeks data siswa.
+  let klPilih = new Set();
+  function klStyle() {
+    if ($('kl-pilih-style')) return;
+    const st = document.createElement('style'); st.id = 'kl-pilih-style';
+    st.textContent = `
+      #modal-kartu-login .kl-tools { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; margin: .2rem 0 .5rem; }
+      #modal-kartu-login .kl-tools input[type=search] { flex: 1 1 160px; min-width: 0; }
+      #modal-kartu-login .kl-tools button { padding: .35rem .7rem; font-size: .82rem; }
+      #modal-kartu-login .kl-list { max-height: 260px; overflow-y: auto; border: 1px solid var(--c-line); border-radius: 10px; background: var(--c-surface); }
+      #modal-kartu-login .kl-item { display: flex; align-items: center; gap: .6rem; padding: .5rem .7rem; min-height: 42px; border-bottom: 1px solid var(--c-line); cursor: pointer; margin: 0; font-weight: 400; }
+      #modal-kartu-login .kl-item:last-child { border-bottom: 0; }
+      #modal-kartu-login .kl-item:hover { background: var(--c-hover); }
+      #modal-kartu-login .kl-item input { width: 18px; height: 18px; flex: none; margin: 0; }
+      #modal-kartu-login .kl-item .n { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+      #modal-kartu-login .kl-item .m { font-size: .76rem; color: var(--c-muted); white-space: nowrap; }
+      #modal-kartu-login .kl-info { font-size: .85rem; color: var(--c-muted); margin: .45rem 0 0; }
+      #modal-kartu-login .kl-kosong { padding: 1rem; text-align: center; color: var(--c-muted); font-size: .88rem; }`;
+    document.head.appendChild(st);
+  }
   function bukaKartuLogin() {
     const semua = state.guru.daftarSiswa || [];
     if (!semua.length) { toast('Belum ada data siswa. Impor atau tambahkan siswa dulu.', 'error'); return; }
+    klStyle();
     let m = $('modal-kartu-login'); if (m) m.remove();
     const kelas = Array.from(new Set(semua.map(s => s.kelas || ''))).sort((a, b) => a.localeCompare(b, 'id', { numeric: true }));
     const pil = $('filter-kelas-siswa') ? $('filter-kelas-siswa').value : '';
     m = document.createElement('div'); m.id = 'modal-kartu-login'; m.className = 'modal-backdrop';
     m.innerHTML = `<div class="modal"><h3>Cetak Kartu Login</h3>
-      <p class="subtitle" style="margin-top:-.4rem">Kartu berisi logo, QR (memindai QR membuka aplikasi dengan username &amp; password terisi), nama, NISN, tempat/tanggal lahir, username dan password.</p>
+      <p class="subtitle" style="margin-top:-.4rem">Kartu berisi logo, QR (memindai QR membuka aplikasi dengan username &amp; password terisi), nama, NISN, tempat/tanggal lahir, username dan password. Centang siswa yang kartunya ingin dicetak.</p>
       <div class="field"><label>Baris judul 1</label><input type="text" id="kl-j1" value="KARTU LOGIN  GLADI BERSIH"></div>
       <div class="field"><label>Baris judul 2</label><input type="text" id="kl-j2" value="TES KEMAMPUAN AKADEMIK  SMP/MTS"></div>
       <div class="field"><label>Baris judul 3</label><input type="text" id="kl-j3" value="TAHUN  ${new Date().getFullYear()}"></div>
@@ -421,14 +443,54 @@ const Anbk = (function () {
         <div class="field"><label>Kelas</label><select id="kl-kelas"><option value="">Semua kelas</option>${kelas.map(k => `<option value="${esc(k)}"${k === pil ? ' selected' : ''}>${esc(k || '(tanpa kelas)')}</option>`).join('')}</select></div>
         <div class="field"><label>Ukuran kartu</label><select id="kl-ukuran"><option value="2">Ringkas: 8 kartu per halaman A4</option><option value="1">Besar: 3 kartu per halaman A4</option></select></div>
       </div>
+      <div class="field"><label>Pilih siswa</label>
+        <div class="kl-tools">
+          <input type="search" id="kl-cari" placeholder="Cari nama / NISN..." autocomplete="off">
+          <button type="button" class="secondary" id="kl-semua">Pilih semua</button>
+          <button type="button" class="secondary" id="kl-kosong">Kosongkan</button>
+        </div>
+        <div class="kl-list" id="kl-list"></div>
+        <p class="kl-info" id="kl-info"></p>
+      </div>
       <div class="modal-close-row"><button class="secondary" onclick="document.getElementById('modal-kartu-login').remove()">Batal</button><button class="accent" id="kl-cetak" onclick="Anbk.cetakKartuLogin()">Cetak / Simpan PDF</button></div></div>`;
     document.body.appendChild(m);
+
+    const urut = semua.map((s, i) => i).sort((x, y) => String(semua[x].kelas || '').localeCompare(String(semua[y].kelas || ''), 'id', { numeric: true }) || String(semua[x].nama || '').localeCompare(String(semua[y].nama || ''), 'id'));
+    const tampil = () => {
+      const k = $('kl-kelas').value, q = $('kl-cari').value.trim().toLowerCase();
+      return urut.filter(i => (!k || (semua[i].kelas || '') === k) && (!q || String(semua[i].nama || '').toLowerCase().includes(q) || String(semua[i].nisn || '').toLowerCase().includes(q)));
+    };
+    const ringkas = () => {
+      const n = klPilih.size;
+      $('kl-info').textContent = n ? n + ' siswa dipilih \u2014 ' + n + ' kartu akan dicetak.' : 'Belum ada siswa dipilih.';
+      $('kl-cetak').textContent = n ? 'Cetak / Simpan PDF (' + n + ' kartu)' : 'Cetak / Simpan PDF';
+    };
+    const gambar = () => {
+      const t = tampil();
+      $('kl-list').innerHTML = t.length ? t.map(i => { const s = semua[i];
+        return `<label class="kl-item"><input type="checkbox" data-i="${i}"${klPilih.has(i) ? ' checked' : ''}><span class="n">${esc(s.nama || '(tanpa nama)')}</span><span class="m">${esc(s.kelas || '')}${s.nisn ? ' \u00b7 ' + esc(s.nisn) : ''}</span></label>`; }).join('')
+        : '<div class="kl-kosong">Tidak ada siswa yang cocok.</div>';
+      ringkas();
+    };
+    // Ganti kelas: pilihan diatur ulang ke seluruh siswa kelas itu (sama seperti perilaku semula).
+    $('kl-kelas').addEventListener('change', () => { $('kl-cari').value = ''; klPilih = new Set(tampil()); gambar(); });
+    $('kl-cari').addEventListener('input', gambar);
+    $('kl-semua').addEventListener('click', () => { tampil().forEach(i => klPilih.add(i)); gambar(); });
+    $('kl-kosong').addEventListener('click', () => { klPilih = new Set(); gambar(); });
+    $('kl-list').addEventListener('change', (e) => {
+      const c = e.target; if (!c || c.type !== 'checkbox') return;
+      const i = Number(c.getAttribute('data-i')); if (c.checked) klPilih.add(i); else klPilih.delete(i);
+      ringkas();
+    });
+    klPilih = new Set(tampil());   // awal: semua siswa pada filter kelas terpilih (centang/kosongkan sesuai kebutuhan)
+    gambar();
   }
   function cetakKartuLogin() {
     const kelas = $('kl-kelas').value, kol = $('kl-ukuran').value;
     const j = [$('kl-j1').value, $('kl-j2').value, $('kl-j3').value].filter(x => x.trim());
-    let daftar = (state.guru.daftarSiswa || []).filter(s => !$('kl-kelas').value || (s.kelas || '') === kelas);
-    if (!daftar.length) { toast('Tidak ada siswa untuk dicetak.', 'error'); return; }
+    const semua = state.guru.daftarSiswa || [];
+    let daftar = Array.from(klPilih).sort((x, y) => x - y).map(i => semua[i]).filter(Boolean);
+    if (!daftar.length) { toast('Pilih (centang) minimal 1 siswa yang kartunya akan dicetak.', 'error'); return; }
     daftar = daftar.slice().sort((a, b) => String(a.kelas || '').localeCompare(String(b.kelas || ''), 'id', { numeric: true }) || String(a.nama || '').localeCompare(String(b.nama || ''), 'id'));
     const base = location.href.split('#')[0];
     const kartu = daftar.map(s => {
@@ -439,8 +501,9 @@ const Anbk = (function () {
         <table class="kl-tb">${baris.map(r => `<tr><td class="k">${r[0]}</td><td class="c">:</td><td class="v${r[2] ? ' b' : ''}">${esc(r[1] || '')}</td></tr>`).join('')}</table></div>`;
     }).join('');
     const html = `<div class="kl-wrap kl-k${kol}">${kartu}</div>`;
+    const judulBerkas = 'Kartu Login' + (daftar.length === 1 ? ' ' + (daftar[0].nama || '') : (kelas ? ' ' + kelas : ''));
     $('modal-kartu-login').remove();
-    Guru._cetakArea_(html, 'Kartu Login' + (kelas ? ' ' + kelas : '')).then(() => {});
+    Guru._cetakArea_(html, judulBerkas).then(() => {});
     const a = $('cetak-area'); if (a) a.classList.add('kl-area');
   }
   // ---------------- impor data siswa (sesuai Kartu Login) ----------------

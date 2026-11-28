@@ -1,3 +1,12 @@
+# v43z85 — Cetak Kartu Login bisa memilih siswa (1, 10, atau sesuai keinginan)
+
+- Jendela **🪪 Cetak Kartu Login** kini punya daftar centang siswa: kolom cari (nama/NISN), tombol **Pilih semua** dan **Kosongkan**, serta penghitung "n siswa dipilih". Hanya kartu siswa yang tercentang yang dicetak / disimpan PDF (1 siswa = 1 kartu, 10 siswa = 10 kartu, dst.).
+- Awalnya semua siswa pada filter Kelas sudah tercentang, jadi cara lama (cetak satu kelas penuh) tetap satu klik. Mengganti Kelas mengatur ulang pilihan ke seluruh siswa kelas itu; pilihan tetap tersimpan saat mencari. Bila hanya 1 siswa dipilih, nama berkas PDF memuat nama siswa itu.
+- Tata letak kartu, QR, ukuran kartu, dan fitur lain tidak berubah. `Code.gs` tidak berubah (tidak perlu deploy ulang).
+- File berubah: `anbk.js` (fungsi `bukaKartuLogin` dan `cetakKartuLogin`), `index.html` (`anbk.js?v=68`), `sw.js` (`hp83`), `README.md`.
+
+---
+
 # v43z84 — Template impor soal membaca Setuju/Tidak Setuju, Ya/Tidak, dan Fakta/Opini
 
 - Soal tipe **Kategori** (berlaku untuk Literasi, Numerasi, dan mapel lain karena memakai satu pembaca template) kini mengenali, selain Benar/Salah, Sesuai/Tidak Sesuai, dan Tepat/Tidak Tepat: **Setuju / Tidak Setuju**, **Ya / Tidak**, dan **Fakta / Opini**. Contoh kolom Opsi: `Siswa wajib berseragam | Setuju`, `Kota itu ramai | Ya`, `Harga naik 10% | Fakta`, `Menurut saya sungai itu indah. Opini`.
