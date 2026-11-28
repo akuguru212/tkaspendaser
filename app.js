@@ -1139,10 +1139,10 @@ function barisTabelJadiSoal_(headerIdx, nilai, guruId, kategoriDefault, petaGamb
     ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].forEach(h => {
       const teks = ambil('opsi' + h).replace(/<[^>]*>/g, '').trim();
       if (!teks) return;
-      // Format KATEGORI (Benar/Salah, Sesuai/Tidak Sesuai, Tepat/Tidak Tepat): teks diakhiri kata
+      // Format KATEGORI (Benar/Salah, Sesuai/Tidak Sesuai, Tepat/Tidak Tepat, Setuju/Tidak Setuju, Ya/Tidak, Fakta/Opini): teks diakhiri kata
       // kategori setelah pemisah, mis. \"x + y = 7 | Benar\" atau \"x - y = 2. Salah\". Pernyataan boleh
       // memuat tanda \"=\" sendiri; yang dipisah hanya kata kategori di ujung.
-      const mKat = teks.match(/^(.*?)\s*(?:\||->|→|=|:|\.|,|;)\s*(tidak\s+sesuai|tidak\s+tepat|benar|salah|sesuai|tepat)\s*$/i);
+      const mKat = teks.match(/^(.*?)\s*(?:\||->|→|=|:|\.|,|;)\s*(tidak\s+sesuai|tidak\s+tepat|tidak\s+setuju|benar|salah|sesuai|tepat|setuju|fakta|opini|ya|tidak)\s*$/i);
       if (mKat && mKat[1].trim()) {
         const kata = mKat[2].replace(/\s+/g, ' ').trim().toLowerCase();
         pasangan.push([mKat[1].trim(), kata.charAt(0).toUpperCase() + kata.slice(1)]);
@@ -1156,12 +1156,12 @@ function barisTabelJadiSoal_(headerIdx, nilai, guruId, kategoriDefault, petaGamb
     if (pasangan.length < 2 && peringatan) peringatan.push(`"${potonganPertanyaan(pertanyaan)}": soal Jodohkan butuh minimal 2 pasangan ("kiri = kanan" pada kolom Opsi A, B, ...).`);
     const kiri = pasangan.map(x => x[0]);
     // Sisi kanan DIRINGKAS ke nilai unik (mis. Benar & Salah saja, bukan Benar/Salah/Benar/Salah),
-    // supaya soal kategori (Benar-Salah, Sesuai-Tidak Sesuai, Tepat-Tidak Tepat) tampil 2 kolom
+    // supaya soal kategori (Benar-Salah, Sesuai-Tidak Sesuai, Tepat-Tidak Tepat, Setuju-Tidak Setuju, Ya-Tidak, Fakta-Opini) tampil 2 kolom
     // dan penilaiannya bersih. Pasangan kata positif ditaruh lebih dulu.
     const normK = (t) => String(t).trim().toLowerCase();
     let unik = [];
     pasangan.forEach(p => { if (!unik.some(u => normK(u) === normK(p[1]))) unik.push(p[1]); });
-    const positif = /^(benar|sesuai|tepat|ya|setuju)$/i;
+    const positif = /^(benar|sesuai|tepat|ya|setuju|fakta)$/i;
     if (unik.length === 2 && !positif.test(unik[0].trim()) && positif.test(unik[1].trim())) unik = [unik[1], unik[0]];
     else if (unik.length > 2 && unik.length === pasangan.length) unik = unik.slice(1).concat(unik.slice(0, 1)); // putar 1 posisi: tidak sejajar dgn kiri
     const kanan = unik;
@@ -5651,7 +5651,7 @@ const Guru = {
     ];
     const items = [
       { text: 'TEMPLATE IMPORT SOAL — CBT Online', heading: true },
-      { text: 'Isi tabel di bawah, SATU BARIS = SATU SOAL (kolom Pembahasan opsional: penjelasan jawaban yang bisa dilihat siswa bila guru mengaktifkannya di pengaturan ujian). Kolom Tipe: PG (pilihan ganda), PGK (pilihan ganda kompleks/kunci boleh lebih dari 1), BS (benar/salah), Kategori (Benar/Salah per pernyataan, PGK Kategori), Jodohkan, Essay. Untuk Kategori, tiap Opsi ditulis "pernyataan | Benar" atau "pernyataan | Salah" (juga boleh Sesuai/Tidak Sesuai, Tepat/Tidak Tepat); kolom Kunci dikosongkan. Pernyataan boleh memuat tanda =, mis. "x - y = 2 | Salah". Kolom Kunci cukup diisi HURUF opsi yang benar (mis. "C"), untuk PGK pisah dgn koma (mis. "A,C"), untuk BS isi "Benar"/"Salah", untuk Essay isi kata kunci penilaian dipisah koma. Kolom Gambar: boleh dikosongkan, boleh diisi link gambar publik, ATAU cukup TEMPEL/SISIPKAN gambarnya langsung di dalam sel itu (Insert > Pictures di Word) -- saat diimpor gambar tersebut otomatis terdeteksi & terunggah sendiri, tanpa perlu file gambar terpisah. Gambar juga boleh ditempel langsung di tengah sel Pertanyaan/Opsi kalau perlu. Kolom yang tidak dipakai (mis. Opsi E utk soal 4 opsi) boleh dikosongkan. Tipe Jodohkan sebaiknya dibuat lewat "Tambah Soal Manual" karena pasangannya lebih mudah diatur lewat formulir. RUMUS: tulis lewat Insert > Equation di Word (pecahan, pangkat, akar, tanda coret, dst) -- otomatis ikut terbaca & tampil sama di aplikasi. Kolom Pembahasan juga mempertahankan baris baru, huruf tebal, pangkat/indeks, dan gambar.' },
+      { text: 'Isi tabel di bawah, SATU BARIS = SATU SOAL (kolom Pembahasan opsional: penjelasan jawaban yang bisa dilihat siswa bila guru mengaktifkannya di pengaturan ujian). Kolom Tipe: PG (pilihan ganda), PGK (pilihan ganda kompleks/kunci boleh lebih dari 1), BS (benar/salah), Kategori (Benar/Salah per pernyataan, PGK Kategori), Jodohkan, Essay. Untuk Kategori, tiap Opsi ditulis "pernyataan | Benar" atau "pernyataan | Salah" (juga boleh Sesuai/Tidak Sesuai, Tepat/Tidak Tepat, Setuju/Tidak Setuju, Ya/Tidak, Fakta/Opini); kolom Kunci dikosongkan. Pernyataan boleh memuat tanda =, mis. "x - y = 2 | Salah". Kolom Kunci cukup diisi HURUF opsi yang benar (mis. "C"), untuk PGK pisah dgn koma (mis. "A,C"), untuk BS isi "Benar"/"Salah", untuk Essay isi kata kunci penilaian dipisah koma. Kolom Gambar: boleh dikosongkan, boleh diisi link gambar publik, ATAU cukup TEMPEL/SISIPKAN gambarnya langsung di dalam sel itu (Insert > Pictures di Word) -- saat diimpor gambar tersebut otomatis terdeteksi & terunggah sendiri, tanpa perlu file gambar terpisah. Gambar juga boleh ditempel langsung di tengah sel Pertanyaan/Opsi kalau perlu. Kolom yang tidak dipakai (mis. Opsi E utk soal 4 opsi) boleh dikosongkan. Tipe Jodohkan sebaiknya dibuat lewat "Tambah Soal Manual" karena pasangannya lebih mudah diatur lewat formulir. RUMUS: tulis lewat Insert > Equation di Word (pecahan, pangkat, akar, tanda coret, dst) -- otomatis ikut terbaca & tampil sama di aplikasi. Kolom Pembahasan juga mempertahankan baris baru, huruf tebal, pangkat/indeks, dan gambar.' },
       { table: { headers, rows } }
     ];
     unduhDocx_('Template_Import_Soal_CBT.docx', items);

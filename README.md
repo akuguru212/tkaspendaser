@@ -1,3 +1,11 @@
+# v43z84 — Template impor soal membaca Setuju/Tidak Setuju, Ya/Tidak, dan Fakta/Opini
+
+- Soal tipe **Kategori** (berlaku untuk Literasi, Numerasi, dan mapel lain karena memakai satu pembaca template) kini mengenali, selain Benar/Salah, Sesuai/Tidak Sesuai, dan Tepat/Tidak Tepat: **Setuju / Tidak Setuju**, **Ya / Tidak**, dan **Fakta / Opini**. Contoh kolom Opsi: `Siswa wajib berseragam | Setuju`, `Kota itu ramai | Ya`, `Harga naik 10% | Fakta`, `Menurut saya sungai itu indah. Opini`.
+- Kolom jawaban tetap diringkas jadi 2 kolom; kata positif (Benar/Sesuai/Tepat/Setuju/Ya/Fakta) ditaruh lebih dulu. Penilaian tetap all-or-nothing; tipe soal lain, tampilan, dan survei tidak berubah. `Code.gs` tidak berubah (tidak perlu deploy ulang).
+- File berubah: `app.js` (pengenal kata kategori + teks petunjuk template), `index.html` (`app.js?v=90`), `sw.js` (`hp82`), `README.md`.
+
+---
+
 # v43z81 — Nama tes pada kartu "Simulasi yang Telah Diselesaikan" tidak lagi terpotong
 
 - Judul ujian seperti "Literasi + Sulingjar (1)" sebelumnya ditampilkan hanya "+ Sulingjar (1)" karena kata Literasi/Numerasi dibuang saat tes dikelompokkan. Kini kepala kartu menampilkan judul ujian lengkap (mis. "Literasi + Sulingjar (1)") bila nama tes tersisa tanda "+"/"&" di tepinya; bila Literasi dan Numerasi punya judul berbeda, tanda sambung yang menggantung dibuang ("Sulingjar (1)"). Tes bernama biasa (mis. "Tes 1") tidak berubah, begitu juga pengelompokan, grafik, dan perhitungan nilai.
