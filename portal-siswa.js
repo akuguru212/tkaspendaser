@@ -397,6 +397,14 @@ const PortalSiswa = (function () {
     return `<div class="sw-row"><span class="sw-ri" style="--c:${w}"><i class="fa-solid ${IKON_JENIS[j]}"></i></span><div class="sw-rt"><b>${esc(r.judul)}</b><small>${tglPendek(r.selesai)}, ${jamTxt(r.selesai)} · ${NAMA_JENIS[j]}</small></div>${badgeStatus(r)}<span class="sw-rn">${r.nilai == null ? '–' : fmt(r.nilai)}</span></div>`;
   }
 
+  // Nama tes pada kartu: bila label hasil pengelompokan tersisa tanda sambung di tepi (mis. judul
+  // "Literasi + Sulingjar (1)" menjadi "+ Sulingjar (1)"), tampilkan judul ujian aslinya.
+  function judulTes(t) {
+    const lb = String(t.label || '');
+    if (!/^[+&]|[+&]$/.test(lb)) return lb;
+    const js = [...new Set(Object.values(t.ref || {}).map(r => r && r.judul).filter(Boolean))];
+    return js.length === 1 ? js[0] : (lb.replace(/^[\s+&]+|[\s+&]+$/g, '') || lb);
+  }
   // ---------------- SIMULASI SELESAI ----------------
   function vSelesai(isi) {
     const rk = ringkasan(), tes = PS.td.tes, jenis = PS.td.jenis;
@@ -410,7 +418,7 @@ const PortalSiswa = (function () {
         if (n == null) return `<div class="sw-js belum"><span class="sw-ri" style="--c:${WARNA_JENIS[j]}"><i class="fa-solid ${IKON_JENIS[j]}"></i></span><b>${NAMA_JENIS[j]}</b><small>Belum dikerjakan</small><span class="sw-n">–</span></div>`;
         return `<div class="sw-js"><span class="sw-ri" style="--c:${WARNA_JENIS[j]}"><i class="fa-solid ${IKON_JENIS[j]}"></i></span><b>${NAMA_JENIS[j]}</b><small>${ref ? tglPendek(ref.selesai) + ' · ' : ''}${ref ? badgeStatus(ref) : ''}</small><span class="sw-n">${fmt(n)}</span><span class="sw-nbar" style="grid-column:2/3"><i class="${levelNilai(n)}" style="width:${Math.max(2, bulat(n))}%"></i></span></div>`;
       }).join('');
-      return `<div class="sw-card sw-tc"><div class="sw-tc-h"><div><b>${esc(t.label)}</b><small>${t.akhir == null ? 'Belum ada nilai' : 'Rata-rata nilai'}</small></div><div class="sw-avg"><strong>${t.akhir == null ? '–' : fmt(t.akhir)}</strong>${d == null ? '' : PG.badgeTren({ arah: d >= PG.AMBANG_TREN ? 'naik' : (d <= -PG.AMBANG_TREN ? 'turun' : 'stabil'), delta: d }, { pendek: true })}</div></div><div class="sw-tc-b">${baris}</div></div>`;
+      return `<div class="sw-card sw-tc"><div class="sw-tc-h"><div><b>${esc(judulTes(t))}</b><small>${t.akhir == null ? 'Belum ada nilai' : 'Rata-rata nilai'}</small></div><div class="sw-avg"><strong>${t.akhir == null ? '–' : fmt(t.akhir)}</strong>${d == null ? '' : PG.badgeTren({ arah: d >= PG.AMBANG_TREN ? 'naik' : (d <= -PG.AMBANG_TREN ? 'turun' : 'stabil'), delta: d }, { pendek: true })}</div></div><div class="sw-tc-b">${baris}</div></div>`;
     }).join('');
     isi.innerHTML = `<div class="sw-konten" style="display:grid;gap:1rem">${judulHalaman('Daftar tes yang sudah kamu selesaikan beserta nilainya. Bila sebuah tes dikerjakan lebih dari sekali, nilai tertinggi yang dipakai.')}${sum}<div class="sw-tes">${kartu}</div></div>`;
   }

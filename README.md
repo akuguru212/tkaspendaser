@@ -1,3 +1,10 @@
+# v43z81 — Nama tes pada kartu "Simulasi yang Telah Diselesaikan" tidak lagi terpotong
+
+- Judul ujian seperti "Literasi + Sulingjar (1)" sebelumnya ditampilkan hanya "+ Sulingjar (1)" karena kata Literasi/Numerasi dibuang saat tes dikelompokkan. Kini kepala kartu menampilkan judul ujian lengkap (mis. "Literasi + Sulingjar (1)") bila nama tes tersisa tanda "+"/"&" di tepinya; bila Literasi dan Numerasi punya judul berbeda, tanda sambung yang menggantung dibuang ("Sulingjar (1)"). Tes bernama biasa (mis. "Tes 1") tidak berubah, begitu juga pengelompokan, grafik, dan perhitungan nilai.
+- File berubah: `portal-siswa.js` (v10), `index.html`, `sw.js` (`hp79`), `README.md`.
+
+---
+
 # v43z80 — Menu siswa lain (HP) sangat elegan dan mewah
 
 - Berlaku di layar HP untuk menu **Simulasi Selesai, Grafik Perkembangan, Riwayat, Leaderboard, Analisis Materi, dan Profil Siswa**, selaras dengan Beranda (v43z79).
