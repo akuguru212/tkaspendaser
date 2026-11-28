@@ -135,6 +135,10 @@ const Leaderboard = (function () {
 #guru-portal .lb-root .lb-pod.g3 { background: linear-gradient(160deg, #fdebd9 0%, #e8a770 40%, #c27a40 80%, #a35f28 100%); }
 #guru-portal .lb-root .lb-pod.g1::before { background: linear-gradient(115deg, rgba(255,255,255,0) 30%, rgba(255,255,255,.65) 48%, rgba(255,255,255,0) 66%); background-size: 260% 100%; background-position: 130% 0; animation: lb-kilau 5.5s ease-in-out infinite; }
 @keyframes lb-kilau { 0%, 55% { background-position: 130% 0; } 100% { background-position: -40% 0; } }
+#guru-portal .lb-root .lb-pod.g2::before { background: linear-gradient(65deg, rgba(255,255,255,0) 32%, rgba(228,240,255,.78) 48%, rgba(255,255,255,0) 64%) -40% 0 / 260% 100% no-repeat, linear-gradient(120deg, rgba(255,255,255,.42) 0%, rgba(255,255,255,0) 42%); animation: lb-kilau-perak 7.5s ease-in-out 1.6s infinite; }
+@keyframes lb-kilau-perak { 0%, 50% { background-position: -40% 0, 0 0; } 100% { background-position: 130% 0, 0 0; } }
+#guru-portal .lb-root .lb-pod.g3::before { background: linear-gradient(172deg, rgba(255,255,255,0) 30%, rgba(255,222,186,.75) 48%, rgba(255,255,255,0) 66%) 0 130% / 100% 260% no-repeat, linear-gradient(120deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,0) 42%); animation: lb-kilau-perunggu 6.5s ease-in-out 3.2s infinite; }
+@keyframes lb-kilau-perunggu { 0%, 45% { background-position: 0 130%, 0 0; } 100% { background-position: 0 -40%, 0 0; } }
 #guru-portal .lb-root .lb-pod-medal { width: 38px; height: 38px; top: -19px; border: 2px solid rgba(255,255,255,.95); box-shadow: 0 6px 14px rgba(15,30,55,.28), inset 0 -2px 4px rgba(0,0,0,.08); }
 #guru-portal .lb-root .g1 .lb-pod-medal { background: linear-gradient(145deg, #fff7d1, #ffd45a); }
 #guru-portal .lb-root .g3 .lb-pod-medal { background: linear-gradient(145deg, #ffe8d3, #f0b685); }
@@ -156,7 +160,7 @@ const Leaderboard = (function () {
 #guru-portal .lb-root tr.lb-r2 td { background: linear-gradient(90deg, color-mix(in srgb, #94a3b8 34%, var(--c-surface)), color-mix(in srgb, #94a3b8 14%, var(--c-surface)) 55%); }
 #guru-portal .lb-root tr.lb-r3 td { background: linear-gradient(90deg, color-mix(in srgb, #d98f55 28%, var(--c-surface)), color-mix(in srgb, #d98f55 10%, var(--c-surface)) 55%); }
 #guru-portal .lb-root .lb-bar { height: 6px; }
-@media (prefers-reduced-motion: reduce) { #guru-portal .lb-root .lb-pod.g1::before { animation: none; } #guru-portal .lb-root .lb-pod, #guru-portal .lb-root .lb-stat { transition: none; } }
+@media (prefers-reduced-motion: reduce) { #guru-portal .lb-root .lb-pod.g1::before, #guru-portal .lb-root .lb-pod.g2::before, #guru-portal .lb-root .lb-pod.g3::before { animation: none; } #guru-portal .lb-root .lb-pod, #guru-portal .lb-root .lb-stat { transition: none; } }
 @media (max-width: 680px) { #guru-portal .lb-root .lb-pod:hover { transform: none; } }
 @media (max-width: 680px) { #guru-portal .lb-root .lb-podium { padding: 1.7rem .6rem .2rem; } }
 #modal-lb-atur table.lb-atur { width: 100%; border-collapse: collapse; font-size: .85rem; }

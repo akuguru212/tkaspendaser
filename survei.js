@@ -124,6 +124,9 @@ const Survei = (function () {
 .sv-pb-saran { border-left: 4px solid #0d6efd; border-radius: 0 8px 8px 0; margin-top: 10px; }
 .sv-no { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 22px; padding: 0 6px; margin-right: 8px; border-radius: 6px; background: #1f4e79; color: #fff; font-weight: 700; font-size: .72rem; vertical-align: 1px; font-variant-numeric: tabular-nums; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .sv-r-ind { margin-left: 32px; } .sv-neg { color: #8a94a0; font-size: .72rem; font-style: normal; }
+.sv-no { box-sizing: border-box; min-width: 30px; padding: 0 5px; text-indent: 0; flex: none; }
+.sv-r-t, .sv-pb-t { padding-left: 38px; text-indent: -38px; }
+.sv-r-t .sv-r-ind, .sv-pb-t .sv-r-ind { margin-left: 0; text-indent: 0; }
 .sv-pb-dn .sv-hit { margin-left: 6px; vertical-align: 1px; }
 .sv-sub { margin: 4px 0 10px; padding: 8px 12px; border-radius: 10px; background: #f6f8fb; border: 1px solid rgba(128,128,128,.2); }
 .sv-sub-h { font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #6c757d; margin-bottom: 4px; }

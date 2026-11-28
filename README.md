@@ -1,3 +1,18 @@
+# v43z75 — Kilau cahaya juara 2 & 3 (Leaderboard & Leaderboard Survei)
+
+- Juara 2 dan 3 kini punya siluet cahaya seperti juara 1, tiap peringkat berbeda: **emas** menyapu diagonal kiri ke kanan (5,5 dtk); **perak** menyapu kanan ke kiri dengan cahaya kebiruan (7,5 dtk, jeda 1,6 dtk); **perunggu** menyapu dari bawah ke atas dengan cahaya hangat (6,5 dtk, jeda 3,2 dtk). Jeda dibuat berbeda agar kilau bergantian, tidak serempak. Mati otomatis bila perangkat memilih "kurangi gerakan".
+- File berubah: `leaderboard.js` (v8), `index.html`, `sw.js` (`hp73`), `README.md`.
+
+---
+
+# v43z74 — Perataan teks butir survei (hanging indent)
+
+- Pada Detail Jawaban Survei (layar dan Cetak/PDF), teks butir yang turun ke baris kedua (mis. kata "dipahami") kini sejajar lurus dengan awal teks di atasnya, tidak lagi masuk ke bawah lencana nomor. Lebar lencana nomor dibuat seragam, dan baris keterangan (kode · dimensi) ikut sejajar. Berlaku juga di bagian "Butir dengan skor rendah", daftar per dimensi, dan dokumen PDF Detail Survei (per kelas / semua siswa).
+- Menu lain sudah diperiksa: opsi jawaban di Detail Jawaban (layar memakai flex, cetak memakai kolom sejajar) dan kartu soal Hasil Literasi & Numerasi sudah rapi, jadi tidak diubah.
+- File berubah: `survei.js` (v34), `index.html`, `sw.js` (`hp72`), `README.md`.
+
+---
+
 # v43z73 — Leaderboard & Leaderboard Survei: sentuhan mewah
 
 - Podium logam emas/perak/perunggu lebih dalam, cincin foto berwarna per peringkat, kilau emas bergerak halus di juara 1 (mati otomatis bila perangkat memilih "kurangi gerakan"), kartu terangkat saat kursor menyentuh, lencana medali lebih besar, kotak nilai bergaya kaca.
