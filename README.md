@@ -1,3 +1,7 @@
+# v43z86 — Nilai tampil 2 desimal berkoma (83,33)
+
+- Perhitungan nilai tidak berubah (sudah 2 desimal: 25 benar dari 30 = 83,33). Yang diperbaiki adalah **tampilan**: layar hasil siswa, Rekap Nilai, Pemantauan, Hasil Literasi & Numerasi, Analisis Materi, Perkembangan Siswa, dan PDF kini menampilkan maksimal 2 desimal dengan koma (sebelumnya titik "83.33" atau dibulatkan "83,3"). Nilai bulat tetap tanpa koma (80).
+
 # v43z85 — Cetak Kartu Login bisa memilih siswa (1, 10, atau sesuai keinginan)
 
 - Jendela **🪪 Cetak Kartu Login** kini punya daftar centang siswa: kolom cari (nama/NISN), tombol **Pilih semua** dan **Kosongkan**, serta penghitung "n siswa dipilih". Hanya kartu siswa yang tercentang yang dicetak / disimpan PDF (1 siswa = 1 kartu, 10 siswa = 10 kartu, dst.).

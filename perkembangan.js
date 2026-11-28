@@ -21,9 +21,9 @@ const Perkembangan = (function () {
   const esc = (s) => escapeHtml_(String(s == null ? '' : s));
   const norm = (t) => String(t == null ? '' : t).trim().toLowerCase().replace(/\s+/g, ' ');
   const bulat = (n) => Math.round(Number(n) || 0);
-  const r1 = (n) => Math.round(Number(n) * 10) / 10;
-  const fmt = (n) => (n == null || isNaN(n)) ? '–' : r1(n).toLocaleString('id-ID', { maximumFractionDigits: 1 });
-  const fmtD = (n) => (n > 0 ? '+' : (n < 0 ? '−' : '')) + Math.abs(r1(n)).toLocaleString('id-ID', { maximumFractionDigits: 1 });
+  const r1 = (n) => Math.round(Number(n) * 100) / 100;
+  const fmt = (n) => (n == null || isNaN(n)) ? '–' : r1(n).toLocaleString('id-ID', { maximumFractionDigits: 2 });
+  const fmtD = (n) => (n > 0 ? '+' : (n < 0 ? '−' : '')) + Math.abs(r1(n)).toLocaleString('id-ID', { maximumFractionDigits: 2 });
   const AMBANG_TREN = 3;
   const SERI = {
     literasi: { nama: 'Literasi', warna: '#2563eb', marker: 'circle' },

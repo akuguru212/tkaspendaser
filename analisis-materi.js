@@ -39,7 +39,7 @@ const AnalisisMateri = (function () {
   const adalahSurvei = (k) => k === 'karakter' || k === 'sulingjar';
   const levelUntuk = (k, p) => adalahSurvei(k) ? levelSurvei(p) : levelDari(p);
   const labelLevel = (k, lv) => (adalahSurvei(k) ? LABEL_LEVEL_SV : LABEL_LEVEL)[lv];
-  const fmt1 = (n) => (n == null || isNaN(n)) ? '–' : (Math.round(Number(n) * 10) / 10).toLocaleString('id-ID', { maximumFractionDigits: 1 });
+  const fmt1 = (n) => (n == null || isNaN(n)) ? '–' : (Math.round(Number(n) * 100) / 100).toLocaleString('id-ID', { maximumFractionDigits: 2 });
 
   // ---------------- gaya (disisipkan dari sini supaya tetap tampil walau berkas CSS tidak ikut terunggah) ----------------
   (function () {

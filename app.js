@@ -2243,6 +2243,8 @@ function badgeKategori_(nilai) {
   const k = kategoriNilai_(nilai);
   return `<span class="badge kat-badge" style="background:${k.latar};color:${k.warna};border:1px solid ${k.warna}">${k.label.charAt(0) + k.label.slice(1).toLowerCase()}</span>`;
 }
+// Format nilai gaya Indonesia: maks. 2 desimal, koma sebagai pemisah (83.33 -> 83,33; 80 -> 80)
+function fmtNilai_(n) { if (n === '' || n == null || isNaN(Number(n))) return '-'; return (Math.round(Number(n) * 100) / 100).toLocaleString('id-ID', { maximumFractionDigits: 2 }); }
 function labelKategori_(nilai) { const l = kategoriNilai_(nilai).label; return l.charAt(0) + l.slice(1).toLowerCase(); }
 function pesanUntukNilai_(nilai, pesanNilaiRaw) {
   const n = Math.round(Number(nilai) || 0);
@@ -5994,7 +5996,7 @@ const Guru = {
     cont.innerHTML = `<table class="ledger"><thead><tr><th style="width:2rem"><input type="checkbox" id="rekap-pilih-semua" title="Pilih semua yang tampil" onchange="Guru.pilihSemuaRekap(this.checked)"></th><th>Nama</th><th>Kelas</th><th>Nilai</th><th>Kategori</th>${adaSurvei ? `<th title="Nilai survei 0-100 (jawaban terbaik = skor 4) — klik Detail Jawaban untuk pembahasan">${state.guru._rekapSurveiJenis === 'karakter' ? 'Nilai Survei Karakter' : 'Nilai Sulingjar'}</th>` : ''}${adaKolomBukti ? '<th>Bukti Orak-Orik</th>' : ''}${adaCepat ? '<th title=\"Kecepatan mengerjakan: siswa yang menjawab terlalu cepat ditandai\">Kecepatan</th>' : ''}<th>Status</th><th>Pelanggaran</th><th>Selesai</th><th>Durasi</th><th></th></tr></thead><tbody>` +
       data.map(r => `<tr>
         <td><input type="checkbox" class="rekap-cek" value="${escapeHtml_(r.sesiId || '')}" ${r.sesiId ? '' : 'disabled'} ${r.sesiId && tercentang.has(String(r.sesiId)) ? 'checked' : ''}></td>
-        <td>${escapeHtml_(r.nama)}</td><td>${escapeHtml_(r.kelas)}</td><td><strong>${r.nilai}</strong></td><td>${badgeKategori_(r.nilai)}</td>
+        <td>${escapeHtml_(r.nama)}</td><td>${escapeHtml_(r.kelas)}</td><td><strong>${fmtNilai_(r.nilai)}</strong></td><td>${badgeKategori_(r.nilai)}</td>
         ${adaSurvei ? `<td>${Survei.selRekap(r)}</td>` : ''}
         ${adaKolomBukti ? `<td>${Guru.selBuktiRekap_(r)}</td>` : ''}
         ${adaCepat ? `<td>${Guru.selCepatRekap_(r)}</td>` : ''}
@@ -6257,7 +6259,7 @@ const Guru = {
       const baris = berhasil.map((x, n) => {
         const lulus = String(x.r.lulus) === 'true';
         const belum = x.items.filter(it => it.status !== 'benar').length;
-        return `<tr><td class="cp-c">${n + 1}</td><td>${esc(x.r.nama || '-')}</td><td class="cp-c">${esc(x.r.kelas || '-')}</td><td class="cp-c"><strong>${esc(String(x.r.nilai))}</strong></td><td class="cp-c">${lulus ? 'Lulus' : 'Remedial'}</td><td class="cp-c">${labelKategori_(x.r.nilai)}</td><td class="cp-c">${belum} / ${x.items.length}</td></tr>`;
+        return `<tr><td class="cp-c">${n + 1}</td><td>${esc(x.r.nama || '-')}</td><td class="cp-c">${esc(x.r.kelas || '-')}</td><td class="cp-c"><strong>${fmtNilai_(x.r.nilai)}</strong></td><td class="cp-c">${lulus ? 'Lulus' : 'Remedial'}</td><td class="cp-c">${labelKategori_(x.r.nilai)}</td><td class="cp-c">${belum} / ${x.items.length}</td></tr>`;
       }).join('');
       const cover = `<section class="cp-cover">${kop}
         <h2 class="cp-judul">Detail Jawaban Siswa — ${esc(labelKelas)}</h2>
@@ -6667,7 +6669,7 @@ const Guru = {
         <th>Nama</th><th>Kelas</th><th>Nilai</th>` + soalList.map(s => `<th title="${escapeHtml_(teksSoalPolos_(s.pertanyaan))}">No ${s.nomor}</th>`).join('') + `
       </tr></thead><tbody>` +
       siswaList.map(sw => `<tr>
-        <td>${escapeHtml_(sw.nama)}</td><td>${escapeHtml_(sw.kelas)}</td><td><strong>${sw.nilai}</strong></td>` +
+        <td>${escapeHtml_(sw.nama)}</td><td>${escapeHtml_(sw.kelas)}</td><td><strong>${fmtNilai_(sw.nilai)}</strong></td>` +
         soalList.map(s => `<td>${simbol[sw.jawabanDetail[s.soalId]] || simbol.kosong}</td>`).join('') + `
       </tr>`).join('') + `</tbody></table></div>`;
   },
@@ -6732,7 +6734,7 @@ const Guru = {
           <td>${sisaWaktu}</td>
           <td>${s.terjawab} / ${s.totalSoal}</td>
           <td><span class="badge ${warnPelanggaran}">${s.pelanggaran} / ${maxPelanggaran}</span></td>
-          <td>${s.status === 'berlangsung' ? '-' : (s.nilai === '' || s.nilai === undefined ? '-' : s.nilai)}</td>
+          <td>${s.status === 'berlangsung' ? '-' : (s.nilai === '' || s.nilai === undefined ? '-' : fmtNilai_(s.nilai))}</td>
           <td class="aksi">
             <button class="secondary small" title="Lihat kronologi pelanggaran siswa ini" onclick="Guru.bukaLogPelanggaran('${s.sesiId}', '${escapeHtml_(s.nama)}', '${escapeHtml_(s.kelas || '')}', '${escapeHtml_(s.status || '')}')">🛡 Detail Pelanggaran</button>
             <button class="secondary small" title="Tambah waktu untuk siswa ini" onclick="Guru.pemantauanTambahWaktu('${s.sesiId}', '${escapeHtml_(s.nama)}')">⏱ Tambah Waktu</button>
@@ -6911,7 +6913,7 @@ const Guru = {
       teksYa: 'Ya, Selesaikan'
     }))) return;
     const res = await api('pemantauanForceFinish', { sesiId });
-    if (res.ok) { toast(`Ujian "${nama}" diselesaikan paksa. Nilai: ${res.nilai}.`, 'success'); Guru.muatPemantauan(); }
+    if (res.ok) { toast(`Ujian "${nama}" diselesaikan paksa. Nilai: ${fmtNilai_(res.nilai)}.`, 'success'); Guru.muatPemantauan(); }
     else toast('Gagal: ' + res.error, 'error');
   },
 
@@ -9609,7 +9611,7 @@ const ExamEngine = {
     KumpulUI.sembunyikanSemua();
     UI.tampilkan('hasil-screen');
     document.getElementById('hasil-judul-ujian').textContent = judul;
-    document.getElementById('hasil-nilai').textContent = nilai;
+    document.getElementById('hasil-nilai').textContent = fmtNilai_(nilai);
     const statusEl = document.getElementById('hasil-status');
     const isLulus = lulus === true || String(lulus) === 'true';
     const kat = kategoriNilai_(nilai);

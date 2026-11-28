@@ -19,7 +19,7 @@ const LaporanPdf = (function () {
   const AM = () => AnalisisMateri;
   const PG = () => Perkembangan;
   const bulat = (n) => Math.round(Number(n) || 0);
-  const f1 = (n) => (n == null || isNaN(n)) ? '-' : (Math.round(Number(n) * 10) / 10).toLocaleString('id-ID', { maximumFractionDigits: 1 });
+  const f1 = (n) => (n == null || isNaN(n)) ? '-' : (Math.round(Number(n) * 100) / 100).toLocaleString('id-ID', { maximumFractionDigits: 2 });
   const WARNA = { kurang: [214, 69, 93], cukup: [220, 143, 18], baik: [34, 154, 102], prim: [13, 110, 253], biru: [29, 79, 140], teks: [31, 42, 55], mute: [108, 117, 125], garis: [222, 226, 230], latar: [243, 247, 253], putih: [255, 255, 255] };
   const SERI = { akhir: [5, 150, 105], literasi: [37, 99, 235], numerasi: [234, 88, 12], lainnya: [124, 58, 237], kelas: [100, 116, 139] };
   const NAMA_SERI = { akhir: 'Rata-rata', literasi: 'Literasi', numerasi: 'Numerasi', lainnya: 'Mapel Lain', kelas: 'Rata-rata kelas' };
