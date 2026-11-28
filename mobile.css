@@ -669,3 +669,37 @@ body.kunci-aktif #ujian-screen img, body.kunci-aktif #survei-screen img { -webki
   #sw-screen.am-scope .sw-konten:not(.sw-dash) .sw-pf-info i { color: #b07a00; }
   #sw-screen.am-scope .sw-konten:not(.sw-dash) .sw-pf-kembali .sw-btn { background: linear-gradient(145deg, #0b2f5f, #1b5fb0); border-color: #0b2f5f; color: #ffe08a; box-shadow: 0 12px 20px -10px rgba(11,47,95,.9); }
 }
+
+/* ============================================================================
+   PORTAL GURU DI HP (≤ 880px) — lebih mewah & elegan (v43z83)
+   Hanya tampilan: top bar bernuansa tema + aksen emas, bottom nav kaca dengan penanda emas,
+   kartu/panel lebih lembut. Tidak mengubah fungsi, data, atau tampilan desktop.
+   ============================================================================ */
+@media (max-width: 880px) {
+  html[data-skin="anbk"] #guru-portal .mobile-topbar, #guru-portal .mobile-topbar {
+    position: relative; border-bottom: 0;
+    background: radial-gradient(ellipse 50% 160% at 96% 20%, rgba(255,214,102,.22), transparent 60%), linear-gradient(120deg, color-mix(in srgb, var(--c-primary-dark, #1f4e79) 72%, #020b24), var(--c-primary-dark, #1f4e79) 55%, var(--c-primary, #2f6fb3));
+    box-shadow: 0 10px 24px -14px rgba(8,20,50,.65);
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  #guru-portal .mobile-topbar::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: linear-gradient(90deg, transparent, #ffd24d 28%, #fff3bf 50%, #ffd24d 72%, transparent); }
+  html[data-skin="anbk"] #guru-portal .mobile-topbar .mt-brand { color: #ffe08a !important; letter-spacing: .1em; }
+  html[data-skin="anbk"] #guru-portal .mobile-topbar strong, #guru-portal .mobile-topbar strong { color: #fff !important; letter-spacing: .005em; }
+  #guru-portal .mobile-topbar .mt-logo { border: 2px solid rgba(255,224,138,.9); box-shadow: 0 0 0 3px rgba(255,214,102,.22), 0 6px 14px -6px rgba(0,0,0,.5); background-color: #fff; }
+
+  #guru-portal .bottom-nav {
+    border-top: 1px solid rgba(255,214,102,.45); border-radius: 22px 22px 0 0;
+    background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(247,249,253,.98));
+    box-shadow: 0 -14px 30px -12px rgba(15,30,55,.28);
+  }
+  #guru-portal .bottom-nav button { border-radius: 16px; font-weight: 600; }
+  #guru-portal .bottom-nav button.active { color: var(--c-primary-dark, #1f4e79); }
+  #guru-portal .bottom-nav button.active i { display: grid; place-items: center; width: 40px; height: 26px; margin-top: -2px; border-radius: 13px; background: color-mix(in srgb, var(--c-primary, #2f6fb3) 14%, #fff); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-primary, #2f6fb3) 22%, transparent); }
+  #guru-portal .bottom-nav button.active::before { left: 30%; right: 30%; height: 3px; background: linear-gradient(90deg, #ffd24d, #f0b400, #ffd24d); box-shadow: 0 2px 8px rgba(240,180,0,.55); }
+
+  html[data-skin="anbk"] #guru-portal .panel { border-radius: 20px; border: 1px solid rgba(31,78,121,.08) !important; box-shadow: 0 16px 30px -18px rgba(15,30,55,.35), 0 1px 3px rgba(15,30,55,.05) !important; }
+  html[data-skin="anbk"] #guru-portal .dash-card { border-radius: 18px; }
+  #guru-portal .main button:not(.small):not(.icon):not(.lb-chip) { border-radius: 14px; letter-spacing: .01em; }
+  html[data-skin="anbk"] #guru-portal table.ledger th { background: linear-gradient(180deg, var(--c-primary, #2f6fb3), var(--c-primary-dark, #1f4e79)); letter-spacing: .03em; }
+  #guru-portal .sidebar { border-radius: 0 24px 24px 0; box-shadow: 18px 0 44px -10px rgba(8,20,50,.45); }
+}

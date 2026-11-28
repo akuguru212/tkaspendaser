@@ -119,10 +119,15 @@ const LeaderboardSurvei = (function () {
   }
 
   // ---------------- penghitungan peringkat ----------------
+  // Nilai sama -> yang waktu pengisian surveinya LEBIH CEPAT peringkatnya lebih tinggi. Waktu (x.wkt, detik) tidak ada = paling lambat.
+  // Nilai DAN waktu sama (dibulatkan ke detik) -> peringkat sama.
+  const wktUrut = (w) => (w == null || isNaN(w)) ? Infinity : Math.round(w);
+  const cmpWkt = (a, b) => { const x = wktUrut(a.wkt), y = wktUrut(b.wkt); return x === y ? 0 : (x < y ? -1 : 1); };
+  const samaPeringkat = (a, b) => a.lengkap === b.lengkap && r2(a.akhir) === r2(b.akhir) && cmpWkt(a, b) === 0;
   function urutkan(arr) {
-    arr.sort((a, b) => (Number(b.lengkap) - Number(a.lengkap)) || (r2(b.akhir) - r2(a.akhir)) || String(a.nama).localeCompare(String(b.nama), 'id'));
+    arr.sort((a, b) => (Number(b.lengkap) - Number(a.lengkap)) || (r2(b.akhir) - r2(a.akhir)) || cmpWkt(a, b) || String(a.nama).localeCompare(String(b.nama), 'id'));
     let prev = null;
-    arr.forEach((x, i) => { x.rank = (prev && prev.lengkap === x.lengkap && r2(prev.akhir) === r2(x.akhir)) ? prev.rank : i + 1; prev = x; });
+    arr.forEach((x, i) => { x.rank = (prev && samaPeringkat(prev, x)) ? prev.rank : i + 1; prev = x; });
     return arr;
   }
   function peringkatKelas(arr) {
@@ -130,7 +135,7 @@ const LeaderboardSurvei = (function () {
     arr.forEach(x => {
       const k = norm(x.kelas) || '-'; const c = per[k] = per[k] || { n: 0, prev: null };
       c.n++;
-      x.rankKelas = (c.prev && c.prev.lengkap === x.lengkap && r2(c.prev.akhir) === r2(x.akhir)) ? c.prev.rankKelas : c.n;
+      x.rankKelas = (c.prev && samaPeringkat(c.prev, x)) ? c.prev.rankKelas : c.n;
       c.prev = x;
     });
   }
@@ -153,32 +158,36 @@ const LeaderboardSurvei = (function () {
         let s = sw.get(k);
         if (!s) { s = { id: k, nama: r.nama || '(tanpa nama)', kelas: r.kelas || '-', skor: {} }; sw.set(k, s); }
         const slot = (s.skor[m.tes] = s.skor[m.tes] || {});
-        if (!slot[m.jenis] || total > slot[m.jenis].nilai) slot[m.jenis] = { nilai: total, kes: (q.nilai === undefined || q.nilai === null) ? null : Number(q.nilai), baik, dim: r._h.dim };
+        let dur = Number(r.durasi); if (!isFinite(dur) || dur <= 0) dur = null; // lama pengisian survei (detik)
+        const cur = slot[m.jenis];
+        // nilai tertinggi; nilai sama => ambil pengisian yang paling cepat
+        if (!cur || total > cur.nilai || (total === cur.nilai && dur != null && (cur.dur == null || dur < cur.dur))) slot[m.jenis] = { nilai: total, dur, kes: (q.nilai === undefined || q.nilai === null) ? null : Number(q.nilai), baik, dim: r._h.dim };
       });
     });
     const semuaMode = S.tes === 'semua';
     const kunciTes = g.tesList.map(t => t.key);
     let daftar = [];
     sw.forEach(s => {
-      let kar = null, sul = null, jml = 0; const kes = []; let perluCek = false; let dimK = null, dimS = null;
+      let kar = null, sul = null, jml = 0; const kes = []; const W = []; let perluCek = false; let dimK = null, dimS = null;
       if (semuaMode) {
         const K = [], L = [];
         kunciTes.forEach(k => {
           const x = s.skor[k]; if (!x) return; let ada = false;
-          if (x.karakter) { K.push(x.karakter.nilai); ada = true; if (x.karakter.kes != null) kes.push(x.karakter.kes); if (!x.karakter.baik) perluCek = true; }
-          if (x.sulingjar) { L.push(x.sulingjar.nilai); ada = true; if (x.sulingjar.kes != null) kes.push(x.sulingjar.kes); if (!x.sulingjar.baik) perluCek = true; }
+          if (x.karakter) { K.push(x.karakter.nilai); W.push(x.karakter.dur); ada = true; if (x.karakter.kes != null) kes.push(x.karakter.kes); if (!x.karakter.baik) perluCek = true; }
+          if (x.sulingjar) { L.push(x.sulingjar.nilai); W.push(x.sulingjar.dur); ada = true; if (x.sulingjar.kes != null) kes.push(x.sulingjar.kes); if (!x.sulingjar.baik) perluCek = true; }
           if (ada) jml++;
         });
         kar = rata(K); sul = rata(L);
       } else {
         const x = s.skor[S.tes] || {};
-        if (x.karakter) { kar = x.karakter.nilai; dimK = x.karakter.dim; if (x.karakter.kes != null) kes.push(x.karakter.kes); if (!x.karakter.baik) perluCek = true; }
-        if (x.sulingjar) { sul = x.sulingjar.nilai; dimS = x.sulingjar.dim; if (x.sulingjar.kes != null) kes.push(x.sulingjar.kes); if (!x.sulingjar.baik) perluCek = true; }
+        if (x.karakter) { kar = x.karakter.nilai; W.push(x.karakter.dur); dimK = x.karakter.dim; if (x.karakter.kes != null) kes.push(x.karakter.kes); if (!x.karakter.baik) perluCek = true; }
+        if (x.sulingjar) { sul = x.sulingjar.nilai; W.push(x.sulingjar.dur); dimS = x.sulingjar.dim; if (x.sulingjar.kes != null) kes.push(x.sulingjar.kes); if (!x.sulingjar.baik) perluCek = true; }
         jml = (kar != null || sul != null) ? 1 : 0;
       }
       if (kar == null && sul == null) return;
       const lengkap = kar != null && sul != null;
-      daftar.push({ id: s.id, nama: s.nama, kelas: s.kelas, kar, sul, lengkap, akhir: lengkap ? (kar + sul) / 2 : (kar != null ? kar : sul), jml, kes: rata(kes), perluCek, dimK, dimS, skor: s.skor });
+      const wkt = (W.length && W.every(v => v != null)) ? rata(W) : null; // rata-rata lama pengisian per survei
+      daftar.push({ id: s.id, nama: s.nama, kelas: s.kelas, kar, sul, lengkap, akhir: lengkap ? (kar + sul) / 2 : (kar != null ? kar : sul), jml, wkt, kes: rata(kes), perluCek, dimK, dimS, skor: s.skor });
     });
     const kelasList = kelasUnikDari_(daftar);
     if (S.kelas && !kelasList.includes(S.kelas)) S.kelas = '';
@@ -210,9 +219,9 @@ const LeaderboardSurvei = (function () {
 
   function htmlPodium(rows) {
     const top = rows.slice(0, 3); if (!top.length) return '';
-    const urutTampil = top.length === 3 ? [top[1], top[0], top[2]] : (top.length === 2 ? [top[1], top[0]] : [top[0]]);
+    const urutTampil = (typeof Leaderboard !== 'undefined' && Leaderboard._urutPodium) ? Leaderboard._urutPodium(top) : (top.length === 3 ? [top[1], top[0], top[2]] : (top.length === 2 ? [top[1], top[0]] : [top[0]]));
     return `<div class="lb-podium">` + urutTampil.map(r => {
-      const p = top.indexOf(r) + 1;
+      const p = r.rank <= 1 ? 1 : (r.rank === 2 ? 2 : 3); // ukuran mengikuti PERINGKAT (seri => sama besar)
       const g = r.rank <= 1 ? 'g1' : (r.rank === 2 ? 'g2' : 'g3');
       const av = (typeof Leaderboard !== 'undefined' && Leaderboard.avatarSiswa) ? Leaderboard.avatarSiswa(r) : { html: esc(inisial(r.nama)), cls: '' };
       return `<div class="lb-pod ${g}" data-p="${p}">
@@ -236,7 +245,7 @@ const LeaderboardSurvei = (function () {
       const cls = (r.rank <= 3 ? 'lb-r' + r.rank : '') + (belum ? ' lb-belum' : '');
       const kk = r.kes == null ? null : Survei.kategoriKesungguhan(Math.round(r.kes));
       return `<tr class="${cls.trim()}">
-        <td class="lb-c"><span class="lb-rk ${kelasRk(r.rank)}">${r.rank}</span></td>
+        <td class="lb-c"><span class="lb-rk ${kelasRk(r.rank)}"${r.wkt != null ? ` title="Waktu pengisian: ${Math.floor(Math.round(r.wkt) / 60)} mnt ${Math.round(r.wkt) % 60} dtk (rata-rata per survei)"` : ''}>${r.rank}</span></td>
         <td class="lb-nama">${esc(r.nama)}${r.perluCek ? ' <span class="badge no" title="Kualitas pengisian survei perlu dicek (terlalu cepat / jawaban seragam / bertentangan)">⚠ dicek</span>' : ''}</td>
         <td>${esc(r.kelas)}</td>
         <td>${sel(r.kar, tipDim(r.dimK, 'karakter'))}</td><td>${sel(r.sul, tipDim(r.dimS, 'sulingjar'))}</td>
@@ -352,7 +361,7 @@ const LeaderboardSurvei = (function () {
         <tr><th>Peserta</th><td>: ${h.rows.length} siswa (${h.nLengkap} lengkap)</td><th>Tanggal</th><td>: ${esc(waktu)}</td></tr>
       </tbody></table>
       <table class="lb-print"><thead><tr><th class="lb-n" style="width:8%">Rank</th><th>Nama Siswa</th><th class="lb-n" style="width:8%">Kelas</th><th class="lb-n" style="width:12%">Survei Karakter</th><th class="lb-n" style="width:11%">Sulingjar</th><th class="lb-n" style="width:11%">Nilai Akhir</th><th class="lb-n" style="width:13%">Kategori</th><th class="lb-n" style="width:11%">Kesungguhan</th></tr></thead><tbody>${baris}</tbody></table>
-      <p class="lb-catatan">Nilai survei 0–100 dihitung dari jawaban survei (bukan benar/salah) dan terpisah dari nilai tes. Nilai Akhir = rata-rata Survei Karakter dan Sulingjar. Kategori: Baik ≥ 75, Sedang 50–74,99, Perlu perhatian &lt; 50 (acuan latihan). Kesungguhan menilai ketelitian mengisi. Dokumen untuk guru, bukan untuk dibagikan ke siswa.</p>
+      <p class="lb-catatan">Nilai survei 0–100 dihitung dari jawaban survei (bukan benar/salah) dan terpisah dari nilai tes. Nilai Akhir = rata-rata Survei Karakter dan Sulingjar. Nilai sama diurutkan berdasarkan waktu pengisian survei tercepat; nilai dan waktu sama = peringkat sama. Kategori: Baik ≥ 75, Sedang 50–74,99, Perlu perhatian &lt; 50 (acuan latihan). Kesungguhan menilai ketelitian mengisi. Dokumen untuk guru, bukan untuk dibagikan ke siswa.</p>
       <footer class="cp-foot"><span>Dicetak dari ${esc(namaSekolah)}</span><span>${esc(waktu)}</span></footer>`;
     Guru._cetakArea_(html, ['Leaderboard Survei', h.labelTes, S.kelas || 'Semua Kelas'].join(' - '));
   }

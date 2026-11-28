@@ -188,9 +188,21 @@ const Leaderboard = (function () {
 #modal-lb-atur table.lb-atur select { padding: .4rem .5rem; font-size: .82rem; }
 #modal-lb-atur .lb-atur-scroll { max-height: 52vh; overflow: auto; margin: .6rem 0; }
 @media (max-width: 680px) {
-  #guru-portal .lb-root .lb-podium { flex-direction: column; align-items: stretch; gap: 1.1rem; padding-top: 1.7rem; }
-  #guru-portal .lb-root .lb-pod { max-width: none; }
-  #guru-portal .lb-root .lb-pod[data-p="1"] { order: 1; } #guru-portal .lb-root .lb-pod[data-p="2"] { order: 2; } #guru-portal .lb-root .lb-pod[data-p="3"] { order: 3; }
+  /* Podium di HP: tetap MENYAMPING (bukan menumpuk ke bawah) supaya beda tinggi juara 1/2/3 terlihat; kartu dipadatkan */
+  #guru-portal .lb-root .lb-podium { flex-direction: row; align-items: flex-end; justify-content: center; gap: .4rem; padding: 1.9rem .35rem .15rem; }
+  #guru-portal .lb-root .lb-pod { flex: 1 1 0; max-width: none; min-width: 0; padding: .95rem .25rem .6rem; border-radius: 16px; }
+  #guru-portal .lb-root .lb-pod[data-p="1"] { padding-top: 1.5rem; padding-bottom: 1.1rem; }
+  #guru-portal .lb-root .lb-pod-medal { width: 30px; height: 30px; top: -15px; font-size: 12px; }
+  #guru-portal .lb-root .lb-pod-av { width: 38px; height: 38px; margin: .3rem auto .35rem; font-size: .85rem; border-width: 2px; }
+  #guru-portal .lb-root .lb-pod[data-p="1"] .lb-pod-av { width: 48px; height: 48px; font-size: 1rem; }
+  #guru-portal .lb-root .lb-pod-nama { font-size: .68rem; line-height: 1.2; min-height: 2.4em; padding: 0 .1rem; overflow-wrap: anywhere; }
+  #guru-portal .lb-root .lb-pod-kelas { display: block; margin: .25rem .15rem .1rem; padding: .08rem .2rem; font-size: .54rem; line-height: 1.25; }
+  #guru-portal .lb-root .lb-pod-nilai { font-size: 1.3rem; }
+  #guru-portal .lb-root .lb-pod[data-p="1"] .lb-pod-nilai { font-size: 1.6rem; }
+  #guru-portal .lb-root .lb-pod-nilai small { font-size: .5rem; letter-spacing: .05em; }
+  #guru-portal .lb-root .lb-pod-mini { flex-direction: column; gap: .2rem; margin: .4rem .1rem 0; }
+  #guru-portal .lb-root .lb-pod-mini span { padding: .15rem .1rem; font-size: .52rem; border-radius: 8px; }
+  #guru-portal .lb-root .lb-pod-mini b { font-size: .75rem; }
   #guru-portal .lb-root .lb-hero { padding: 18px 18px; } #guru-portal .lb-root .lb-hero h3 { font-size: 1.2rem; }
 }
 @media print {
@@ -349,11 +361,16 @@ const Leaderboard = (function () {
   }
 
   // ---------------- penghitungan peringkat ----------------
+  // Nilai sama -> yang waktu pengerjaannya LEBIH CEPAT peringkatnya lebih tinggi. Waktu (x.wkt, detik) tidak ada = dianggap paling lambat.
+  // Nilai DAN waktu sama (dibulatkan ke detik) -> peringkat sama.
+  const wktUrut = (w) => (w == null || isNaN(w)) ? Infinity : Math.round(w);
+  const cmpWkt = (a, b) => { const x = wktUrut(a.wkt), y = wktUrut(b.wkt); return x === y ? 0 : (x < y ? -1 : 1); };
+  const samaPeringkat = (a, b) => a.lengkap === b.lengkap && r2(a.akhir) === r2(b.akhir) && cmpWkt(a, b) === 0;
   function urutkan(arr) {
-    arr.sort((a, b) => (Number(b.lengkap) - Number(a.lengkap)) || (r2(b.akhir) - r2(a.akhir)) || String(a.nama).localeCompare(String(b.nama), 'id'));
+    arr.sort((a, b) => (Number(b.lengkap) - Number(a.lengkap)) || (r2(b.akhir) - r2(a.akhir)) || cmpWkt(a, b) || String(a.nama).localeCompare(String(b.nama), 'id'));
     let prev = null;
     arr.forEach((x, i) => {
-      x.rank = (prev && prev.lengkap === x.lengkap && r2(prev.akhir) === r2(x.akhir)) ? prev.rank : i + 1;
+      x.rank = (prev && samaPeringkat(prev, x)) ? prev.rank : i + 1;
       prev = x;
     });
     return arr;
@@ -364,7 +381,7 @@ const Leaderboard = (function () {
       const k = norm(x.kelas) || '-';
       const c = per[k] = per[k] || { n: 0, prev: null };
       c.n++;
-      x.rankKelas = (c.prev && c.prev.lengkap === x.lengkap && r2(c.prev.akhir) === r2(x.akhir)) ? c.prev.rankKelas : c.n;
+      x.rankKelas = (c.prev && samaPeringkat(c.prev, x)) ? c.prev.rankKelas : c.n;
       c.prev = x;
     });
   }
@@ -385,9 +402,13 @@ const Leaderboard = (function () {
         const n = Number(r.nilai); if (isNaN(n)) return;
         const k = r.siswaId ? 'id:' + r.siswaId : 'nm:' + norm(r.nama) + '|' + norm(r.kelas);
         let s = sw.get(k);
-        if (!s) { s = { id: k, nama: r.nama || '(tanpa nama)', kelas: r.kelas || '-', skor: {} }; sw.set(k, s); }
+        if (!s) { s = { id: k, nama: r.nama || '(tanpa nama)', kelas: r.kelas || '-', skor: {}, dur: {} }; sw.set(k, s); }
         const slot = (s.skor[m.tes] = s.skor[m.tes] || {});
-        if (slot[m.jenis] == null || n > slot[m.jenis]) slot[m.jenis] = n; // bila ada beberapa percobaan, ambil yang tertinggi
+        const dSlot = (s.dur[m.tes] = s.dur[m.tes] || {});
+        // lama pengerjaan (detik) = selesai - mulai; tidak valid => null
+        let d = (Date.parse(r.selesai) - Date.parse(r.mulai)) / 1000; if (!isFinite(d) || d < 0) d = null;
+        // bila ada beberapa percobaan, ambil nilai tertinggi; nilai sama => ambil yang paling cepat
+        if (slot[m.jenis] == null || n > slot[m.jenis] || (n === slot[m.jenis] && d != null && (dSlot[m.jenis] == null || d < dSlot[m.jenis]))) { slot[m.jenis] = n; dSlot[m.jenis] = d; }
       });
     });
     const semuaMode = S.tes === 'semua';
@@ -395,24 +416,30 @@ const Leaderboard = (function () {
     let daftar = [];
     sw.forEach(s => {
       let lit = null, num = null, jml = 0;
+      const W = []; // lama pengerjaan tiap ujian yang dipakai (untuk pemisah nilai sama)
       if (semuaMode) {
         const L = [], N = [];
         kunciTes.forEach(k => {
           const x = s.skor[k]; if (!x) return;
+          const dk = s.dur[k] || {};
           let ada = false;
-          if (x.literasi != null) { L.push(x.literasi); ada = true; }
-          if (x.numerasi != null) { N.push(x.numerasi); ada = true; }
+          if (x.literasi != null) { L.push(x.literasi); W.push(dk.literasi); ada = true; }
+          if (x.numerasi != null) { N.push(x.numerasi); W.push(dk.numerasi); ada = true; }
           if (ada) jml++;
         });
         lit = rata(L); num = rata(N);
       } else {
-        const x = s.skor[S.tes] || {};
+        const x = s.skor[S.tes] || {}, dk = s.dur[S.tes] || {};
         lit = x.literasi != null ? x.literasi : null; num = x.numerasi != null ? x.numerasi : null;
+        if (lit != null) W.push(dk.literasi);
+        if (num != null) W.push(dk.numerasi);
         jml = (lit != null || num != null) ? 1 : 0;
       }
+      // waktu = rata-rata lama pengerjaan per ujian (bila ada ujian tanpa data waktu => null => dianggap paling lambat)
+      const wkt = (W.length && W.every(v => v != null)) ? rata(W) : null;
       if (lit == null && num == null) return;
       const lengkap = lit != null && num != null;
-      daftar.push({ id: s.id, nama: s.nama, kelas: s.kelas, lit, num, lengkap, akhir: lengkap ? (lit + num) / 2 : (lit != null ? lit : num), jml, skor: s.skor });
+      daftar.push({ id: s.id, nama: s.nama, kelas: s.kelas, lit, num, lengkap, akhir: lengkap ? (lit + num) / 2 : (lit != null ? lit : num), jml, wkt, skor: s.skor });
     });
     const kelasList = kelasUnikDari_(daftar);
     if (S.kelas && !kelasList.includes(S.kelas)) S.kelas = '';
@@ -439,14 +466,23 @@ const Leaderboard = (function () {
     const p = Math.max(0, Math.min(100, n));
     return `<span class="lb-bar"><i style="width:${p}%;background:${kategoriNilai_(n).warna}"></i></span>`;
   }
+  const fmtWkt = (d) => { d = Math.round(d); return Math.floor(d / 60) + ' mnt ' + (d % 60) + ' dtk'; };
   const kelasRk = (r) => r <= 1 ? 'k1' : (r === 2 ? 'k2' : (r === 3 ? 'k3' : ''));
 
+  // Urutan tampil podium. Peringkat berbeda semua: [2, 1, 3] (juara 1 di tengah).
+  // Ada peringkat yang sama (seri nilai & waktu): yang sama diberi ukuran, warna, dan tinggi yang sama.
+  function urutPodium_(top) {
+    if (top.length === 3 && top[0].rank < top[1].rank && top[1].rank < top[2].rank) return [top[1], top[0], top[2]];
+    if (top.length === 3 && top[0].rank < top[1].rank && top[1].rank === top[2].rank) return [top[1], top[0], top[2]]; // 1, 2, 2 => juara 1 tetap di tengah
+    if (top.length === 2 && top[0].rank < top[1].rank) return [top[1], top[0]];
+    return top.slice();
+  }
   function htmlPodium(rows) {
     const top = rows.slice(0, 3);
     if (!top.length) return '';
-    const urutTampil = top.length === 3 ? [top[1], top[0], top[2]] : (top.length === 2 ? [top[1], top[0]] : [top[0]]);
+    const urutTampil = urutPodium_(top);
     const kartu = urutTampil.map(r => {
-      const p = top.indexOf(r) + 1;
+      const p = r.rank <= 1 ? 1 : (r.rank === 2 ? 2 : 3); // ukuran mengikuti PERINGKAT (seri => sama besar)
       const g = r.rank <= 1 ? 'g1' : (r.rank === 2 ? 'g2' : 'g3');
       const ikon = r.rank <= 1 ? 'fa-crown' : 'fa-medal';
       const av = avatarSiswa(r);
@@ -471,7 +507,7 @@ const Leaderboard = (function () {
       const belum = tampilBelum && !r.lengkap;
       const cls = (r.rank <= 3 ? 'lb-r' + r.rank : '') + (belum ? ' lb-belum' : '');
       return `<tr class="${cls.trim()}">
-        <td class="lb-c"><span class="lb-rk ${kelasRk(r.rank)}">${r.rank}</span></td>
+        <td class="lb-c"><span class="lb-rk ${kelasRk(r.rank)}"${r.wkt != null ? ` title="Waktu pengerjaan: ${esc(fmtWkt(r.wkt))} (rata-rata per ujian)"` : ''}>${r.rank}</span></td>
         <td class="lb-nama">${esc(r.nama)}</td>
         <td>${esc(r.kelas)}</td>
         <td>${sel(r.lit)}</td><td>${sel(r.num)}</td>
@@ -590,7 +626,7 @@ const Leaderboard = (function () {
         <tr><th>Peserta</th><td>: ${h.rows.length} siswa (${h.nLengkap} lengkap)</td><th>Tanggal</th><td>: ${esc(waktu)}</td></tr>
       </tbody></table>
       <table class="lb-print"><thead><tr><th class="lb-n" style="width:9%">Peringkat</th><th>Nama Siswa</th><th class="lb-n" style="width:9%">Kelas</th><th class="lb-n" style="width:12%">Literasi</th><th class="lb-n" style="width:12%">Numerasi</th><th class="lb-n" style="width:12%">Nilai Akhir</th><th class="lb-n" style="width:14%">Kategori</th></tr></thead><tbody>${baris}</tbody></table>
-      <p class="lb-catatan">Nilai Akhir = rata-rata nilai Literasi dan Numerasi${h.semuaMode ? ' (masing-masing dirata-ratakan dari seluruh tes yang diikuti)' : ''}. Siswa yang belum mengerjakan salah satu tes diurutkan setelah siswa yang sudah lengkap. Nilai sama = peringkat sama.</p>
+      <p class="lb-catatan">Nilai Akhir = rata-rata nilai Literasi dan Numerasi${h.semuaMode ? ' (masing-masing dirata-ratakan dari seluruh tes yang diikuti)' : ''}. Siswa yang belum mengerjakan salah satu tes diurutkan setelah siswa yang sudah lengkap. Nilai sama diurutkan berdasarkan waktu pengerjaan tercepat; nilai dan waktu sama = peringkat sama.</p>
       <footer class="cp-foot"><span>Dicetak dari ${esc(namaSekolah)}</span><span>${esc(waktu)}</span></footer>`;
     Guru._cetakArea_(html, ['Leaderboard', h.labelTes, S.kelas || 'Semua Kelas'].join(' - '));
   }
@@ -652,5 +688,5 @@ const Leaderboard = (function () {
     if (tabId === 'tab-leaderboard') buka();
   };
 
-  return { muatFoto, avatarSiswa, galatFoto, _fotoSiap: () => F.dimuat, buka, muat, render, pilihTes, pilihKelas, unduh, cetak, bukaAtur, tutupAtur, simpanAtur, resetAtur, _hitung: hitung, _kelompok: kelompok, _S: S };
+  return { muatFoto, avatarSiswa, _urutkan: urutkan, _urutPodium: urutPodium_, galatFoto, _fotoSiap: () => F.dimuat, buka, muat, render, pilihTes, pilihKelas, unduh, cetak, bukaAtur, tutupAtur, simpanAtur, resetAtur, _hitung: hitung, _kelompok: kelompok, _S: S };
 })();
