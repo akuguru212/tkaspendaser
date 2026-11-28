@@ -1,3 +1,12 @@
+# v43z71 — Tampilan Leaderboard & Leaderboard Survei lebih elegan dan berbeda
+
+- **Podium:** kartu peringkat 2 kini perak-baja yang lebih tegas (tidak lagi menyatu dengan latar) dengan garis tepi dan cincin halus; peringkat 1 emas dan peringkat 3 perunggu diberi kilau, bayangan berwarna, dan garis tepi. Area podium diberi latar lembut agar kartu tampak timbul.
+- **Pembeda:** Leaderboard tes tetap memakai warna tema (biru) dengan ikon piala; Leaderboard Survei memakai aksen hijau tosca tetap (hero, chip aktif, garis kartu ringkasan, garis header tabel, catatan) dengan ikon papan centang.
+- **Tabel:** baris peringkat 2 lebih terlihat, penanda warna di sisi kiri untuk Top 3, sorotan baris saat kursor mengarah memakai warna aksen.
+- Struktur, urutan kolom, Excel, dan cetak/PDF tidak diubah. File berubah: `leaderboard.js` (v5), `leaderboard-survei.js` (v4), `index.html`, `sw.js` (`hp69`), `README.md`.
+
+---
+
 # v43z70 — Leaderboard & Leaderboard Survei: podium memakai foto/karakter siswa + penanganan foto gagal dimuat
 
 - **Gagal memuat data foto:** dicoba ulang otomatis 2x; bila tetap gagal podium memakai inisial dan guru diberi pemberitahuan satu kali (tombol Segarkan mencoba lagi). Foto yang rusak/gagal tampil per siswa otomatis kembali ke inisial. Bila data foto sudah ada, Segarkan tidak menunda tampilan dan podium diperbarui sendiri bila ada foto berubah.

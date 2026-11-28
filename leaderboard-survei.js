@@ -28,11 +28,12 @@ const LeaderboardSurvei = (function () {
     if (document.getElementById('leaderboard-survei-css-inline')) return;
     const st = document.createElement('style'); st.id = 'leaderboard-survei-css-inline';
     st.textContent = `
-#guru-portal #tab-lb-survei .lb-hero { background: linear-gradient(118deg, color-mix(in srgb, var(--c-secondary) 70%, #000), var(--c-secondary)); color: var(--c-on-secondary, #fff); }
-#guru-portal #tab-lb-survei button.lb-chip.on, #guru-portal #tab-lb-survei button.lb-chip.on:hover { background: var(--c-secondary); border-color: var(--c-secondary); color: var(--c-on-secondary, #fff); }
-#guru-portal #tab-lb-survei button.lb-chip:hover { border-color: var(--c-secondary); }
-#tab-lb-survei .ls-catatan { display: flex; gap: .65rem; align-items: flex-start; margin: 0 0 1rem; padding: .7rem .95rem; border-radius: 14px; font-size: .82rem; line-height: 1.5; background: color-mix(in srgb, var(--c-secondary) 12%, var(--c-surface)); border: 1px solid color-mix(in srgb, var(--c-secondary) 38%, var(--c-line)); color: var(--c-text); }
-#tab-lb-survei .ls-catatan i { color: var(--c-secondary); font-size: 1.1rem; margin-top: .1rem; }
+#guru-portal #tab-lb-survei .lb-hero { background: linear-gradient(118deg, #064e46, #0f9d8a 62%, #2cc6a8); color: #fff; }
+#guru-portal #tab-lb-survei .lb-hero::before { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, #b8f5e6, #ffffff55); }
+#guru-portal #tab-lb-survei button.lb-chip.on, #guru-portal #tab-lb-survei button.lb-chip.on:hover { background: #0f9d8a; border-color: #0f9d8a; color: #fff); }
+#guru-portal #tab-lb-survei button.lb-chip:hover { border-color: #0f9d8a; }
+#tab-lb-survei .ls-catatan { display: flex; gap: .65rem; align-items: flex-start; margin: 0 0 1rem; padding: .7rem .95rem; border-radius: 14px; font-size: .82rem; line-height: 1.5; background: color-mix(in srgb, #0f9d8a 12%, var(--c-surface)); border: 1px solid color-mix(in srgb, #0f9d8a 38%, var(--c-line)); color: var(--c-text); }
+#tab-lb-survei .ls-catatan i { color: #0f9d8a; font-size: 1.1rem; margin-top: .1rem; }
 #tab-lb-survei .ls-kes { font-size: .72rem; color: var(--c-muted); display: block; }
 #tab-lb-survei .ls-kes b { font-size: .85rem; }
 #tab-lb-survei .ls-cek { margin-left: .3rem; }
@@ -263,7 +264,7 @@ const LeaderboardSurvei = (function () {
     chipsKelas.innerHTML = `<button type="button" class="lb-chip${!S.kelas ? ' on' : ''}" onclick="LeaderboardSurvei.pilihKelas(-1)">Semua Kelas</button>` +
       h.kelasList.map((k, i) => `<button type="button" class="lb-chip${S.kelas === k ? ' on' : ''}" onclick="LeaderboardSurvei.pilihKelas(${i})">${esc(k)}</button>`).join('');
     const waktu = S.waktu ? new Date(S.waktu).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
-    hero.innerHTML = `<div class="lb-hero"><i class="fa-solid fa-ranking-star lb-hero-ico"></i>
+    hero.innerHTML = `<div class="lb-hero"><i class="fa-solid fa-clipboard-check lb-hero-ico"></i>
       <p class="lb-eyebrow">Leaderboard Survei Karakter &amp; Sulingjar</p><h3>${esc(h.labelTes)}</h3>
       <p class="lb-sub">${S.kelas ? 'Kelas ' + esc(S.kelas) : 'Seluruh kelas'} • ${h.rows.length} siswa • ${g.tesList.length} tes dengan survei${waktu ? ' • data per ' + waktu : ''}</p></div>`;
     if (!h.rows.length) {

@@ -96,6 +96,32 @@ const Leaderboard = (function () {
 #guru-portal .lb-root .lb-bar i { display: block; height: 100%; border-radius: 99px; }
 #guru-portal .lb-root .lb-kosongan { text-align: center; padding: 1.6rem 1rem; color: var(--c-muted); }
 #guru-portal .lb-root .lb-kosongan i { font-size: 2.2rem; display: block; margin-bottom: .5rem; opacity: .5; }
+/* ===== Percantik tampilan (v43z71): podium bertimbul, aksen warna per leaderboard ===== */
+#guru-portal #tab-leaderboard { --lb-acc: var(--c-primary, #1f4e79); --lb-acc2: color-mix(in srgb, var(--c-primary, #1f4e79) 60%, #000); }
+#guru-portal #tab-lb-survei { --lb-acc: #0f9d8a; --lb-acc2: #0a6b5e; }
+#guru-portal .lb-root .lb-stat { border-top: 3px solid var(--lb-acc); }
+#guru-portal .lb-root .lb-stat b { color: var(--lb-acc2); }
+#guru-portal .lb-root .lb-podium { padding: 1.4rem 1rem .4rem; border-radius: 22px; background: radial-gradient(ellipse 70% 90% at 50% 100%, color-mix(in srgb, var(--lb-acc) 13%, transparent), transparent 75%), linear-gradient(180deg, color-mix(in srgb, var(--lb-acc) 5%, transparent), transparent); }
+#guru-portal .lb-root .lb-pod { border: 1px solid rgba(255,255,255,.7); overflow: hidden; box-shadow: 0 14px 28px -14px rgba(15,30,55,.45), 0 2px 6px rgba(15,30,55,.10), inset 0 1px 0 rgba(255,255,255,.75); }
+#guru-portal .lb-root .lb-pod::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(120deg, rgba(255,255,255,.42) 0%, rgba(255,255,255,0) 42%); pointer-events: none; }
+#guru-portal .lb-root .lb-pod > *:not(.lb-pod-medal) { position: relative; }
+#guru-portal .lb-root .lb-pod-medal { z-index: 2; }
+#guru-portal .lb-root .lb-pod.g1 { background: linear-gradient(160deg, #fff3bf, #f6c945 62%, #e3a200); border-color: #f1cf63; box-shadow: 0 18px 34px -14px rgba(214,150,0,.65), 0 2px 6px rgba(15,30,55,.10), inset 0 1px 0 rgba(255,255,255,.8); }
+#guru-portal .lb-root .lb-pod.g2 { background: linear-gradient(160deg, #e6ecf4, #b3bfd0 58%, #8191a8); border-color: #7f8ea4; color: #121c2e; box-shadow: 0 16px 30px -14px rgba(51,65,85,.7), 0 0 0 3px rgba(100,116,139,.18), inset 0 1px 0 rgba(255,255,255,.7); }
+#guru-portal .lb-root .lb-pod.g3 { background: linear-gradient(160deg, #fbe0c8, #e09a62 60%, #b96f37); border-color: #c98650; box-shadow: 0 16px 30px -14px rgba(150,80,25,.65), 0 2px 6px rgba(15,30,55,.10), inset 0 1px 0 rgba(255,255,255,.7); }
+#guru-portal .lb-root .g2 .lb-pod-medal { background: linear-gradient(145deg, #fff, #dfe5ee); color: #5b6a80; }
+#guru-portal .lb-root .lb-pod-av { border-width: 3px; box-shadow: 0 4px 12px rgba(15,30,55,.22); }
+#guru-portal .lb-root .lb-pod-mini span { background: rgba(255,255,255,.55); box-shadow: inset 0 0 0 1px rgba(255,255,255,.5); }
+#guru-portal .lb-root .g2 .lb-pod-mini span { background: rgba(255,255,255,.5); }
+#guru-portal .lb-root table.lb-table th { border-bottom-color: var(--lb-acc); }
+#guru-portal .lb-root table.lb-table tbody tr:hover td { background: color-mix(in srgb, var(--lb-acc) 7%, var(--c-surface)); }
+#guru-portal .lb-root tr.lb-r2 td { background: color-mix(in srgb, #94a3b8 24%, var(--c-surface)); }
+#guru-portal .lb-root tr.lb-r1 td:first-child { box-shadow: inset 4px 0 0 #e8b100; }
+#guru-portal .lb-root tr.lb-r2 td:first-child { box-shadow: inset 4px 0 0 #7f8ea4; }
+#guru-portal .lb-root tr.lb-r3 td:first-child { box-shadow: inset 4px 0 0 #c47c43; }
+#guru-portal .lb-root .lb-hero { box-shadow: 0 14px 28px -16px color-mix(in srgb, var(--lb-acc) 80%, #000); }
+#guru-portal #tab-leaderboard .lb-hero::before { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, #ffd24d, #ffffff55); }
+@media (max-width: 680px) { #guru-portal .lb-root .lb-podium { padding: 1.2rem .6rem .2rem; } }
 #modal-lb-atur table.lb-atur { width: 100%; border-collapse: collapse; font-size: .85rem; }
 #modal-lb-atur table.lb-atur th { text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--c-muted); padding: .4rem .5rem; border-bottom: 2px solid var(--c-line); }
 #modal-lb-atur table.lb-atur td { padding: .45rem .5rem; border-bottom: 1px solid var(--c-line); vertical-align: middle; }
