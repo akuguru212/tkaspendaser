@@ -1,3 +1,19 @@
+# v43z70 — Leaderboard & Leaderboard Survei: podium memakai foto/karakter siswa + penanganan foto gagal dimuat
+
+- **Gagal memuat data foto:** dicoba ulang otomatis 2x; bila tetap gagal podium memakai inisial dan guru diberi pemberitahuan satu kali (tombol Segarkan mencoba lagi). Foto yang rusak/gagal tampil per siswa otomatis kembali ke inisial. Bila data foto sudah ada, Segarkan tidak menunda tampilan dan podium diperbarui sendiri bila ada foto berubah.
+- File berubah: `leaderboard.js` (v4), `leaderboard-survei.js` (v3), `index.html`, `sw.js` (`hp68`), `README.md`.
+
+---
+
+# v43z69 — Leaderboard: podium Top 3 memakai foto profil / karakter pilihan siswa
+
+- **Podium Top 3 (Leaderboard & Leaderboard Survei)** tidak lagi menampilkan inisial (mis. PC, KD, PD). Lingkaran avatar kini memakai **foto profil** siswa, atau **karakter lucu pilihan siswa** (lengkap dengan latar dan gerakannya), atau **karakter bawaan** yang sama persis dengan yang tampil di akun siswa bila belum memilih.
+- **Tanpa perubahan `Code.gs`:** data diambil lewat aksi yang sudah ada (`getDaftarSiswa`), dimuat paralel dengan data nilai. Bila gagal dimuat, podium tetap menampilkan inisial seperti sebelumnya. Muat ulang berikutnya tidak menunda tampilan; podium diperbarui sendiri bila ada foto yang berubah.
+- Tabel peringkat, kartu ringkasan, Excel, dan cetak/PDF **tidak diubah**.
+- File berubah: `leaderboard.js` (v3), `leaderboard-survei.js` (v2), `index.html`, `sw.js` (`hp67`), `README.md`. Cukup unggah berkas klien; `foto-profil.js` harus tetap ada.
+
+---
+
 # v43z68 — Keamanan akses siswa & sandi guru, PDF/ZIP per kelas lebih cepat, tabel sub materi, Kelompok Remedial, opsi "abaikan pengisian perlu dicek" di Hasil Survei
 
 **Urutan kerja mengikuti tingkat kepentingan: keamanan dulu, lalu fitur.**

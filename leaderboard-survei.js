@@ -94,7 +94,10 @@ const LeaderboardSurvei = (function () {
           } else { gagal++; if (S.data[id]) baru[id] = S.data[id]; }
         }
       };
-      await Promise.all([kerja(), kerja(), kerja(), kerja()]);
+      const LB = (typeof Leaderboard !== 'undefined') ? Leaderboard : null;
+      const pf = (LB && LB.muatFoto) ? LB.muatFoto() : null, fotoSiap = !!(LB && LB._fotoSiap && LB._fotoSiap());
+      await Promise.all([kerja(), kerja(), kerja(), kerja(), fotoSiap ? null : pf]);
+      if (fotoSiap && pf) pf.then(b => { if (b && S.dimuat) { try { render(); } catch (e) { } } });
       S.data = baru; S.dimuat = true; S.waktu = Date.now();
       if (gagal) { ok = false; toast(gagal + ' ujian gagal dimuat; data sebelumnya (jika ada) tetap dipakai.', 'error'); }
     } catch (e) {
@@ -206,9 +209,10 @@ const LeaderboardSurvei = (function () {
     return `<div class="lb-podium">` + urutTampil.map(r => {
       const p = top.indexOf(r) + 1;
       const g = r.rank <= 1 ? 'g1' : (r.rank === 2 ? 'g2' : 'g3');
+      const av = (typeof Leaderboard !== 'undefined' && Leaderboard.avatarSiswa) ? Leaderboard.avatarSiswa(r) : { html: esc(inisial(r.nama)), cls: '' };
       return `<div class="lb-pod ${g}" data-p="${p}">
         <div class="lb-pod-medal"><i class="fa-solid ${r.rank <= 1 ? 'fa-crown' : 'fa-medal'}"></i></div>
-        <div class="lb-pod-av">${esc(inisial(r.nama))}</div>
+        <div class="lb-pod-av${av.cls}" data-ini="${esc(av.ini || inisial(r.nama))}">${av.html}</div>
         <div class="lb-pod-nama" title="${esc(r.nama)}">${esc(r.nama)}</div>
         <span class="lb-pod-kelas">Peringkat ${r.rank} • ${esc(r.kelas)}</span>
         <div class="lb-pod-nilai">${fmt(r.akhir)}<small>Nilai Akhir Survei</small></div>

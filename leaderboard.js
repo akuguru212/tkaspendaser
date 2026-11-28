@@ -56,6 +56,9 @@ const Leaderboard = (function () {
 #guru-portal .lb-root .g1 .lb-pod-medal { color: #d99a00; } #guru-portal .lb-root .g2 .lb-pod-medal { color: #7d8999; } #guru-portal .lb-root .g3 .lb-pod-medal { color: #b9723a; }
 #guru-portal .lb-root .lb-pod-av { width: 52px; height: 52px; margin: .35rem auto .45rem; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 1.05rem; background: rgba(255,255,255,.62); border: 2px solid rgba(255,255,255,.9); }
 #guru-portal .lb-root .lb-pod[data-p="1"] .lb-pod-av { width: 62px; height: 62px; font-size: 1.25rem; }
+#guru-portal .lb-root .lb-pod-av.lb-av-foto { background: none; padding: 0; overflow: hidden; font-size: 1.35rem; box-shadow: 0 2px 8px rgba(0,0,0,.14); }
+#guru-portal .lb-root .lb-pod[data-p="1"] .lb-pod-av.lb-av-foto { font-size: 1.6rem; }
+#guru-portal .lb-root .lb-pod-av .fp-av { width: 100%; height: 100%; border-radius: 50%; }
 #guru-portal .lb-root .lb-pod-nama { font-weight: 800; font-size: .95rem; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; min-height: 2.4em; }
 #guru-portal .lb-root .lb-pod-kelas { display: inline-block; margin: .3rem 0 .15rem; padding: .08rem .6rem; border-radius: 999px; background: rgba(255,255,255,.55); font-size: .72rem; font-weight: 700; }
 #guru-portal .lb-root .lb-pod-nilai { font-size: 2rem; font-weight: 800; line-height: 1.1; }
@@ -157,6 +160,64 @@ const Leaderboard = (function () {
     return { tesList };
   }
 
+  // ---------------- foto profil / karakter siswa (untuk podium) ----------------
+  // Memakai aksi yang sudah ada (getDaftarSiswa) -> tanpa perubahan Code.gs. Tiap siswa: foto (data URL),
+  // atau karakter pilihannya ('kar:...'), atau kosong (=> karakter bawaan sama seperti di akun siswa).
+  const F = { peta: {}, nama: {}, dimuat: false, tunggu: null, tanda: '', gagal: 0, info: false };
+  async function ambilFoto_() {
+    const r = await api('getDaftarSiswa', { guruId: state.user.id });
+    if (!r || !r.ok || !Array.isArray(r.data)) throw new Error('gagal');
+    const peta = {}, nama = {}; let tanda = String(r.data.length);
+    r.data.forEach(x => {
+      const f = String(x.foto || ''); peta[String(x.id)] = f;
+      nama[norm(x.nama) + '|' + norm(x.kelas)] = String(x.id);
+      tanda += '|' + f.length + f.slice(-12);
+    });
+    const berubah = tanda !== F.tanda;
+    F.peta = peta; F.nama = nama; F.tanda = tanda; F.dimuat = true; F.gagal = 0; F.info = false;
+    return berubah;
+  }
+  // Mengembalikan Promise<boolean> = "ada perubahan data foto". Tidak pernah melempar galat.
+  // Gagal => dicoba ulang 2x (jeda 1,5 dtk & 4 dtk); bila tetap gagal podium memakai inisial dan guru diberi tahu satu kali.
+  function muatFoto() {
+    if (F.tunggu) return F.tunggu;
+    if (typeof state === 'undefined' || !state.user || typeof api !== 'function') return Promise.resolve(false);
+    F.tunggu = (async () => {
+      const jeda = [0, 1500, 4000];
+      for (let i = 0; i < jeda.length; i++) {
+        if (jeda[i]) await new Promise(res => setTimeout(res, jeda[i]));
+        try { return await ambilFoto_(); } catch (e) { F.gagal++; }
+      }
+      if (!F.info && !F.dimuat) { F.info = true; try { toast('Foto profil siswa belum bisa dimuat; podium sementara memakai inisial. Tekan Segarkan untuk mencoba lagi.', 'error'); } catch (e) { } }
+      return false;
+    })().finally(() => { F.tunggu = null; });
+    return F.tunggu;
+  }
+  // Foto yang rusak/gagal tampil -> kembali ke inisial (dipanggil dari atribut onerror gambar).
+  function galatFoto(img) {
+    try {
+      const w = img.closest ? img.closest('.lb-pod-av') : null; if (!w) return;
+      w.classList.remove('lb-av-foto'); w.textContent = w.getAttribute('data-ini') || '?';
+    } catch (e) { }
+  }
+  // Mengembalikan { html, cls, ini } untuk isi lingkaran avatar podium.
+  function avatarSiswa(r) {
+    const ini = inisial(r.nama);
+    const polos = { html: esc(ini), cls: '', ini };
+    const FP = (typeof FotoProfil !== 'undefined') ? FotoProfil : null;
+    if (!F.dimuat || !FP || typeof FP.avatarHtml !== 'function') return polos;
+    const kid = String(r.id || '');
+    const sid = kid.indexOf('id:') === 0 ? kid.slice(3) : (F.nama[norm(r.nama) + '|' + norm(r.kelas)] || '');
+    const f = (sid && F.peta[sid]) || '';
+    const kar = f.slice(0, 4) === 'kar:';
+    try {
+      let h = FP.avatarHtml(r.nama, kar ? '' : f, 'fp-live', sid || r.nama, kar ? f : '');
+      if (!h) return polos;
+      h = h.replace('<img ', '<img onerror="Leaderboard.galatFoto(this)" ');
+      return { html: h, cls: ' lb-av-foto', ini };
+    } catch (e) { return polos; }
+  }
+
   // ---------------- memuat data ----------------
   async function muat(tombol) {
     if (S.memuat) return false;
@@ -183,7 +244,9 @@ const Leaderboard = (function () {
           else { gagal++; if (S.rekap[id]) baru[id] = S.rekap[id]; }
         }
       };
-      await Promise.all([kerja(), kerja(), kerja(), kerja()]);
+      const pf = muatFoto(), fotoSiap = F.dimuat;
+      await Promise.all([kerja(), kerja(), kerja(), kerja(), fotoSiap ? null : pf]);
+      if (fotoSiap) pf.then(b => { if (b && S.dimuat) { try { render(); } catch (e) { } } });
       S.rekap = baru; S.dimuat = true; S.waktu = Date.now();
       if (gagal) { ok = false; toast(gagal + ' ujian gagal dimuat; data sebelumnya (jika ada) tetap dipakai.', 'error'); }
     } catch (e) {
@@ -300,9 +363,10 @@ const Leaderboard = (function () {
       const p = top.indexOf(r) + 1;
       const g = r.rank <= 1 ? 'g1' : (r.rank === 2 ? 'g2' : 'g3');
       const ikon = r.rank <= 1 ? 'fa-crown' : 'fa-medal';
+      const av = avatarSiswa(r);
       return `<div class="lb-pod ${g}" data-p="${p}">
         <div class="lb-pod-medal"><i class="fa-solid ${ikon}"></i></div>
-        <div class="lb-pod-av">${esc(inisial(r.nama))}</div>
+        <div class="lb-pod-av${av.cls}" data-ini="${esc(av.ini)}">${av.html}</div>
         <div class="lb-pod-nama" title="${esc(r.nama)}">${esc(r.nama)}</div>
         <span class="lb-pod-kelas">Peringkat ${r.rank} • ${esc(r.kelas)}</span>
         <div class="lb-pod-nilai">${fmt(r.akhir)}<small>Nilai Akhir</small></div>
@@ -502,5 +566,5 @@ const Leaderboard = (function () {
     if (tabId === 'tab-leaderboard') buka();
   };
 
-  return { buka, muat, render, pilihTes, pilihKelas, unduh, cetak, bukaAtur, tutupAtur, simpanAtur, resetAtur, _hitung: hitung, _kelompok: kelompok, _S: S };
+  return { muatFoto, avatarSiswa, galatFoto, _fotoSiap: () => F.dimuat, buka, muat, render, pilihTes, pilihKelas, unduh, cetak, bukaAtur, tutupAtur, simpanAtur, resetAtur, _hitung: hitung, _kelompok: kelompok, _S: S };
 })();
