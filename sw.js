@@ -8,7 +8,7 @@
      supaya soal, nilai, dan jawaban ujian selalu langsung dari server.
    Setelah mengganti file aplikasi, naikkan angka VERSI di bawah ini.
    ============================================================================ */
-const VERSI = 'spendaser-v2-hp69';
+const VERSI = 'spendaser-v2-hp71';
 const CACHE_APP = VERSI + '-app';
 const CACHE_CDN = VERSI + '-cdn';
 

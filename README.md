@@ -1,3 +1,17 @@
+# v43z73 — Leaderboard & Leaderboard Survei: sentuhan mewah
+
+- Podium logam emas/perak/perunggu lebih dalam, cincin foto berwarna per peringkat, kilau emas bergerak halus di juara 1 (mati otomatis bila perangkat memilih "kurangi gerakan"), kartu terangkat saat kursor menyentuh, lencana medali lebih besar, kotak nilai bergaya kaca.
+- Hero berkilau halus, kartu ringkasan bergradasi, header tabel dan lencana peringkat bergaya logam, baris Top 3 bergradasi.
+- Semua aturan dibatasi di dalam `.lb-root` (dua leaderboard saja); menu lain tidak terpengaruh. File berubah: `leaderboard.js` (v7), `leaderboard-survei.js` (v5), `index.html`, `sw.js` (`hp71`), `README.md`.
+
+---
+
+# v43z72 — Perbaikan lencana podium terpotong (Leaderboard & Leaderboard Survei)
+
+- Lencana mahkota/medali di atas foto profil terpotong karena kartu podium memakai `overflow: hidden`; kini dihapus dan ruang atas podium ditambah. File berubah: `leaderboard.js` (v6), `index.html`, `sw.js` (`hp70`), `README.md`.
+
+---
+
 # v43z71 — Tampilan Leaderboard & Leaderboard Survei lebih elegan dan berbeda
 
 - **Podium:** kartu peringkat 2 kini perak-baja yang lebih tegas (tidak lagi menyatu dengan latar) dengan garis tepi dan cincin halus; peringkat 1 emas dan peringkat 3 perunggu diberi kilau, bayangan berwarna, dan garis tepi. Area podium diberi latar lembut agar kartu tampak timbul.

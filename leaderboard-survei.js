@@ -28,7 +28,7 @@ const LeaderboardSurvei = (function () {
     if (document.getElementById('leaderboard-survei-css-inline')) return;
     const st = document.createElement('style'); st.id = 'leaderboard-survei-css-inline';
     st.textContent = `
-#guru-portal #tab-lb-survei .lb-hero { background: linear-gradient(118deg, #064e46, #0f9d8a 62%, #2cc6a8); color: #fff; }
+#guru-portal #tab-lb-survei .lb-hero { background-color: #0f9d8a; background-image: linear-gradient(118deg, #064e46, #0f9d8a 62%, #2cc6a8), radial-gradient(circle at 85% 20%, rgba(255,255,255,.18), transparent 45%); color: #fff; }
 #guru-portal #tab-lb-survei .lb-hero::before { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, #b8f5e6, #ffffff55); }
 #guru-portal #tab-lb-survei button.lb-chip.on, #guru-portal #tab-lb-survei button.lb-chip.on:hover { background: #0f9d8a; border-color: #0f9d8a; color: #fff); }
 #guru-portal #tab-lb-survei button.lb-chip:hover { border-color: #0f9d8a; }
