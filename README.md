@@ -1,3 +1,12 @@
+# v43z88 — Nilai Literasi & Numerasi tidak lagi bulat (25 benar dari 30 = 83,33)
+
+- Pada tes **Literasi** dan **Numerasi**, nilai kini dihitung dari jumlah soal benar dibagi jumlah soal x 100, sehingga tiap soal bernilai sama dan hasilnya 2 desimal (25 dari 30 = 83,33). Sebelumnya nilai dihitung dari bobot per soal, sehingga bila bobot antarsoal berbeda (mis. 3 dan 4) hasilnya tampak bulat (86,00 / 97,00).
+- Ujian lain (bukan Literasi/Numerasi), tampilan, dan fitur lain tidak berubah.
+- **Penting:** perhitungan dilakukan di server, jadi `Code.gs` harus di-**deploy ulang** (Deploy > Manage deployments > Edit > New version). Nilai yang sudah tersimpan baru berubah setelah tombol **Hitung Ulang Nilai** di Rekap Nilai ditekan.
+- File berubah: `Code.gs`, `app.js` (fungsi `hitungNilaiDariJawaban_`), `index.html` (`app.js?v=91`), `sw.js` (`hp86`), `README.md`.
+
+---
+
 # v43z87 — Semua nilai tampil tepat 2 desimal berkoma (83,00 / 83,33)
 
 - Format nilai kini selalu 2 digit di belakang koma (80 -> 80,00) di layar hasil siswa, Rekap Nilai, Pemantauan, Leaderboard, Hasil Literasi & Numerasi, Perkembangan Siswa, Portal Siswa, kartu cetak, dan PDF.

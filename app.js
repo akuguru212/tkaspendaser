@@ -2786,14 +2786,17 @@ const LocalBackend = (function () {
     const opsiAcakMap = urutan.opsiAcak || {};
     const ujian = D.ujian.find(u => u.id === sesi.ujian_id);
     const soalMap = {}; D.bankSoal.forEach(s => soalMap[s.id] = s);
+    // Tes Literasi/Numerasi: tiap soal bernilai SAMA (nilai = benar / jumlah soal x 100, mis. 25 dari 30 = 83,33),
+    // tidak terpengaruh perbedaan bobot antarsoal. Ujian lain tetap memakai bobot.
+    const samaBobot = ujian ? !!ptJenisUjian_(ujian) : false;
     let totalBobot = 0, totalDapat = 0, detail = [];
     (urutan.order || []).forEach(sid => {
       const soal = soalMap[sid];
       if (!soal) return;
       const bobot = Number(soal.bobot) || 0;
-      totalBobot += bobot;
       const skor = skorSoal(soal, jawaban[sid], opsiAcakMap[sid]);
-      totalDapat += skor;
+      if (samaBobot) { if (bobot > 0) { totalBobot += 1; totalDapat += Math.min(1, skor / bobot); } }
+      else { totalBobot += bobot; totalDapat += skor; }
       detail.push({ id: sid, tipe: soal.tipe, bobot, skor });
     });
     const nilaiAkhir = totalBobot > 0 ? Math.round((totalDapat / totalBobot) * 10000) / 100 : 0;
