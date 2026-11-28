@@ -1,3 +1,47 @@
+# v43z80 — Menu siswa lain (HP) sangat elegan dan mewah
+
+- Berlaku di layar HP untuk menu **Simulasi Selesai, Grafik Perkembangan, Riwayat, Leaderboard, Analisis Materi, dan Profil Siswa**, selaras dengan Beranda (v43z79).
+- Judul tiap halaman kini banner navy dengan cahaya dan garis emas, judul bergradasi putih-emas, tombol Segarkan bergaya kaca-emas. Kartu ringkasan dan panel memakai aksen emas serta penanda berlian. Simulasi Selesai: kepala kartu tes navy dengan angka emas. Riwayat: chip aktif navy, kartu baris lebih halus. Leaderboard: kartu peringkat kamu navy-emas dengan medali emas, podium lebih berkilau, baris "Kamu" bernuansa emas. Analisis Materi: kartu pilihan dengan bingkai emas saat aktif. Profil: sampul navy-emas, foto bercincin emas, panel beraksen emas.
+- Tidak diubah: Beranda, layar soal, layar survei, hasil ujian, hasil survei, portal guru, serta isi dan fungsi semua halaman.
+- File berubah: `mobile.css` (v17), `index.html`, `sw.js` (`hp78`), `README.md`.
+
+---
+
+# v43z79 — Dashboard HP siswa, Hasil Ujian, dan Hasil Survei sangat elegan dan mewah
+
+- **Dashboard HP siswa (Beranda):** banner sapaan bernuansa navy dengan cahaya dan garis emas, label serta judul bergradasi putih-emas, foto profil bercincin emas, tombol "Mulai Simulasi" emas dan tombol lain kaca. Kartu ringkasan punya garis aksen warna di atas, cahaya lembut di sudut, dan ikon bercincin; kartu ke-5 (Peringkat Kelas) kini melebar penuh agar tidak sendirian. Panel diberi aksen emas dan penanda berlian di judul. Tab bar bawah: penanda menu aktif berwarna navy dengan ikon emas.
+- **Hasil Ujian:** kartu berpendar emas lembut, medali ikon bercincin emas, label "Hasil Ujian" berhias garis, cincin skor lebih besar dengan lingkaran nilai putih, pesan guru dalam kotak krem berbingkai emas, tombol "Kembali ke Beranda" emas dan tombol lain outline navy. Warna kategori nilai (kurang / memadai / baik / istimewa) tetap tampil seperti sebelumnya.
+- **Hasil Survei (setelah survei terkirim):** banner "Survei terkirim" navy-emas, Nilai Kesungguhan dalam lingkaran bercincin, Nilai Survei Karakter dalam pita navy dengan angka emas, kartu dimensi dengan bar lebih halus.
+- **Tidak diubah:** halaman soal simulasi dan soal survei, menu siswa lain (grafik, riwayat, peringkat, analisis, profil), seluruh portal guru, serta isi dan fungsi semua halaman. Perubahan satu baris di `portal-siswa.js` hanya menambahkan kelas `sw-dash` pada Beranda agar gaya tidak merembet ke menu lain.
+- File berubah: `mobile.css` (v16), `portal-siswa.js` (v9), `index.html`, `sw.js` (`hp77`), `README.md`.
+
+---
+
+# v43z78 — Banner pembuka tiap menu guru sangat elegan dan mewah
+
+- 14 menu kini dibuka dengan banner bergaya sama seperti dashboard: latar gelap bergradasi mengikuti warna tema + pola garis halus, cahaya emas, garis tepi dan garis dasar emas, kilau menyapu pelan (mati bila "kurangi gerakan"), judul bergradasi putih-emas bergaris emas, kata kunci pada keterangan berwarna emas muda, dan medali emas berikon sesuai menu di sisi kanan. Menu: Bank Soal, Kelola Ujian, Rekap Nilai, Rekap Keikutsertaan, Hasil Survei (versi tosca), Hasil Literasi & Numerasi, Analisis Soal, Analisis Materi, Perkembangan Siswa, Log Pelanggaran, Pemantauan Ujian, Data Siswa, Status Login, Pengaturan.
+- Yang tidak diubah: isi dan fungsi menu, tombol, filter, tabel, panel, Dashboard, Leaderboard, dan Leaderboard Survei (sudah punya banner sendiri). Emoji di judul Analisis Soal, Pemantauan Ujian, dan Status Login diganti ikon pada medali agar judul bergradasi tampil bersih.
+- File berubah: `style.css` (v68), `index.html`, `sw.js` (`hp76`), `README.md`.
+
+---
+
+# v43z77 — Dashboard guru sangat elegan dan mewah
+
+- Hero sambutan: latar gelap bergradasi mengikuti warna tema + pola garis halus, cahaya emas, garis tepi emas tipis, kilau menyapu pelan (mati bila "kurangi gerakan"), avatar bercincin emas, tanggal bergaya kapsul kaca, judul bergradasi putih-emas, tombol utama emas dan tombol lain kaca.
+- Kartu ringkasan: garis aksen atas, cahaya lembut di sudut, ikon bercincin putih, angka berwarna selaras, terangkat saat disentuh. Panel grafik & Ujian terbaru: tepi halus, aksen emas, penanda berlian di judul. Chip mode berwarna emas.
+- Semua aturan dibatasi di `#tab-dashboard`; menu lain tidak terpengaruh. Isi/fungsi dashboard tidak diubah. File berubah: `style.css` (v67), `index.html`, `sw.js` (`hp75`), `README.md`.
+
+---
+
+# v43z76 — Judul Leaderboard & Leaderboard Survei sangat elegan dan mewah
+
+- Hero baru: latar gelap bergradasi dengan pola garis halus, cahaya emas di sisi kanan, garis tepi emas tipis, kilau cahaya menyapu pelan (mati bila perangkat memilih "kurangi gerakan"), garis emas di dasar.
+- Judul besar bergradasi putih-emas dengan garis emas pendek di bawahnya; label atas bergaya spasi lebar dengan garis dekoratif; ikon piala kini medali emas bulat di sisi kanan (memperbaiki ikon yang sebelumnya ikut mengisi baris di sisi kiri dan membuat banner terlalu tinggi).
+- Leaderboard Survei memakai versi tosca-mint dengan medali putih-mint dan ikon papan centang sebagai pembeda.
+- Tampilan HP disesuaikan. File berubah: `leaderboard.js` (v9), `leaderboard-survei.js` (v6), `index.html`, `sw.js` (`hp74`), `README.md`.
+
+---
+
 # v43z75 — Kilau cahaya juara 2 & 3 (Leaderboard & Leaderboard Survei)
 
 - Juara 2 dan 3 kini punya siluet cahaya seperti juara 1, tiap peringkat berbeda: **emas** menyapu diagonal kiri ke kanan (5,5 dtk); **perak** menyapu kanan ke kiri dengan cahaya kebiruan (7,5 dtk, jeda 1,6 dtk); **perunggu** menyapu dari bawah ke atas dengan cahaya hangat (6,5 dtk, jeda 3,2 dtk). Jeda dibuat berbeda agar kilau bergantian, tidak serempak. Mati otomatis bila perangkat memilih "kurangi gerakan".

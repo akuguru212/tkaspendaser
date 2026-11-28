@@ -160,7 +160,26 @@ const Leaderboard = (function () {
 #guru-portal .lb-root tr.lb-r2 td { background: linear-gradient(90deg, color-mix(in srgb, #94a3b8 34%, var(--c-surface)), color-mix(in srgb, #94a3b8 14%, var(--c-surface)) 55%); }
 #guru-portal .lb-root tr.lb-r3 td { background: linear-gradient(90deg, color-mix(in srgb, #d98f55 28%, var(--c-surface)), color-mix(in srgb, #d98f55 10%, var(--c-surface)) 55%); }
 #guru-portal .lb-root .lb-bar { height: 6px; }
-@media (prefers-reduced-motion: reduce) { #guru-portal .lb-root .lb-pod.g1::before, #guru-portal .lb-root .lb-pod.g2::before, #guru-portal .lb-root .lb-pod.g3::before { animation: none; } #guru-portal .lb-root .lb-pod, #guru-portal .lb-root .lb-stat { transition: none; } }
+/* ===== Judul (hero) sangat elegan & mewah (v43z76) ===== */
+#guru-portal .lb-root .lb-hero { padding: 30px 150px 28px 36px; border-radius: 24px; border: 1px solid rgba(255,214,102,.5); background-image: radial-gradient(ellipse 55% 130% at 90% 50%, rgba(255,214,102,.24), transparent 62%), repeating-linear-gradient(135deg, rgba(255,255,255,.05) 0 1px, transparent 1px 16px), linear-gradient(120deg, color-mix(in srgb, var(--lb-acc2) 68%, #020b24) 0%, var(--lb-acc2) 52%, var(--lb-acc) 100%); box-shadow: 0 22px 40px -22px color-mix(in srgb, var(--lb-acc) 90%, #000), inset 0 0 0 1px rgba(255,255,255,.07), inset 0 1px 0 rgba(255,255,255,.3); }
+#guru-portal .lb-root .lb-hero::after { content: ''; position: absolute; inset: 0; width: auto; height: auto; right: 0; top: 0; border-radius: inherit; background: linear-gradient(105deg, rgba(255,255,255,0) 38%, rgba(255,255,255,.13) 50%, rgba(255,255,255,0) 62%) -60% 0 / 260% 100% no-repeat; animation: lb-hero-kilau 9s ease-in-out 1s infinite; pointer-events: none; z-index: 0; }
+@keyframes lb-hero-kilau { 0%, 55% { background-position: -60% 0; } 100% { background-position: 120% 0; } }
+#guru-portal .lb-root .lb-hero::before { height: 3px; background: linear-gradient(90deg, transparent, #ffd24d 28%, #fff3bf 50%, #ffd24d 72%, transparent); }
+#guru-portal .lb-root .lb-hero > .lb-hero-ico { position: absolute; right: 38px; top: 50%; bottom: auto; transform: translateY(-50%); width: 84px; height: 84px; display: grid; place-items: center; border-radius: 50%; font-size: 36px; opacity: 1; z-index: 1; color: #6b4700; background: linear-gradient(145deg, #fff6c2, #f3bc1a 58%, #c98a00); border: 3px solid rgba(255,255,255,.92); box-shadow: 0 0 0 4px rgba(255,214,102,.28), 0 14px 26px -8px rgba(0,0,0,.5), inset 0 2px 3px rgba(255,255,255,.7), inset 0 -4px 8px rgba(120,70,0,.28); }
+#guru-portal .lb-root .lb-hero .lb-eyebrow { display: inline-flex; align-items: center; gap: 12px; padding: 0; margin: 0 0 .5rem; background: none; border: 0; backdrop-filter: none; opacity: 1; color: #ffe08a; font-size: .72rem; font-weight: 800; letter-spacing: .3em; }
+#guru-portal .lb-root .lb-hero .lb-eyebrow::before { content: ''; width: 34px; height: 1px; background: linear-gradient(90deg, transparent, currentColor); }
+#guru-portal .lb-root .lb-hero .lb-eyebrow::after { content: ''; width: 34px; height: 1px; background: linear-gradient(90deg, currentColor, transparent); }
+#guru-portal .lb-root .lb-hero h3 { font-size: 2rem; font-weight: 800; line-height: 1.15; letter-spacing: .005em; text-shadow: none; background: linear-gradient(180deg, #ffffff 30%, #ffe9a8); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; filter: drop-shadow(0 3px 8px rgba(0,0,0,.35)); }
+#guru-portal .lb-root .lb-hero h3::after { content: ''; display: block; width: 72px; height: 3px; margin-top: .7rem; border-radius: 3px; background: linear-gradient(90deg, #ffd24d, rgba(255,210,77,0)); }
+#guru-portal .lb-root .lb-hero p.lb-sub { margin: .75rem 0 0; font-size: .9rem; letter-spacing: .03em; opacity: .94; }
+@media (max-width: 680px) {
+  #guru-portal .lb-root .lb-hero { padding: 22px 82px 22px 20px; border-radius: 20px; }
+  #guru-portal .lb-root .lb-hero > .lb-hero-ico { right: 16px; width: 54px; height: 54px; font-size: 22px; border-width: 2px; }
+  #guru-portal .lb-root .lb-hero h3 { font-size: 1.35rem; }
+  #guru-portal .lb-root .lb-hero .lb-eyebrow { letter-spacing: .16em; font-size: .62rem; gap: 8px; }
+  #guru-portal .lb-root .lb-hero .lb-eyebrow::before { width: 16px; } #guru-portal .lb-root .lb-hero .lb-eyebrow::after { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { #guru-portal .lb-root .lb-pod.g1::before, #guru-portal .lb-root .lb-pod.g2::before, #guru-portal .lb-root .lb-pod.g3::before, #guru-portal .lb-root .lb-hero::after { animation: none; } #guru-portal .lb-root .lb-pod, #guru-portal .lb-root .lb-stat { transition: none; } }
 @media (max-width: 680px) { #guru-portal .lb-root .lb-pod:hover { transform: none; } }
 @media (max-width: 680px) { #guru-portal .lb-root .lb-podium { padding: 1.7rem .6rem .2rem; } }
 #modal-lb-atur table.lb-atur { width: 100%; border-collapse: collapse; font-size: .85rem; }

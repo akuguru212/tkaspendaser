@@ -28,8 +28,12 @@ const LeaderboardSurvei = (function () {
     if (document.getElementById('leaderboard-survei-css-inline')) return;
     const st = document.createElement('style'); st.id = 'leaderboard-survei-css-inline';
     st.textContent = `
-#guru-portal #tab-lb-survei .lb-hero { background-color: #0f9d8a; background-image: linear-gradient(118deg, #064e46, #0f9d8a 62%, #2cc6a8), radial-gradient(circle at 85% 20%, rgba(255,255,255,.18), transparent 45%); color: #fff; }
-#guru-portal #tab-lb-survei .lb-hero::before { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, #b8f5e6, #ffffff55); }
+#guru-portal #tab-lb-survei .lb-hero { background-color: #0a6b5e; background-image: radial-gradient(ellipse 55% 130% at 90% 50%, rgba(255,236,170,.22), transparent 62%), repeating-linear-gradient(135deg, rgba(255,255,255,.05) 0 1px, transparent 1px 16px), linear-gradient(120deg, #022b26 0%, #0a6b5e 52%, #0f9d8a 100%); color: #fff; border-color: rgba(184,245,230,.55); }
+#guru-portal #tab-lb-survei .lb-hero::before { background: linear-gradient(90deg, transparent, #7fe8cf 28%, #e6fff8 50%, #7fe8cf 72%, transparent); }
+#guru-portal #tab-lb-survei .lb-hero > .lb-hero-ico { color: #05564b; background: linear-gradient(145deg, #f2fffb, #9ceed8 58%, #3fc1a5); box-shadow: 0 0 0 4px rgba(184,245,230,.28), 0 14px 26px -8px rgba(0,0,0,.5), inset 0 2px 3px rgba(255,255,255,.8), inset 0 -4px 8px rgba(5,86,75,.28); }
+#guru-portal #tab-lb-survei .lb-hero .lb-eyebrow { color: #b8f5e6; }
+#guru-portal #tab-lb-survei .lb-hero h3 { background: linear-gradient(180deg, #ffffff 30%, #c8fbee); -webkit-background-clip: text; background-clip: text; }
+#guru-portal #tab-lb-survei .lb-hero h3::after { background: linear-gradient(90deg, #7fe8cf, rgba(127,232,207,0)); }
 #guru-portal #tab-lb-survei button.lb-chip.on, #guru-portal #tab-lb-survei button.lb-chip.on:hover { background: #0f9d8a; border-color: #0f9d8a; color: #fff); }
 #guru-portal #tab-lb-survei button.lb-chip:hover { border-color: #0f9d8a; }
 #tab-lb-survei .ls-catatan { display: flex; gap: .65rem; align-items: flex-start; margin: 0 0 1rem; padding: .7rem .95rem; border-radius: 14px; font-size: .82rem; line-height: 1.5; background: color-mix(in srgb, #0f9d8a 12%, var(--c-surface)); border: 1px solid color-mix(in srgb, #0f9d8a 38%, var(--c-line)); color: var(--c-text); }

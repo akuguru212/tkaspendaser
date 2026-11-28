@@ -365,7 +365,7 @@ const PortalSiswa = (function () {
     const rk = ringkasan(), u = state.user || {};
     const am = AnalisisMateri.ringkasSiswa();
     const terbaru = PS.data.riwayat.slice(0, 4);
-    isi.innerHTML = `<div class="sw-konten" style="display:grid;gap:1rem">
+    isi.innerHTML = `<div class="sw-konten sw-dash" style="display:grid;gap:1rem">
       <div class="sw-hero"><small>Dashboard Siswa</small><h3>Halo, ${esc(namaDepan(u.nama))}! 👋</h3><p>${kalimatSapaan(rk)}</p>
         <div class="sw-acts"><button type="button" class="sw-btn" onclick="PortalSiswa.mulaiSimulasi()"><i class="fa-solid fa-play"></i> Mulai Simulasi</button>${PS.ada ? `<button type="button" class="sw-btn ghost" onclick="PortalSiswa.buka('grafik')"><i class="fa-solid fa-chart-line"></i> Lihat Grafik</button><button type="button" class="sw-btn ghost" onclick="PortalSiswa.buka('analisis')"><i class="fa-solid fa-magnifying-glass-chart"></i> Analisis Materi</button>` : ''}</div></div>
       <div class="sw-kpis">

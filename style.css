@@ -1862,3 +1862,63 @@ details.tm-det > summary { cursor: pointer; font-weight: 700; font-size: .88rem;
 .log-sebab { margin: 0 0 .7rem; padding: .7rem .85rem; border-radius: 12px; background: var(--c-no-bg); font-size: .86rem; line-height: 1.5; }
 .log-sebab ul { margin: .35rem 0 0; padding-left: 1.1rem; }
 .log-sebab li { margin-bottom: .3rem; }
+
+/* ===== Dashboard guru: sangat elegan & mewah (v43z77) — hanya #tab-dashboard ===== */
+#guru-portal #tab-dashboard .dash-hero { padding: 2.1rem 2.4rem; border-radius: 26px; color: #fff; border: 1px solid rgba(255,214,102,.5); background: radial-gradient(ellipse 50% 140% at 92% 40%, rgba(255,214,102,.26), transparent 62%), repeating-linear-gradient(135deg, rgba(255,255,255,.045) 0 1px, transparent 1px 18px), linear-gradient(120deg, color-mix(in srgb, var(--c-primary-dark, #1f4e79) 62%, #030c24), var(--c-primary-dark, #1f4e79) 55%, var(--c-primary, #2f6fb3)); box-shadow: 0 26px 46px -26px color-mix(in srgb, var(--c-primary-dark, #1f4e79) 90%, #000), inset 0 0 0 1px rgba(255,255,255,.07), inset 0 1px 0 rgba(255,255,255,.28); }
+#guru-portal #tab-dashboard .dash-hero > * { position: relative; z-index: 1; }
+#guru-portal #tab-dashboard .dash-hero::before { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, transparent, #ffd24d 28%, #fff3bf 50%, #ffd24d 72%, transparent); z-index: 1; }
+#guru-portal #tab-dashboard .dash-hero::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(105deg, rgba(255,255,255,0) 38%, rgba(255,255,255,.13) 50%, rgba(255,255,255,0) 62%) -60% 0 / 260% 100% no-repeat; animation: dash-kilau 9s ease-in-out 1s infinite; pointer-events: none; z-index: 0; }
+@keyframes dash-kilau { 0%, 55% { background-position: -60% 0; } 100% { background-position: 120% 0; } }
+#guru-portal #tab-dashboard .dash-avatar { border: 3px solid rgba(255,255,255,.92); background: linear-gradient(145deg, #fff6c2, #f3bc1a 60%, #c98a00); color: #5a3d00; box-shadow: 0 0 0 4px rgba(255,214,102,.3), 0 16px 26px -10px rgba(0,0,0,.55), inset 0 2px 3px rgba(255,255,255,.7); }
+#guru-portal #tab-dashboard .dash-date { background: rgba(255,255,255,.12); border: 1px solid rgba(255,214,102,.45); color: #ffe08a; letter-spacing: .08em; text-transform: uppercase; font-size: .7rem; font-weight: 800; backdrop-filter: blur(4px); }
+#guru-portal #tab-dashboard .dash-hero h3 { font-size: 2rem; font-weight: 800; line-height: 1.15; background: linear-gradient(180deg, #ffffff 30%, #ffe9a8); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; filter: drop-shadow(0 3px 8px rgba(0,0,0,.35)); }
+#guru-portal #tab-dashboard .dash-hero h3::after { content: ''; display: block; width: 72px; height: 3px; margin-top: .6rem; border-radius: 3px; background: linear-gradient(90deg, #ffd24d, rgba(255,210,77,0)); }
+#guru-portal #tab-dashboard .dash-hero p { color: rgba(255,255,255,.88); margin-top: .75rem; }
+#guru-portal #tab-dashboard .dash-hero-deco { color: rgba(255,214,102,.3); font-size: 6.2rem; filter: drop-shadow(0 8px 14px rgba(0,0,0,.35)); }
+#guru-portal #tab-dashboard .dash-hero-btns button { border-radius: 999px; font-weight: 700; letter-spacing: .01em; transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
+#guru-portal #tab-dashboard .dash-hero-btns button:not(.secondary) { background: linear-gradient(145deg, #fff3b0, #f3bc1a 62%, #d99a00); color: #4d3300; border: 1px solid rgba(255,255,255,.7); box-shadow: 0 12px 22px -10px rgba(214,150,0,.8), inset 0 1px 0 rgba(255,255,255,.8); }
+#guru-portal #tab-dashboard .dash-hero-btns button.secondary { background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.38); box-shadow: inset 0 1px 0 rgba(255,255,255,.2); backdrop-filter: blur(4px); }
+#guru-portal #tab-dashboard .dash-hero-btns button.secondary:hover { background: rgba(255,255,255,.22); border-color: rgba(255,214,102,.8); }
+#guru-portal #tab-dashboard .dash-hero-btns button:hover { transform: translateY(-2px); }
+#guru-portal #tab-dashboard .dash-chip { background: linear-gradient(145deg, #fff6c9, #fde08a); color: #6b4700; border: 1px solid rgba(214,150,0,.45); box-shadow: 0 6px 12px -8px rgba(214,150,0,.8); letter-spacing: .04em; }
+#guru-portal #tab-dashboard .dash-card { position: relative; overflow: hidden; border-radius: 22px; border: 1px solid color-mix(in srgb, var(--dash-warna, var(--c-primary)) 28%, var(--c-line)); box-shadow: 0 18px 30px -22px color-mix(in srgb, var(--dash-warna, var(--c-primary)) 75%, #000), inset 0 1px 0 rgba(255,255,255,.7); transition: transform .2s ease, box-shadow .2s ease; }
+#guru-portal #tab-dashboard .dash-card > * { position: relative; z-index: 1; }
+#guru-portal #tab-dashboard .dash-card::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--dash-warna, var(--c-primary)), color-mix(in srgb, var(--dash-warna, var(--c-primary)) 35%, #ffd24d)); z-index: 2; }
+#guru-portal #tab-dashboard .dash-card::after { content: ''; position: absolute; right: -34px; top: -34px; width: 120px; height: 120px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--dash-warna, var(--c-primary)) 22%, transparent), transparent 70%); pointer-events: none; z-index: 0; }
+#guru-portal #tab-dashboard .dash-card:hover { transform: translateY(-5px); box-shadow: 0 26px 38px -22px color-mix(in srgb, var(--dash-warna, var(--c-primary)) 85%, #000), 0 0 0 2px color-mix(in srgb, var(--dash-warna, var(--c-primary)) 40%, transparent), inset 0 1px 0 rgba(255,255,255,.7); }
+#guru-portal #tab-dashboard .dash-card-ico { border: 2px solid rgba(255,255,255,.85); box-shadow: 0 10px 18px -6px var(--dash-warna, var(--c-primary)), inset 0 1px 0 rgba(255,255,255,.5); }
+#guru-portal #tab-dashboard .dash-card-label { font-weight: 700; letter-spacing: .02em; }
+#guru-portal #tab-dashboard .dash-card-nilai { font-size: 2.2rem; letter-spacing: -.01em; color: color-mix(in srgb, var(--dash-warna, var(--c-primary)) 55%, var(--c-text)); }
+#guru-portal #tab-dashboard .dash-cols .panel, #guru-portal #tab-dashboard #dashboard-ujian-terbaru { position: relative; border-radius: 22px; border: 1px solid color-mix(in srgb, var(--c-primary) 14%, var(--c-line)); box-shadow: 0 20px 34px -26px rgba(15,30,55,.55), inset 0 1px 0 rgba(255,255,255,.7); }
+#guru-portal #tab-dashboard .dash-cols .panel::before { content: ''; position: absolute; left: 26px; top: 0; width: 64px; height: 3px; border-radius: 0 0 3px 3px; background: linear-gradient(90deg, #ffd24d, #c98a00); }
+#guru-portal #tab-dashboard .dash-ph h3, #guru-portal #tab-dashboard .dash-section-head h3 { letter-spacing: .01em; }
+#guru-portal #tab-dashboard .dash-ph h3::before, #guru-portal #tab-dashboard .dash-section-head h3::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: .6rem; vertical-align: middle; transform: rotate(45deg); background: linear-gradient(135deg, #ffd24d, #c98a00); box-shadow: 0 2px 6px rgba(201,138,0,.45); }
+#guru-portal #tab-dashboard .dash-section-head { padding-bottom: .6rem; border-bottom: 1px solid transparent; border-image: linear-gradient(90deg, rgba(255,210,77,.7), transparent 70%) 1; }
+@media (prefers-reduced-motion: reduce) { #guru-portal #tab-dashboard .dash-hero::after { animation: none; } #guru-portal #tab-dashboard .dash-card, #guru-portal #tab-dashboard .dash-hero-btns button { transition: none; } }
+@media (max-width: 680px) {
+  #guru-portal #tab-dashboard .dash-hero { padding: 1.5rem 1.25rem; border-radius: 20px; }
+  #guru-portal #tab-dashboard .dash-hero h3 { font-size: 1.4rem; }
+  #guru-portal #tab-dashboard .dash-card:hover { transform: none; }
+  #guru-portal #tab-dashboard .dash-card-nilai { font-size: 1.6rem; }
+}
+
+/* ===== Banner pembuka tiap menu guru: elegan & mewah (v43z78) — hanya .menu-hero di dalam #guru-portal ===== */
+#guru-portal .main .menu-hero { --mh-a: var(--c-primary-dark, #1f4e79); --mh-b: var(--c-primary, #2f6fb3); position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: 1.4rem; margin: 0 0 1.25rem; padding: 1.7rem 2rem; border-radius: 24px; color: #fff; border: 1px solid rgba(255,214,102,.45); background: radial-gradient(ellipse 46% 150% at 94% 45%, rgba(255,214,102,.24), transparent 62%), repeating-linear-gradient(135deg, rgba(255,255,255,.04) 0 1px, transparent 1px 18px), linear-gradient(120deg, color-mix(in srgb, var(--mh-a) 62%, #030c24), var(--mh-a) 55%, var(--mh-b)); box-shadow: 0 24px 42px -26px color-mix(in srgb, var(--mh-a) 90%, #000), inset 0 0 0 1px rgba(255,255,255,.07), inset 0 1px 0 rgba(255,255,255,.26); }
+#guru-portal .main #tab-survei .menu-hero { --mh-a: #0b4f4a; --mh-b: #14917f; }
+#guru-portal .main .menu-hero > * { position: relative; z-index: 1; }
+#guru-portal .main .menu-hero::before { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, transparent, #ffd24d 28%, #fff3bf 50%, #ffd24d 72%, transparent); z-index: 1; }
+#guru-portal .main .menu-hero::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(105deg, rgba(255,255,255,0) 38%, rgba(255,255,255,.12) 50%, rgba(255,255,255,0) 62%) -60% 0 / 260% 100% no-repeat; animation: dash-kilau 10s ease-in-out 1.5s infinite; pointer-events: none; z-index: 0; }
+#guru-portal .main .menu-hero-teks { min-width: 0; flex: 1 1 auto; }
+#guru-portal .main .menu-hero h2 { margin: 0; font-size: 1.85rem; font-weight: 800; line-height: 1.15; letter-spacing: -.01em; background: linear-gradient(180deg, #ffffff 30%, #ffe9a8); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; filter: drop-shadow(0 3px 8px rgba(0,0,0,.35)); }
+#guru-portal .main .menu-hero h2::after { content: ''; display: block; width: 72px; height: 3px; margin-top: .6rem; border-radius: 3px; background: linear-gradient(90deg, #ffd24d, rgba(255,210,77,0)); }
+#guru-portal .main .menu-hero .subtitle { margin: .75rem 0 0; max-width: 78ch; color: rgba(255,255,255,.88); font-size: .9rem; line-height: 1.6; }
+#guru-portal .main .menu-hero .subtitle strong { color: #ffe08a; font-weight: 700; }
+#guru-portal .main .menu-hero .subtitle em { color: #fff; }
+#guru-portal .main .menu-hero-medali { flex: 0 0 auto; display: grid; place-items: center; width: 74px; height: 74px; border-radius: 50%; font-size: 1.9rem; color: #5a3d00; background: linear-gradient(145deg, #fff6c2, #f3bc1a 60%, #c98a00); border: 3px solid rgba(255,255,255,.92); box-shadow: 0 0 0 5px rgba(255,214,102,.28), 0 16px 26px -10px rgba(0,0,0,.55), inset 0 2px 3px rgba(255,255,255,.7); }
+@media (prefers-reduced-motion: reduce) { #guru-portal .main .menu-hero::after { animation: none; } }
+@media (max-width: 720px) {
+  #guru-portal .main .menu-hero { padding: 1.2rem 1.1rem; border-radius: 20px; gap: .9rem; }
+  #guru-portal .main .menu-hero h2 { font-size: 1.35rem; }
+  #guru-portal .main .menu-hero .subtitle { font-size: .82rem; line-height: 1.5; }
+  #guru-portal .main .menu-hero-medali { width: 48px; height: 48px; font-size: 1.15rem; border-width: 2px; box-shadow: 0 0 0 3px rgba(255,214,102,.28), 0 10px 16px -8px rgba(0,0,0,.55); }
+}

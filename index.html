@@ -29,12 +29,12 @@
      dimuat TANPA memblokir tampilan halaman login (dulu halaman kosong sampai keduanya selesai diunduh). -->
 <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 <link rel="dns-prefetch" href="https://script.google.com">
-<link rel="stylesheet" href="style.css?v=66">
+<link rel="stylesheet" href="style.css?v=68">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
 <link rel="stylesheet" href="anbk.css?v=71">
-<link rel="stylesheet" href="mobile.css?v=15">
+<link rel="stylesheet" href="mobile.css?v=17">
 <link rel="stylesheet" href="tombol.css?v=3">
 <!-- Font Awesome: ikon sidebar & tombol (gaya dashboard modern) -->
 <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
@@ -230,8 +230,13 @@
 
     <!-- ---------- TAB: BANK SOAL ---------- -->
     <section id="tab-bank-soal" class="hidden">
-      <h2>Bank Soal</h2>
+      <header class="menu-hero">
+        <div class="menu-hero-teks">
+        <h2>Bank Soal</h2>
       <p class="subtitle">Kelola soal per Mapel: pilihan ganda, pilihan ganda kompleks, benar/salah, mencocokkan, dan essay.</p>
+        </div>
+        <span class="menu-hero-medali" aria-hidden="true"><i class="fa-solid fa-layer-group"></i></span>
+      </header>
 
       <!-- ============ LEVEL A: GRID MAPEL ============ -->
       <div id="grid-mapel-view">
@@ -388,8 +393,13 @@
 
     <!-- ---------- TAB: KELOLA UJIAN ---------- -->
     <section id="tab-ujian" class="hidden">
-      <h2>Kelola Ujian</h2>
+      <header class="menu-hero">
+        <div class="menu-hero-teks">
+        <h2>Kelola Ujian</h2>
       <p class="subtitle">Atur durasi, jadwal token, toleransi keterlambatan, dan batas pelanggaran anti-cheat. Tombol <strong>Token Tampil</strong> di setiap baris ujian membuat token <em>ujian itu saja</em> tidak tampil di layar siswa, sehingga hanya guru yang bisa memberikannya. Pengaturannya terpisah untuk tiap ujian.</p>
+        </div>
+        <span class="menu-hero-medali" aria-hidden="true"><i class="fa-solid fa-calendar-days"></i></span>
+      </header>
       <div class="panel">
         <div class="toolbar">
           <button type="button" class="secondary btn-segarkan" title="Ambil data terbaru tanpa mengubah pilihan ujian &amp; kelas" onclick="Guru.segarkan('tab-ujian', this)"><i class="fa-solid fa-rotate"></i> Segarkan</button><span class="segar-info" id="segar-info-tab-ujian" aria-live="polite"></span>
@@ -402,8 +412,13 @@
 
     <!-- ---------- TAB: REKAP NILAI ---------- -->
     <section id="tab-rekap" class="hidden">
-      <h2>Rekap Nilai</h2>
+      <header class="menu-hero">
+        <div class="menu-hero-teks">
+        <h2>Rekap Nilai</h2>
       <p class="subtitle">Pilih ujian untuk melihat rekap nilai seluruh siswa dan mengunduhnya.</p>
+        </div>
+        <span class="menu-hero-medali" aria-hidden="true"><i class="fa-solid fa-clipboard-check"></i></span>
+      </header>
       <div class="panel">
         <div class="toolbar">
           <select id="pilih-ujian-rekap" onchange="Guru.muatRekap()" style="max-width:320px"></select>
@@ -429,8 +444,13 @@
     <!-- ---------- TAB: LEADERBOARD (peringkat Literasi + Numerasi) ---------- -->
     <!-- ---------- TAB: REKAP KEIKUTSERTAAN (siapa yang sudah / belum ikut simulasi) ---------- -->
     <section id="tab-rekap-ikut" class="hidden am-scope">
-      <h2>Rekap Keikutsertaan</h2>
+      <header class="menu-hero">
+        <div class="menu-hero-teks">
+        <h2>Rekap Keikutsertaan</h2>
       <p class="subtitle">Lihat siapa yang <strong>sudah</strong> dan <strong>belum</strong> mengikuti simulasi/ujian. Pilih satu simulasi atau <em>Semua simulasi</em>, lalu pilih kelas (atau semua kelas), dan unduh hasilnya sebagai <strong>PDF</strong>. "Sudah ikut" berarti siswa sudah menyelesaikan ujian itu.</p>
+        </div>
+        <span class="menu-hero-medali" aria-hidden="true"><i class="fa-solid fa-user-check"></i></span>
+      </header>
       <div class="panel">
         <div class="toolbar">
           <div class="toolbar-actions" style="align-items:center">
@@ -525,8 +545,13 @@
 
     <!-- ---------- TAB: HASIL SURVEI (Survei Karakter & Sulingjar) ---------- -->
     <section id="tab-survei" class="hidden">
-      <h2>Hasil Survei Karakter &amp; Sulingjar</h2>
+      <header class="menu-hero">
+        <div class="menu-hero-teks">
+        <h2>Hasil Survei Karakter &amp; Sulingjar</h2>
       <p class="subtitle">Nilai survei <strong>0–100</strong> per siswa, per dimensi, dan rata-rata kelas. Jawaban terbaik = skor 4 (Sangat setuju/Selalu; untuk pernyataan negatif, Tidak pernah). Atur survei di <strong>Kelola Ujian &gt; Survei Setelah Ujian</strong>.</p>
+        </div>
+        <span class="menu-hero-medali" aria-hidden="true"><i class="fa-solid fa-square-poll-vertical"></i></span>
+      </header>
       <div class="panel">
         <div class="toolbar">
           <select id="pilih-ujian-survei" onchange="Survei.guruMuat()" style="max-width:360px"></select>
@@ -548,8 +573,13 @@
 
     <!-- ---------- TAB: HASIL LITERASI & NUMERASI (per siswa, per materi, detail jawaban) ---------- -->
     <section id="tab-hasil-tes" class="hidden am-scope">
-      <h2>Hasil Literasi &amp; Numerasi</h2>
+      <header class="menu-hero">
+        <div class="menu-hero-teks">
+        <h2>Hasil Literasi &amp; Numerasi</h2>
       <p class="subtitle">Seperti Hasil Survei, tetapi untuk tes: nilai tiap siswa, <strong>materi (Topik) yang kurang</strong> dan <strong>yang sudah baik</strong>, serta <strong>detail jawaban per soal</strong>. Klik nama siswa untuk melihat detail. PDF bisa per siswa, per kelas, atau seluruh siswa; <em>ZIP per siswa</em> membuat satu PDF untuk tiap siswa; <em>Kelompok Remedial</em> menyusun daftar remedial &amp; kelompok belajar. Isi kolom <em>Topik</em> pada soal di Bank Soal agar materinya rinci.</p>
+        </div>
+        <span class="menu-hero-medali" aria-hidden="true"><i class="fa-solid fa-file-circle-check"></i></span>
+      </header>
       <div class="panel">
         <div class="toolbar">
           <select id="ht-ujian" onchange="HasilTes.muat()" style="max-width:360px"></select>
@@ -575,12 +605,17 @@
 
     <!-- ---------- TAB: ANALISIS SOAL & JAWABAN SISWA ---------- -->
     <section id="tab-analisis" class="hidden">
-      <h2>📊 Analisis Soal &amp; Jawaban Siswa</h2>
+      <header class="menu-hero">
+        <div class="menu-hero-teks">
+        <h2>Analisis Soal &amp; Jawaban Siswa</h2>
       <p class="subtitle">
-        Pilih ujian untuk melihat soal mana yang ternyata paling banyak dijawab salah (sulit) atau paling banyak
-        dijawab benar (mudah), beserta pola jawaban tiap siswa per soal. Dihitung dari siswa yang sudah
-        <strong>menyelesaikan</strong> ujian ini.
-      </p>
+          Pilih ujian untuk melihat soal mana yang ternyata paling banyak dijawab salah (sulit) atau paling banyak
+          dijawab benar (mudah), beserta pola jawaban tiap siswa per soal. Dihitung dari siswa yang sudah
+          <strong>menyelesaikan</strong> ujian ini.
+        </p>
+        </div>
+        <span class="menu-hero-medali" aria-hidden="true"><i class="fa-solid fa-chart-pie"></i></span>
+      </header>
       <div class="panel">
         <div class="toolbar">
           <select id="pilih-ujian-analisis" onchange="Guru.muatAnalisisSoal()" style="max-width:320px"></select>
@@ -613,8 +648,13 @@
     <!-- ---------- TAB: LOG PELANGGARAN ---------- -->
     <!-- ---------- TAB: ANALISIS MATERI (materi yang kurang per siswa / per materi) ---------- -->
     <section id="tab-analisis-materi" class="hidden am-scope">
-      <h2>Analisis Materi</h2>
+      <header class="menu-hero">
+        <div class="menu-hero-teks">
+        <h2>Analisis Materi</h2>
       <p class="subtitle">Materi (<strong>Topik</strong> pada soal) mana yang masih kurang pada tiap siswa, untuk <strong>Literasi</strong> dan <strong>Numerasi</strong>, plus hasil <strong>Survei Karakter</strong> dan <strong>Sulingjar</strong> (per dimensi). Gunakan <strong>Laporan PDF</strong> untuk membuat laporan per siswa, per kelas, atau seluruh siswa yang bisa dibagikan ke siswa. Siswa melihat analisis dan saran belajar yang sama di Portal Siswa. Isi kolom <em>Topik</em> pada soal di Bank Soal agar analisisnya rinci. Kurang = di bawah 60%.</p>
+        </div>
+        <span class="menu-hero-medali" aria-hidden="true"><i class="fa-solid fa-magnifying-glass-chart"></i></span>
+      </header>
       <div class="panel">
         <div class="toolbar">
           <div class="toolbar-actions" style="align-items:center">
@@ -648,8 +688,13 @@
 
     <!-- ---------- TAB: PERKEMBANGAN SISWA (grafik naik / turun per tes) ---------- -->
     <section id="tab-perkembangan" class="hidden am-scope">
-      <h2>Perkembangan Siswa</h2>
+      <header class="menu-hero">
+        <div class="menu-hero-teks">
+        <h2>Perkembangan Siswa</h2>
       <p class="subtitle">Grafik perkembangan nilai <strong>Tes 1, Tes 2, Tes 3, ...</strong> (rata-rata Literasi dan Numerasi): lihat siapa yang <strong>naik</strong>, <strong>stabil</strong>, atau <strong>turun</strong>. Klik <em>Grafik</em> pada seorang siswa untuk melihat perkembangannya dibanding rata-rata kelas. Siswa melihat grafik yang sama di akunnya.</p>
+        </div>
+        <span class="menu-hero-medali" aria-hidden="true"><i class="fa-solid fa-arrow-trend-up"></i></span>
+      </header>
       <div class="panel">
         <div class="toolbar">
           <div class="toolbar-actions" style="align-items:center">
@@ -678,8 +723,13 @@
     </section>
 
     <section id="tab-pelanggaran" class="hidden">
-      <h2>Log Pelanggaran Anti-Cheat</h2>
+      <header class="menu-hero">
+        <div class="menu-hero-teks">
+        <h2>Log Pelanggaran Anti-Cheat</h2>
       <p class="subtitle">Riwayat pelanggaran (pindah tab, keluar fullscreen, dll.) per ujian.</p>
+        </div>
+        <span class="menu-hero-medali" aria-hidden="true"><i class="fa-solid fa-triangle-exclamation"></i></span>
+      </header>
       <div class="panel">
         <div class="toolbar">
           <select id="pilih-ujian-log" onchange="Guru.muatLogPelanggaran()" style="max-width:320px"></select>
@@ -696,11 +746,16 @@
 
     <!-- ---------- TAB: PEMANTAUAN UJIAN (live monitoring) ---------- -->
     <section id="tab-pemantauan" class="hidden">
-      <h2>🖥 Pemantauan Ujian</h2>
+      <header class="menu-hero">
+        <div class="menu-hero-teks">
+        <h2>Pemantauan Ujian</h2>
       <p class="subtitle">
-        Pilih ujian untuk melihat siapa saja yang sedang mengerjakan/​sudah selesai, sisa waktu, jumlah soal yang
-        sudah terjawab, dan jumlah pelanggaran anti-cheat -- lengkap dengan aksi untuk tiap siswa.
-      </p>
+          Pilih ujian untuk melihat siapa saja yang sedang mengerjakan/​sudah selesai, sisa waktu, jumlah soal yang
+          sudah terjawab, dan jumlah pelanggaran anti-cheat -- lengkap dengan aksi untuk tiap siswa.
+        </p>
+        </div>
+        <span class="menu-hero-medali" aria-hidden="true"><i class="fa-solid fa-eye"></i></span>
+      </header>
       <div class="panel">
         <div class="toolbar">
           <select id="pilih-ujian-pemantauan" onchange="Guru.muatPemantauan()" style="max-width:320px"></select>
@@ -729,8 +784,13 @@
 
     <!-- ---------- TAB: DATA SISWA ---------- -->
     <section id="tab-siswa" class="hidden">
-      <h2>Data Siswa</h2>
+      <header class="menu-hero">
+        <div class="menu-hero-teks">
+        <h2>Data Siswa</h2>
       <p class="subtitle">Kredensial akun siswa. Tambahkan satu per satu, atau impor massal dari file .xlsx/.csv.</p>
+        </div>
+        <span class="menu-hero-medali" aria-hidden="true"><i class="fa-solid fa-users"></i></span>
+      </header>
 
       <datalist id="daftar-kelas-siswa"></datalist>
 
@@ -808,12 +868,17 @@
 
     <!-- ---------- TAB: STATUS LOGIN (device lock per akun) ---------- -->
     <section id="tab-login" class="hidden">
-      <h2>🔐 Status Login</h2>
+      <header class="menu-hero">
+        <div class="menu-hero-teks">
+        <h2>Status Login</h2>
       <p class="subtitle">
-        Setiap akun siswa hanya boleh aktif di <strong>satu perangkat (HP/komputer)</strong> dalam satu waktu,
-        ditandai lewat Device ID di bawah ini. Kalau siswa perlu login dari perangkat lain sementara akunnya masih
-        tercatat "Terkunci", buka kuncinya di sini terlebih dahulu.
-      </p>
+          Setiap akun siswa hanya boleh aktif di <strong>satu perangkat (HP/komputer)</strong> dalam satu waktu,
+          ditandai lewat Device ID di bawah ini. Kalau siswa perlu login dari perangkat lain sementara akunnya masih
+          tercatat "Terkunci", buka kuncinya di sini terlebih dahulu.
+        </p>
+        </div>
+        <span class="menu-hero-medali" aria-hidden="true"><i class="fa-solid fa-lock"></i></span>
+      </header>
       <div class="panel" style="margin-bottom:1rem">
         <div class="toolbar" style="align-items:center">
           <div>
@@ -848,8 +913,13 @@
 
     <!-- ---------- TAB: PENGATURAN ---------- -->
     <section id="tab-pengaturan" class="hidden">
-      <h2>Pengaturan</h2>
+      <header class="menu-hero">
+        <div class="menu-hero-teks">
+        <h2>Pengaturan</h2>
       <p class="subtitle">Kelola akun, tampilan, dan koneksi data aplikasi.</p>
+        </div>
+        <span class="menu-hero-medali" aria-hidden="true"><i class="fa-solid fa-gear"></i></span>
+      </header>
 
       <div class="panel">
         <h3>👤 Akun Saya</h3>
@@ -1732,14 +1802,14 @@
 <script src="peringatan-cepat.js?v=4"></script>
 <script src="survei.js?v=34"></script>
 <script src="kunci-ujian.js?v=12"></script>
-<script src="leaderboard.js?v=8"></script>
-<script src="leaderboard-survei.js?v=5"></script>
+<script src="leaderboard.js?v=9"></script>
+<script src="leaderboard-survei.js?v=6"></script>
 <script src="analisis-materi.js?v=7"></script>
 <script src="perkembangan.js?v=3"></script>
 <script src="hasil-tes.js?v=5"></script>
 <script src="rekap-ikut.js?v=1"></script>
 <script src="laporan-pdf.js?v=3"></script>
-<script src="portal-siswa.js?v=8"></script>
+<script src="portal-siswa.js?v=9"></script>
 <script src="tombol-kembali.js?v=6"></script>
 <script src="foto-profil.js?v=3"></script>
 <script src="tombol.js?v=1"></script>
