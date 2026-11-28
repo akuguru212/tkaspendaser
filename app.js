@@ -233,7 +233,19 @@ function kelasBeririsan_(a, b) {
   if (!ka || !kb) return true;
   return ka.some(k => kb.includes(k));
 }
+// ---- Token siswa terpilih (lihat Code.gs "TOKEN SISWA TERPILIH"): JSON array id siswa yang token-nya diaktifkan khusus ----
+function siswaKhususUjian_(u) {
+  const raw = String((u && u.token_siswa) == null ? '' : u.token_siswa).trim();
+  if (raw === '') return [];
+  try { const a = JSON.parse(raw); if (Array.isArray(a)) return a.map(String); } catch (e) { }
+  return [];
+}
+function siswaDiaktifkanKhusus_(u, siswaId) { return !!siswaId && siswaKhususUjian_(u).indexOf(String(siswaId)) >= 0; }
 function ringkasTokenKelas_(u) {
+  const n = siswaKhususUjian_(u).length;
+  return ringkasTokenKelasSaja_(u) + (n ? '<br><span class="badge ok" title="Token diaktifkan khusus untuk siswa terpilih (lihat tombol Token Siswa)">+ ' + n + ' siswa terpilih</span>' : '');
+}
+function ringkasTokenKelasSaja_(u) {
   const raw = String((u && u.token_kelas) == null ? '' : u.token_kelas).trim();
   if (raw === '') return '<span class="badge ok">Semua kelas</span>';
   let arr = []; try { arr = JSON.parse(raw); } catch (e) { arr = []; }
@@ -792,12 +804,22 @@ async function muatTemaGlobal() {
   if (res.ok) terapkanTema(res.tema);
 }
 
-function unduhTeks(teks, filename) {
-  const blob = new Blob(['\uFEFF' + teks], { type: 'text/csv;charset=utf-8;' });
+// Memicu unduhan berkas dari Blob. Di HP (Chrome Android, Firefox, Safari iOS, PWA) tautan yang tidak dipasang di
+// dokumen sering diabaikan, dan URL yang dicabut terlalu cepat membuat berkas gagal/0 byte -> pasang dulu, cabut belakangan.
+function unduhBlobBerkas_(blob, namaBerkas) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = filename;
+  a.download = namaBerkas;
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  document.body.appendChild(a);
   a.click();
+  setTimeout(() => { try { URL.revokeObjectURL(a.href); } catch (e) { /* abaikan */ } a.remove(); }, 30000);
+}
+
+function unduhTeks(teks, filename) {
+  const blob = new Blob(['\uFEFF' + teks], { type: 'text/csv;charset=utf-8;' });
+  unduhBlobBerkas_(blob, filename);
 }
 
 // Bikin file .xlsx sungguhan (bukan teks koma) supaya saat dibuka di Excel/Google
@@ -931,10 +953,7 @@ function buatDocxSederhana_(items) {
 function unduhDocx_(filename, items) {
   const bytes = buatDocxSederhana_(items);
   const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
+  unduhBlobBerkas_(blob, filename);
 }
 
 // ----------------------------------------------------------------------------
@@ -2871,8 +2890,10 @@ const LocalBackend = (function () {
   }
   function fotoBuktiLokal(b) { return { id: b.id, nama: b.nama, bytes: b.bytes, waktu: b.waktu, url: b.url, urlAsli: b.url }; }
     function izinKelasLokal_(ujian, siswaId) {
+      if (siswaDiaktifkanKhusus_(ujian, siswaId)) return { ok: true }; // siswa terpilih selalu boleh
       const aktif = kelasAktifUjian_(ujian); if (aktif === null) return { ok: true };
-      const sw = D.siswa.find(x => x.id === siswaId); const kelas = sw ? String(sw.kelas || '') : '';
+      // (variabel D hanya ada di dalam route(); fungsi ini berada di luarnya, jadi data dibaca ulang lewat muat())
+      const sw = muat().siswa.find(x => x.id === siswaId); const kelas = sw ? String(sw.kelas || '') : '';
       if (aktif.indexOf(normKelas_(kelas)) >= 0) return { ok: true };
       return { ok: false, error: 'Token ujian ini belum diaktifkan untuk kelas ' + (kelas.trim() || 'Anda') + '. Tunggu jadwal dari guru/pengawas.' };
     }
@@ -2944,6 +2965,7 @@ const LocalBackend = (function () {
         const now = new Date();
         const list = D.ujian.filter(u => {
           if (u.status !== 'aktif') return false;
+          if (siswaDiaktifkanKhusus_(u, data.siswaId)) return true; // siswa terpilih: token tampil walau di luar jadwal
           if (u.mulai && now < new Date(u.mulai)) return false;
           const batas = u.selesai ? new Date(new Date(u.selesai).getTime() + (Number(u.toleransi_menit) || 0) * 60000) : null;
           return !(batas && now > batas);
@@ -3064,6 +3086,19 @@ const LocalBackend = (function () {
         }
         D.ujian[ix].token_kelas = nilai; simpan();
         return { ok: true, kelas: nilai };
+      }
+      case 'setTokenSiswa': {
+        const ix = cariIdx(D.ujian, data.ujianId);
+        if (ix < 0) return { ok: false, error: 'Ujian tidak ditemukan.' };
+        let arr = null; try { arr = JSON.parse(String(data.siswa == null ? '[]' : data.siswa)); } catch (e) { arr = null; }
+        if (!Array.isArray(arr) || arr.length > 3000) return { ok: false, error: 'Daftar siswa tidak valid.' };
+        const lihat = {}; const unik = [];
+        arr.forEach(x => { const t = String(x == null ? '' : x).trim().slice(0, 80); if (t && !lihat[t]) { lihat[t] = 1; unik.push(t); } });
+        D.ujian[ix].token_siswa = unik.length ? JSON.stringify(unik) : '';
+        const kunci = data.kunciKelas === true || String(data.kunciKelas).toLowerCase() === 'true' || String(data.kunciKelas) === '1';
+        if (kunci) D.ujian[ix].token_kelas = '[]';
+        simpan();
+        return { ok: true, siswa: D.ujian[ix].token_siswa, kelas: kunci ? '[]' : undefined };
       }
       case 'hapusUjian': {
         const idx = cariIdx(D.ujian, data.id);
@@ -3484,9 +3519,10 @@ const LocalBackend = (function () {
         const ujian = pilihUjianByToken_(D.ujian, data.token);
         if (!ujian) return { ok: false, error: 'Token ujian tidak ditemukan.' };
         const now = new Date();
-        if (ujian.mulai && now < new Date(ujian.mulai)) return { ok: false, error: 'Ujian belum dibuka.' };
+        const khusus = siswaDiaktifkanKhusus_(ujian, data.siswaId); // siswa terpilih: jadwal tidak berlaku (mis. ujian susulan)
+        if (!khusus && ujian.mulai && now < new Date(ujian.mulai)) return { ok: false, error: 'Ujian belum dibuka.' };
         const batasTelat = ujian.selesai ? new Date(new Date(ujian.selesai).getTime() + (Number(ujian.toleransi_menit) || 0) * 60000) : null;
-        if (batasTelat && now > batasTelat) return { ok: false, error: 'Waktu akses ujian sudah berakhir.' };
+        if (!khusus && batasTelat && now > batasTelat) return { ok: false, error: 'Waktu akses ujian sudah berakhir.' };
         if (ujian.status !== 'aktif') return { ok: false, error: 'Ujian ini sedang tidak aktif.' };
         const lanjutan = !!D.sesi.find(s => s.ujian_id === ujian.id && s.siswa_id === data.siswaId && s.status !== 'selesai' && s.status !== 'diblokir');
         if (!lanjutan) { const iz = izinKelasLokal_(ujian, data.siswaId); if (!iz.ok) return { ok: false, error: iz.error }; }
@@ -5706,6 +5742,7 @@ const Guru = {
               <button type="button" class="secondary small tgl" aria-pressed="${antiCurangUjian_(u) ? 'true' : 'false'}" onclick="Guru.ubahAntiCurang('${u.id}', ${!antiCurangUjian_(u)})" title="${antiCurangUjian_(u) ? 'Anti curang AKTIF (layar penuh, alarm, hitungan pelanggaran). Klik untuk menonaktifkan.' : 'Anti curang NONAKTIF. Klik untuk mengaktifkan.'}"><i class="fa-solid fa-shield-halved"></i><span class="tgl-label">Anti Curang</span><i class="${antiCurangUjian_(u) ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle'} tgl-st" aria-hidden="true"></i></button>
               <button type="button" class="secondary small tgl" aria-pressed="${tokenTampilUjian_(u) ? 'true' : 'false'}" onclick="Guru.ubahTampilToken('${u.id}', ${!tokenTampilUjian_(u)})" title="${tokenTampilUjian_(u) ? 'Token TAMPIL di layar siswa. Klik untuk menyembunyikan (hanya guru/pengawas yang memberi tahu).' : 'Token DISEMBUNYIKAN dari layar siswa. Klik untuk menampilkan.'}"><i class="fa-solid fa-eye"></i><span class="tgl-label">Token Tampil</span><i class="${tokenTampilUjian_(u) ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle'} tgl-st" aria-hidden="true"></i></button>
               <button type="button" class="info small span2" onclick="Guru.bukaTokenKelas('${u.id}')" title="Aktifkan / nonaktifkan token per kelas"><i class="fa-solid fa-key"></i> Token Kelas</button>
+              <button type="button" class="info small span2" onclick="TokenSiswa.buka('${u.id}')" title="Aktifkan token hanya untuk siswa yang dicentang (mis. siswa susulan karena sakit)"><i class="fa-solid fa-user-check"></i> Token Siswa</button>
               <button type="button" class="secondary small" onclick='Guru.bukaEditUjian("${u.id}")'><i class="fa-solid fa-pen"></i> Ubah</button>
               <button type="button" class="danger small" onclick="Guru.hapusUjian('${u.id}')"><i class="fa-solid fa-trash-can"></i> Hapus</button>
             </div>
@@ -6191,12 +6228,20 @@ const Guru = {
     const judulAsli = document.title;
     document.title = judulDokumen;
     const bersihkan = () => {
-      document.body.classList.remove('cetak-detail-siswa');
-      document.title = judulAsli;
-      const a = document.getElementById('cetak-area'); if (a) a.remove();
-      window.removeEventListener('afterprint', bersihkan);
+      const aktif = document.getElementById('cetak-area');
+      // bila sudah ada lembar cetak yang lebih baru, jangan ganggu kelas/judul miliknya
+      if (!aktif || aktif === area) { document.body.classList.remove('cetak-detail-siswa'); document.title = judulAsli; }
+      area.remove();
     };
-    window.addEventListener('afterprint', bersihkan);
+    // Di HP (Chrome Android / Safari iOS) 'afterprint' bisa terpicu SEGERA setelah window.print() dipanggil, padahal pratinjau
+    // cetak baru dirender sesudahnya. Bila lembar cetak dibuang saat itu, yang tercetak adalah SELURUH isi halaman.
+    // Karena itu di perangkat sentuh pembersihan ditunda (aman: lembar cetak & kelasnya hanya berlaku saat @media print).
+    const perangkatSentuh = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') || (navigator.maxTouchPoints > 1 && !(window.matchMedia && window.matchMedia('(hover: hover)').matches));
+    const sesudahCetak = () => {
+      window.removeEventListener('afterprint', sesudahCetak);
+      if (perangkatSentuh) setTimeout(bersihkan, 120000); else bersihkan();
+    };
+    window.addEventListener('afterprint', sesudahCetak);
     const gambar = Array.from(area.querySelectorAll('img')).filter(im => !im.complete)
       .map(im => new Promise(r => { im.addEventListener('load', r); im.addEventListener('error', r); }));
     const font = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
@@ -8047,10 +8092,7 @@ function pratinjauSoalHtml_(html, maks) {
 }
 function unduhTeksSebagaiFile_(teks, namaFile) {
   const blob = new Blob(['\ufeff' + teks], { type: 'text/csv;charset=utf-8;' }); // BOM supaya Excel baca UTF-8 dgn benar
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = namaFile;
-  a.click();
+  unduhBlobBerkas_(blob, namaFile);
 }
 
 // ============================================================================

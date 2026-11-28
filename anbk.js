@@ -485,7 +485,8 @@ const Anbk = (function () {
     klPilih = new Set(tampil());   // awal: semua siswa pada filter kelas terpilih (centang/kosongkan sesuai kebutuhan)
     gambar();
   }
-  function cetakKartuLogin() {
+  // Jalur CADANGAN (dialog cetak browser) -- dipakai bila pustaka PDF tidak bisa dimuat (mis. tanpa internet).
+  function cetakKartuLoginDialog_() {
     const kelas = $('kl-kelas').value, kol = $('kl-ukuran').value;
     const j = [$('kl-j1').value, $('kl-j2').value, $('kl-j3').value].filter(x => x.trim());
     const semua = state.guru.daftarSiswa || [];
@@ -505,6 +506,135 @@ const Anbk = (function () {
     $('modal-kartu-login').remove();
     Guru._cetakArea_(html, judulBerkas).then(() => {});
     const a = $('cetak-area'); if (a) a.classList.add('kl-area');
+  }
+  // ---- Unduh Kartu Login sebagai berkas PDF (digambar langsung dengan jsPDF) ----
+  // Di HP, dialog cetak browser sering mencetak SELURUH halaman aplikasi, bukan kartunya. PDF dibuat langsung & diunduh,
+  // sehingga hasilnya sama di HP maupun komputer (tata letak sama dengan kartu cetak: 8 kartu/halaman atau 3 kartu/halaman).
+  const teksPdf = (t) => String(t == null ? '' : t).replace(/[\u2013\u2014]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/\s+/g, ' ').replace(/[^\x20-\x7E\u00A0-\u00FF]/g, '').trim();
+  function muatLogoPdf(src) {
+    return new Promise((res) => {
+      const im = new Image();
+      im.onload = () => {
+        try {
+          const sk = Math.min(1, 320 / Math.max(im.naturalWidth, im.naturalHeight, 1));
+          const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(im.naturalWidth * sk)); c.height = Math.max(1, Math.round(im.naturalHeight * sk));
+          c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+          res({ data: c.toDataURL('image/png'), rasio: im.naturalWidth / Math.max(1, im.naturalHeight) });
+        } catch (e) { res(null); }
+      };
+      im.onerror = () => res(null);
+      im.src = src;
+    });
+  }
+  async function buatPdfKartuLogin(daftar, judul, kol, namaBerkas) {
+    await muatPustaka_('jspdf');
+    const { jsPDF } = window.jspdf;
+    const [logo1, logo2] = await Promise.all([muatLogoPdf('icons/tutwuri.png'), muatLogoPdf('icons/smpn2.png')]);
+    const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+    doc.setProperties({ title: teksPdf(namaBerkas) });
+    const PW = 210, PH = 297, MG = 8, besar = kol === '1';
+    const P = besar ? { cols: 1, gap: 6, fs: 12.5, logo: 22, qr: 30, jfs: 13.5, pad: 2.2 } : { cols: 2, gap: 4, fs: 9, logo: 13, qr: 19, jfs: 8.4, pad: 1.3 };
+    const PT = 0.3528, cw = (PW - 2 * MG - P.gap * (P.cols - 1)) / P.cols, PX = 2.6, GP = 2.2;
+    const lineH = P.fs * PT * 1.3, headH = Math.max(P.qr, P.logo) + 2 * 2.2;
+    const base = location.href.split('#')[0];
+    const lw1 = logo1 ? P.logo * logo1.rasio : 0, lw2 = logo2 ? P.logo * logo2.rasio : 0;
+    const tw = cw - 2 * PX - P.qr - (lw1 ? lw1 + GP : 0) - (lw2 ? lw2 + GP : 0) - GP;
+    const kx = cw * 0.45 + 1, vw = cw * 0.55 - 2.2;
+
+    // siapkan setiap kartu (isi + tinggi) lebih dulu agar penempatan di halaman bisa dihitung
+    const kartu = daftar.map((s) => {
+      const ttl = [s.tempat_lahir, tglPanjang(s.tanggal_lahir)].filter(Boolean).join(', ');
+      const baris = [['Nama Peserta', s.nama], ['NISN', s.nisn], ['Tempat, Tanggal Lahir', ttl], ['Username', s.username, 1], ['Password', s.password, 1]];
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(P.fs);
+      const rows = baris.map((r) => {
+        doc.setFont('helvetica', r[2] ? 'bold' : 'normal'); doc.setFontSize(P.fs);
+        const lines = doc.splitTextToSize(teksPdf(r[1]) || ' ', vw);
+        return { k: r[0], lines, h: lines.length * lineH + 2 * P.pad };
+      });
+      return { s, rows, h: headH + rows.reduce((a, r) => a + r.h, 0) };
+    });
+
+    // judul (wrap otomatis, font dikecilkan bila tidak muat di tinggi kepala kartu)
+    let jfs = P.jfs, jLines = [];
+    for (;;) {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(jfs);
+      jLines = judul.reduce((a, t) => a.concat(doc.splitTextToSize(teksPdf(t), Math.max(10, tw))), []);
+      if (jLines.length * jfs * PT * 1.3 <= headH - 2 || jfs <= 5) break;
+      jfs -= 0.3;
+    }
+    const jH = jfs * PT * 1.3;
+
+    const gambarKartu = (k, x, y) => {
+      doc.setDrawColor(68, 68, 68); doc.setLineWidth(0.29); doc.setFillColor(255, 255, 255);
+      doc.rect(x, y, cw, k.h, 'S');
+      doc.line(x, y + headH, x + cw, y + headH);
+      // logo
+      let lx = x + PX;
+      [[logo1, 'kl-tutwuri', lw1], [logo2, 'kl-sekolah', lw2]].forEach(([lg, alias, w]) => {
+        if (!lg) return;
+        try { doc.addImage(lg.data, 'PNG', lx, y + (headH - P.logo) / 2, w, P.logo, alias); } catch (e) { /* logo dilewati */ }
+        lx += w + GP;
+      });
+      // QR
+      const qx = x + cw - PX - P.qr, qy = y + (headH - P.qr) / 2;
+      try {
+        const M = qrMatrix(base + '#u=' + encodeURIComponent(k.s.username) + '&p=' + encodeURIComponent(k.s.password));
+        const n = M.length, q = 2, c = P.qr / (n + 2 * q);
+        doc.setFillColor(255, 255, 255); doc.rect(qx, qy, P.qr, P.qr, 'F');
+        doc.setFillColor(0, 0, 0);
+        M.forEach((r, yy) => { let xx = 0; while (xx < n) { if (r[xx]) { let w = 1; while (xx + w < n && r[xx + w]) w++; doc.rect(qx + (xx + q) * c, qy + (yy + q) * c, w * c, c * 1.03, 'F'); xx += w; } else xx++; } });
+      } catch (e) { /* QR dilewati */ }
+      // judul di tengah antara logo dan QR
+      const tx = lx + (qx - GP - lx) / 2, ty = y + headH / 2 - (jLines.length - 1) * jH / 2;
+      doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'bold'); doc.setFontSize(jfs);
+      jLines.forEach((t, i) => doc.text(t, tx, ty + i * jH, { align: 'center', baseline: 'middle' }));
+      // baris data
+      let ry = y + headH;
+      k.rows.forEach((r, i) => {
+        const mid = ry + P.pad + lineH / 2;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(P.fs);
+        doc.text(r.k, x + PX, mid, { baseline: 'middle' });
+        doc.text(':', x + cw * 0.435, mid, { align: 'center', baseline: 'middle' });
+        doc.setFont('helvetica', i >= 3 ? 'bold' : 'normal');
+        r.lines.forEach((t, li) => doc.text(t, x + kx, mid + li * lineH, { baseline: 'middle' }));
+        ry += r.h;
+      });
+    };
+
+    // tempatkan kartu per baris; pindah halaman bila tidak muat
+    let y = MG, jeda = 0;
+    for (let i = 0; i < kartu.length; i += P.cols) {
+      const baris = kartu.slice(i, i + P.cols), tinggi = Math.max.apply(null, baris.map(k => k.h));
+      if (y + tinggi > PH - MG && y > MG) { doc.addPage(); y = MG; }
+      baris.forEach((k, ci) => gambarKartu(k, MG + ci * (cw + P.gap), y));
+      y += tinggi + P.gap;
+      if (++jeda % 12 === 0) await new Promise(r => setTimeout(r, 0));   // beri napas ke UI pada daftar panjang
+    }
+    return doc.output('blob');
+  }
+
+  async function cetakKartuLogin() {
+    const kelas = $('kl-kelas').value, kol = $('kl-ukuran').value;
+    const j = [$('kl-j1').value, $('kl-j2').value, $('kl-j3').value].filter(x => x.trim());
+    const semua = state.guru.daftarSiswa || [];
+    let daftar = Array.from(klPilih).sort((x, y) => x - y).map(i => semua[i]).filter(Boolean);
+    if (!daftar.length) { toast('Pilih (centang) minimal 1 siswa yang kartunya akan dicetak.', 'error'); return; }
+    daftar = daftar.slice().sort((a, b) => String(a.kelas || '').localeCompare(String(b.kelas || ''), 'id', { numeric: true }) || String(a.nama || '').localeCompare(String(b.nama || ''), 'id'));
+    const judulBerkas = 'Kartu Login' + (daftar.length === 1 ? ' ' + (daftar[0].nama || '') : (kelas ? ' ' + kelas : ''));
+    const btn = $('kl-cetak'), teksTombol = btn ? btn.textContent : '';
+    if (btn) { if (btn.disabled) return; btn.disabled = true; btn.textContent = 'Membuat PDF...'; }
+    try {
+      const blob = await buatPdfKartuLogin(daftar, j, kol, judulBerkas);
+      const nama = (judulBerkas.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Kartu Login') + '.pdf';
+      unduhBlobBerkas_(blob, nama);
+      const m = $('modal-kartu-login'); if (m) m.remove();
+      toast('PDF Kartu Login (' + daftar.length + ' kartu) diunduh: ' + nama, 'success');
+    } catch (e) {
+      console.error(e);
+      if (btn) { btn.disabled = false; btn.textContent = teksTombol; }
+      toast('PDF tidak dapat dibuat (' + ((e && e.message) || e) + '). Memakai jendela cetak: pilih "Simpan sebagai PDF".', 'info');
+      cetakKartuLoginDialog_();
+    }
   }
   // ---------------- impor data siswa (sesuai Kartu Login) ----------------
   const norm = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]/g, '');

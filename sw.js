@@ -8,7 +8,7 @@
      supaya soal, nilai, dan jawaban ujian selalu langsung dari server.
    Setelah mengganti file aplikasi, naikkan angka VERSI di bawah ini.
    ============================================================================ */
-const VERSI = 'spendaser-v2-hp86';
+const VERSI = 'spendaser-v2-hp88';
 const CACHE_APP = VERSI + '-app';
 const CACHE_CDN = VERSI + '-cdn';
 
@@ -16,7 +16,7 @@ const SHELL = [
   './', 'index.html', 'manifest.json', 'config.js',
   'style.css', 'anbk.css', 'mobile.css', 'tombol.css',
   'app.js', 'anbk.js', 'peringatan-cepat.js', 'survei.js', 'kunci-ujian.js', 'leaderboard.js', 'leaderboard-survei.js',
-  'analisis-materi.js', 'perkembangan.js', 'hasil-tes.js', 'rekap-ikut.js', 'laporan-pdf.js', 'portal-siswa.js', 'tombol-kembali.js',
+  'analisis-materi.js', 'perkembangan.js', 'hasil-tes.js', 'rekap-ikut.js', 'laporan-pdf.js', 'token-siswa.js', 'portal-siswa.js', 'tombol-kembali.js',
   'foto-profil.js', 'tombol.js', 'pwa.js',
   'icons/tutwuri.png', 'icons/smpn2.png', 'icons/favicon.ico',
   'icons/logo-test-192.png', 'icons/logo-test-512.png', 'icons/apple-touch-icon.png'

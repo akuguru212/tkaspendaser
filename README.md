@@ -1,3 +1,27 @@
+# v43z90 — Token ujian bisa diaktifkan untuk siswa terpilih (siswa susulan)
+
+- **Fitur baru:** di Kelola Ujian, tiap ujian punya tombol **👤 Token Siswa** (di samping Token Kelas). Guru mencentang siswa (ada kolom cari, filter kelas, Pilih semua, Kosongkan), lalu **Simpan**. Contoh: siswa A terlambat karena sakit -> centang A saja.
+- **Aturan siswa tercentang:** boleh memasukkan token dan mengerjakan walau **jadwal ujian sudah lewat (atau belum dibuka)** dan walau kelasnya tidak aktif di Token Kelas; token ujian juga tampil di layar siswa itu saja. Ujian tetap harus berstatus **aktif**, akun tidak boleh diblokir, dan siswa yang sudah selesai tidak bisa mengulang.
+- **Siswa lain tidak aktif:** kotak **"Nonaktifkan token semua kelas"** (tercentang bawaan) mengunci token semua kelas saat disimpan, sehingga hanya siswa tercentang yang bisa. Hilangkan centangnya bila kelas lain tetap ingin dibiarkan seperti pengaturan Token Kelas sekarang. Untuk membuka kelas lagi sesudahnya, pakai **Token Kelas**.
+- Di kolom **Token Aktif untuk** muncul lencana **"+ N siswa terpilih"**. Mengosongkan centang lalu Simpan menghapus pengaturan khusus ini.
+- Siswa yang sudah mulai mengerjakan tetap bisa melanjutkan (seperti Token Kelas). Jadwal, durasi, dan fitur ujian lain tidak berubah.
+- **Perbaikan kecil Mode Lokal:** pengecekan Token Kelas di Mode Lokal sebelumnya memunculkan "Kesalahan lokal: D is not defined" untuk siswa dari kelas yang dikunci; kini menampilkan pesan yang benar. Mode Server tidak terpengaruh.
+- **Penting (Mode Server):** tempel `Code.gs` terbaru lalu **Deploy > Manage deployments > Edit > New version**. Kolom baru `token_siswa` di sheet Ujian ditambahkan otomatis oleh mekanisme skema. Tanpa `Code.gs` baru, tombol Token Siswa akan gagal menyimpan. Mode Lokal langsung berfungsi.
+- File berubah: `Code.gs` (kolom `token_siswa`, aksi `setTokenSiswa`, `cekIzinKelas_`, `actionCekToken_`, `actionGetTokenAktif_`), `app.js` (Mode Lokal, tombol, lencana), `token-siswa.js` (BARU), `index.html` (`app.js?v=93`, `token-siswa.js?v=1`), `sw.js` (`hp88`), `README.md`.
+
+---
+
+# v43z89 — Kartu Login bisa diunduh sebagai PDF di HP (tidak lagi mencetak seluruh halaman)
+
+- **Masalah:** di HP, tombol **Cetak / Simpan PDF** pada Kartu Login membuka dialog cetak yang mencetak SELURUH isi halaman aplikasi, bukan kartunya.
+- **Perbaikan:** Kartu Login kini dibuat langsung sebagai berkas **PDF** (digambar dengan jsPDF, teks vektor) lalu **diunduh**, jadi hasilnya sama di HP dan komputer. Tata letak tetap: ukuran Ringkas = 8 kartu/halaman A4, Besar = 3 kartu/halaman; isi kartu, logo, dan QR (sudah diuji terbaca) sama seperti sebelumnya. Bila pustaka PDF gagal dimuat (mis. tanpa internet), otomatis memakai jendela cetak seperti semula.
+- **Cetak lain di HP:** pada perangkat sentuh, lembar cetak (Detail Jawaban, Leaderboard, dll.) tidak lagi dibuang segera saat `afterprint` — di HP peristiwa itu bisa terpicu sebelum pratinjau cetak dirender sehingga yang tercetak malah seluruh halaman. Di komputer perilaku tidak berubah.
+- **Cek unduhan lain:** unduhan CSV (`unduhTeks`, `unduhTeksSebagaiFile_`) dan template Word (`unduhDocx_`) sebelumnya memakai tautan yang tidak dipasang di halaman dan bisa diabaikan browser HP; kini memakai pemicu unduhan yang aman (`unduhBlobBerkas_`). Unduhan Excel (.xlsx), PDF laporan/rekap/pelanggaran, dan ZIP tidak diubah (sudah memakai cara yang benar).
+- Fitur dan tampilan lain tidak berubah. `Code.gs` tidak berubah (tidak perlu deploy ulang).
+- File berubah: `anbk.js` (fungsi `cetakKartuLogin`, baru `buatPdfKartuLogin`), `app.js` (`unduhBlobBerkas_`, `_cetakArea_`), `index.html` (`app.js?v=92`, `anbk.js?v=69`), `sw.js` (`hp87`), `README.md`.
+
+---
+
 # v43z88 — Nilai Literasi & Numerasi tidak lagi bulat (25 benar dari 30 = 83,33)
 
 - Pada tes **Literasi** dan **Numerasi**, nilai kini dihitung dari jumlah soal benar dibagi jumlah soal x 100, sehingga tiap soal bernilai sama dan hasilnya 2 desimal (25 dari 30 = 83,33). Sebelumnya nilai dihitung dari bobot per soal, sehingga bila bobot antarsoal berbeda (mis. 3 dan 4) hasilnya tampak bulat (86,00 / 97,00).
